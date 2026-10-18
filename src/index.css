@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-bg-primary: #FFFFFF;
+    --color-bg-secondary: #F7F8F3;
+    --color-accent-green: #71883F;
+    --color-accent-green-hover: #5F7334;
+    --color-accent-green-light: #EFF4E6;
+    --color-text-primary: #171717;
+    --color-text-secondary: #6B6B6B;
+    --color-border: #E8E8E3;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+
+  body {
+    background-color: #FFFFFF;
+    color: #171717;
+    overflow-x: hidden;
+  }
+}
+
+/* Dynamic Accent Customization bindings for live admin color switching */
+.bg-\[\#71883F\], [data-accent="bg"] {
+  background-color: var(--color-accent-green, #71883F) !important;
+}
+.hover\:bg-\[\#5F7334\]:hover, [data-accent="hover-bg"]:hover {
+  background-color: var(--color-accent-green-hover, #5F7334) !important;
+}
+.text-\[\#71883F\], [data-accent="text"] {
+  color: var(--color-accent-green, #71883F) !important;
+}
+.hover\:text-\[\#71883F\]:hover, .hover\:text-\[\#5F7334\]:hover {
+  color: var(--color-accent-green-hover, #5F7334) !important;
+}
+.border-\[\#71883F\], [data-accent="border"] {
+  border-color: var(--color-accent-green, #71883F) !important;
+}
+.border-\[\#71883F\]\/30 {
+  border-color: color-mix(in srgb, var(--color-accent-green, #71883F) 30%, transparent) !important;
+}
+.hover\:border-\[\#71883F\]:hover {
+  border-color: var(--color-accent-green, #71883F) !important;
+}
+.focus\:border-\[\#71883F\]:focus {
+  border-color: var(--color-accent-green, #71883F) !important;
+}
+.accent-\[\#71883F\] {
+  accent-color: var(--color-accent-green, #71883F) !important;
+}
+.bg-\[\#EFF4E6\] {
+  background-color: var(--color-accent-green-light, #EFF4E6) !important;
+}
+.text-\[\#EFF4E6\] {
+  color: var(--color-accent-green-light, #EFF4E6) !important;
+}
+.hover\:bg-\[\#dfeacb\]:hover {
+  background-color: color-mix(in srgb, var(--color-accent-green, #71883F) 25%, white) !important;
+}
+
+/* Custom scrollbar for horizontal category scroller & modals */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-invoice, #printable-invoice * {
+    visibility: visible;
+  }
+  #printable-invoice {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    background: white;
+  }
+}
+
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-progress {
+  animation: progress linear forwards;
+}
+

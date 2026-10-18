@@ -1,0 +1,6 @@
+{
+  "name": "Fathima Stores",
+  "description": "Shop stationery, school supplies, office essentials, notebooks, pens, art supplies and more at Fathima Stores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

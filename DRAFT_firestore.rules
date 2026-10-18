@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+
+    // User Profile Validation
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role in ['customer', 'admin'] &&
+             (data.name == null || (data.name is string && data.name.size() <= 100)) &&
+             (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             (data.phone == null || (data.phone is string && data.phone.size() <= 20)) &&
+             (data.bio == null || (data.bio is string && data.bio.size() <= 500)) &&
+             (data.city == null || (data.city is string && data.city.size() <= 100)) &&
+             (data.state == null || (data.state is string && data.state.size() <= 100));
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isEmailVerified() && isValidUser(incoming()) && 
+                    incoming().role == 'customer'; // New users are customers by default
+      allow update: if isOwner(userId) && isValidUser(incoming()) && (
+        // Prevent role escalation
+        incoming().role == existing().role &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL', 'phone', 'bio', 'city', 'state', 'updatedAt'])
+      );
+    }
+    
+    match /orders/{orderId} {
+      allow read: if isOwner(existing().userId);
+      allow create: if isSignedIn() && isEmailVerified() && incoming().userId == request.auth.uid;
+    }
+  }
+}
