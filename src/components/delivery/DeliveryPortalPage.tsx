@@ -24,6 +24,7 @@ export const DeliveryPortalPage: React.FC = () => {
     deliveryPersonnel,
     orders,
     updateDeliveryAssignmentStatus,
+    updateDeliveryPersonLocation,
     setActivePage,
     showToast,
   } = useStore();
@@ -55,6 +56,24 @@ export const DeliveryPortalPage: React.FC = () => {
       setSelectedAssignment(pendingJobs[0]);
     }
   }, [deliveryAssignments]);
+
+  // Simulation: Update location periodically when sharing is active
+  useEffect(() => {
+    if (!isLocationSharing || !activeWorker) return;
+
+    const interval = setInterval(() => {
+      // Small random movement around Trivandrum central if no coordinates
+      const baseLat = activeWorker.currentLat || 8.5241;
+      const baseLng = activeWorker.currentLng || 76.9366;
+      
+      const newLat = baseLat + (Math.random() - 0.5) * 0.001;
+      const newLng = baseLng + (Math.random() - 0.5) * 0.001;
+      
+      updateDeliveryPersonLocation(activeWorker.id, newLat, newLng);
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [isLocationSharing, activeWorker, updateDeliveryPersonLocation]);
 
   const handleStatusChange = (
     assignmentId: string,

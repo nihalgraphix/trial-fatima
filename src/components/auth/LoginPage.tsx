@@ -23,7 +23,7 @@ export const LoginPage: React.FC = () => {
     }
   }, [isAuthLoading, currentUser, setActivePage]);
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) {
       showToast('Please enter both your email and password.', 'error');
@@ -31,7 +31,7 @@ export const LoginPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const success = loginUser(email.trim(), password, 'customer');
+    const success = await loginUser(email.trim(), password, 'customer');
     setIsSubmitting(false);
 
     if (success) {
@@ -40,7 +40,8 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
+
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password) {
       showToast('Please fill out all required fields.', 'error');
@@ -58,7 +59,7 @@ export const LoginPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const success = registerUser({
+    const success = await registerUser({
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim() || '+91 98450 12345',
@@ -72,6 +73,7 @@ export const LoginPage: React.FC = () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
 
   return (
     <div className="bg-[#F7F8F3] min-h-[85vh] py-10 sm:py-16 flex items-center justify-center px-4">

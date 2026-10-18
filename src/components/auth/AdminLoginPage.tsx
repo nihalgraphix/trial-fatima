@@ -8,18 +8,19 @@ export const AdminLoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       showToast('Please enter admin credentials.', 'error');
       return;
     }
-    const success = loginUser(email, password, 'admin');
+    const success = await loginUser(email, password, 'admin');
     if (success) {
       setActivePage('admin');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
 
   return (
     <div className="bg-[#171717] min-h-screen py-14 flex items-center justify-center px-4">

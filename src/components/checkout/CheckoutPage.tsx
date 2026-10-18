@@ -87,7 +87,7 @@ export const CheckoutPage: React.FC = () => {
     setShowPaymentModal(true);
   };
 
-  const executeOrderPlacement = (chosenPayment: PaymentMethod) => {
+  const executeOrderPlacement = async (chosenPayment: PaymentMethod) => {
     setIsProcessing(true);
 
     const shippingAddress: ShippingAddress = {
@@ -104,8 +104,8 @@ export const CheckoutPage: React.FC = () => {
       isDefault: true,
     };
 
-    setTimeout(() => {
-      const order = placeOrder({
+    try {
+      const order = await placeOrder({
         customerName: fullName,
         email,
         phone,
@@ -119,8 +119,13 @@ export const CheckoutPage: React.FC = () => {
       setSelectedOrderId(order.id);
       setActivePage('order-success');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 600);
+    } catch (error) {
+      console.error("Error placing order:", error);
+      setIsProcessing(false);
+      showToast("Failed to place order. Please try again.", "error");
+    }
   };
+
 
   return (
     <div className="bg-[#F7F8F3] min-h-screen py-10">

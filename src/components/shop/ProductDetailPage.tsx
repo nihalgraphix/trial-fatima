@@ -32,6 +32,8 @@ export const ProductDetailPage: React.FC = () => {
     setIsCartOpen,
     showToast,
     storeSettings,
+    currentUser,
+    checkIfUserPurchasedProduct,
   } = useStore();
 
   const [quantity, setQuantity] = useState(1);
@@ -41,8 +43,28 @@ export const ProductDetailPage: React.FC = () => {
   const [reviewerName, setReviewerName] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
+  const [isVerifiedCustomer, setIsVerifiedCustomer] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
 
   const product = products.find((p) => p.id === selectedProductId) || products[0];
+
+  React.useEffect(() => {
+    const verify = async () => {
+      if (currentUser && product) {
+        setIsCheckingVerification(true);
+        const isVerified = await checkIfUserPurchasedProduct(product.id, currentUser.id);
+        setIsVerifiedCustomer(isVerified);
+        setIsCheckingVerification(false);
+        // Auto-fill reviewer name if logged in
+        if (reviewerName === '') {
+          setReviewerName(currentUser.name);
+        }
+      } else {
+        setIsVerifiedCustomer(false);
+      }
+    };
+    verify();
+  }, [currentUser, product, checkIfUserPurchasedProduct]);
 
   if (!product) {
     return (
@@ -79,13 +101,13 @@ export const ProductDetailPage: React.FC = () => {
     addToCart(product, quantity);
   };
 
-  const handleReviewSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewerName.trim() || !reviewComment.trim()) {
       showToast('Please enter your name and comments.', 'error');
       return;
     }
-    addReview({
+    await addReview({
       productId: product.id,
       productName: product.name,
       rating: reviewRating,
@@ -453,7 +475,14 @@ export const ProductDetailPage: React.FC = () => {
                       className="p-4 bg-[#F7F8F3] border border-[#E8E8E3] rounded-xl space-y-2"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#171717]">{rev.userName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#171717]">{rev.userName}</span>
+                          {rev.verifiedPurchase && (
+                            <span className="flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-tighter">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> Verified Purchase
+                            </span>
+                          )}
+                        </div>
                         <div className="flex text-amber-500">
                           {Array.from({ length: 5 }).map((_, i) => (
                             <Star
@@ -473,71 +502,98 @@ export const ProductDetailPage: React.FC = () => {
               </div>
 
               {/* Submit a Review Form */}
-              <div className="lg:col-span-5 bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-5">
+              <div className="lg:col-span-5 bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-5 h-fit">
                 <h4 className="text-sm font-bold text-[#171717] mb-1">Write a Review</h4>
-                <p className="text-xs text-[#6B6B6B] mb-4">
-                  Share your experience with other students and shoppers.
-                </p>
-
-                <form onSubmit={handleReviewSubmit} className="space-y-3">
-                  <div>
-                    <label className="text-xs font-semibold text-[#171717] block mb-1">
-                      Your Name
-                    </label>
-                    <input
-                      type="text"
-                      value={reviewerName}
-                      onChange={(e) => setReviewerName(e.target.value)}
-                      placeholder="e.g. Rahul S."
-                      className="w-full text-xs px-3 py-2 bg-white border border-[#E8E8E3] rounded-lg outline-none focus:border-[#71883F]"
-                      required
-                    />
+                
+                {!currentUser ? (
+                  <div className="mt-4 p-4 bg-white/60 rounded-xl border border-dashed border-[#E8E8E3] text-center space-y-3">
+                    <MessageSquare className="w-8 h-8 text-neutral-300 mx-auto" />
+                    <p className="text-[11px] text-[#6B6B6B]">Please login to share your experience with this product.</p>
+                    <button
+                      onClick={() => setActivePage('login')}
+                      className="w-full py-2 bg-[#171717] text-white text-xs font-semibold rounded-lg hover:bg-neutral-800 transition-colors"
+                    >
+                      Login to Review
+                    </button>
                   </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-[#171717] block mb-1">
-                      Rating
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      {[1, 2, 3, 4, 5].map((stars) => (
-                        <button
-                          key={stars}
-                          type="button"
-                          onClick={() => setReviewRating(stars)}
-                          className="p-1 text-amber-500 hover:scale-110 transition-transform"
-                        >
-                          <Star
-                            className={`w-5 h-5 ${
-                              stars <= reviewRating ? 'fill-current' : 'text-neutral-300'
-                            }`}
-                          />
-                        </button>
-                      ))}
-                      <span className="text-xs text-[#6B6B6B] ml-2">{reviewRating} of 5 stars</span>
-                    </div>
+                ) : isCheckingVerification ? (
+                  <div className="mt-4 p-8 flex flex-col items-center justify-center space-y-2">
+                    <div className="w-5 h-5 border-2 border-[#71883F] border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-[10px] text-[#6B6B6B]">Verifying purchase status...</p>
                   </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-[#171717] block mb-1">
-                      Review Comments
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      placeholder="Write your review here..."
-                      className="w-full text-xs px-3 py-2 bg-white border border-[#E8E8E3] rounded-lg outline-none focus:border-[#71883F]"
-                      required
-                    />
+                ) : !isVerifiedCustomer ? (
+                  <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-100 text-center space-y-3">
+                    <ShieldCheck className="w-8 h-8 text-amber-400 mx-auto" />
+                    <p className="text-[11px] text-amber-900 font-medium">Only verified customers can leave reviews.</p>
+                    <p className="text-[10px] text-amber-800/80">Purchase this product and have it delivered to share your feedback!</p>
                   </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-[#6B6B6B] mb-4">
+                      Share your experience with other students and shoppers.
+                    </p>
 
-                  <button
-                    type="submit"
-                    className="w-full py-2 px-4 text-xs font-semibold text-white bg-[#71883F] hover:bg-[#5F7334] rounded-lg shadow-2xs transition-colors"
-                  >
-                    Submit Review
-                  </button>
-                </form>
+                    <form onSubmit={handleReviewSubmit} className="space-y-3">
+                      <div>
+                        <label className="text-xs font-semibold text-[#171717] block mb-1">
+                          Your Name
+                        </label>
+                        <input
+                          type="text"
+                          value={reviewerName}
+                          onChange={(e) => setReviewerName(e.target.value)}
+                          placeholder="e.g. Rahul S."
+                          className="w-full text-xs px-3 py-2 bg-white border border-[#E8E8E3] rounded-lg outline-none focus:border-[#71883F]"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-[#171717] block mb-1">
+                          Rating
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          {[1, 2, 3, 4, 5].map((stars) => (
+                            <button
+                              key={stars}
+                              type="button"
+                              onClick={() => setReviewRating(stars)}
+                              className="p-1 text-amber-500 hover:scale-110 transition-transform"
+                            >
+                              <Star
+                                className={`w-5 h-5 ${
+                                  stars <= reviewRating ? 'fill-current' : 'text-neutral-300'
+                                }`}
+                              />
+                            </button>
+                          ))}
+                          <span className="text-xs text-[#6B6B6B] ml-2">{reviewRating} of 5 stars</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-[#171717] block mb-1">
+                          Review Comments
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          placeholder="Write your review here..."
+                          className="w-full text-xs px-3 py-2 bg-white border border-[#E8E8E3] rounded-lg outline-none focus:border-[#71883F]"
+                          required
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-2 px-4 text-xs font-semibold text-white bg-[#71883F] hover:bg-[#5F7334] rounded-lg shadow-2xs transition-colors"
+                      >
+                        Submit Review
+                      </button>
+                    </form>
+                  </>
+                )}
               </div>
 
             </div>

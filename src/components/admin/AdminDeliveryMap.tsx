@@ -63,7 +63,7 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
 
         // Fit Viewport
         if (primaryRoute.viewport) {
-          map.fitBounds(primaryRoute.viewport, { padding: 50 });
+          map.fitBounds(primaryRoute.viewport, 50);
         }
 
         setRouteDetails({

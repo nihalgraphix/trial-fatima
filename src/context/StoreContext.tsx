@@ -35,8 +35,11 @@ import {
 import { 
   doc, 
   getDoc, 
+  getDocs,
   setDoc, 
   updateDoc, 
+  deleteDoc,
+  writeBatch,
   collection,
   query,
   where,
@@ -54,534 +57,55 @@ import {
   INITIAL_USER,
 } from '../data/initialData';
 
-interface Toast {
-  id: string;
-  message: string;
-  type: 'success' | 'info' | 'error';
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
 }
 
-interface StoreContextType {
-  // Navigation & Page State
-  activePage: ActivePage;
-  setActivePage: (page: ActivePage) => void;
-  selectedProductId: string | null;
-  setSelectedProductId: (id: string | null) => void;
-  selectedCategorySlug: string | null;
-  setSelectedCategorySlug: (slug: string | null) => void;
-  selectedOrderId: string | null;
-  setSelectedOrderId: (id: string | null) => void;
-  navigateToProduct: (productId: string) => void;
-  navigateToCategory: (categorySlug: string) => void;
-  navigateToOrder: (orderId: string) => void;
-
-  // Products
-  products: Product[];
-  addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => void;
-  updateProduct: (id: string, updates: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
-  deleteMultipleProducts: (ids: string[]) => void;
-  duplicateProduct: (id: string) => void;
-  quickUpdateStock: (id: string, newStock: number) => void;
-  removeAllProductBadges: () => void;
-
-  // Categories
-  categories: Category[];
-  addCategory: (category: Omit<Category, 'id'>) => void;
-  updateCategory: (id: string, updates: Partial<Category>) => void;
-  deleteCategory: (id: string) => void;
-  clearAllCategories: () => void;
-
-  // Cart
-  cart: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
-  updateCartQuantity: (productId: string, quantity: number) => void;
-  removeFromCart: (productId: string) => void;
-  clearCart: () => void;
-  isCartOpen: boolean;
-  setIsCartOpen: (open: boolean) => void;
-  cartCount: number;
-  cartSubtotal: number;
-  cartDeliveryCharge: number;
-  cartDiscount: number;
-  cartTotal: number;
-
-  // Wishlist
-  wishlist: string[]; // product IDs
-  toggleWishlist: (productId: string) => void;
-  isInWishlist: (productId: string) => boolean;
-
-  // Coupon
-  appliedCoupon: Coupon | null;
-  applyCoupon: (code: string) => { success: boolean; message: string };
-  removeCoupon: () => void;
-  coupons: Coupon[];
-  addCoupon: (coupon: Coupon) => void;
-  updateCoupon: (code: string, updates: Partial<Coupon>) => void;
-  deleteCoupon: (code: string) => void;
-
-  // Orders
-  orders: Order[];
-  placeOrder: (orderData: {
-    customerName: string;
-    email: string;
-    phone: string;
-    shippingAddress: ShippingAddress;
-    paymentMethod: PaymentMethod;
-    deliveryMethod: string;
-  }) => Order;
-  createDirectOrder: (orderData: Partial<Order>) => Order;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
-  deleteOrder: (orderId: string) => void;
-  recordOrderPayment: (
-    orderId: string,
-    amount: number,
-    method: string,
-    reference: string,
-    type: 'advance' | 'installment' | 'final' | 'refund',
-    notes?: string
-  ) => void;
-  updateOrderDeliveryStatus: (
-    orderId: string,
-    status: OrderStatus,
-    courierName?: string,
-    trackingNumber?: string,
-    note?: string
-  ) => void;
-  requestOrderReturn: (orderId: string, reason: string) => void;
-  processOrderReturn: (orderId: string, status: 'Approved' | 'Rejected' | 'Refunded') => void;
-
-  // Expenses & Finance
-  expenses: Expense[];
-  addExpense: (expense: Omit<Expense, 'id'>) => void;
-  updateExpense: (id: string, updates: Partial<Expense>) => void;
-  deleteExpense: (id: string) => void;
-
-  // Customer Support Chat
-  supportThreads: SupportThread[];
-  createSupportThread: (subject: string, message: string, orderId?: string) => SupportThread;
-  sendSupportMessage: (threadId: string, message: string, senderRole?: 'customer' | 'admin') => void;
-  updateSupportThreadStatus: (threadId: string, status: 'open' | 'in_progress' | 'resolved') => void;
-  isSupportChatOpen: boolean;
-  setIsSupportChatOpen: (open: boolean) => void;
-
-  // Inventory Adjustments
-  inventoryAdjustments: InventoryAdjustment[];
-  recordInventoryAdjustment: (adj: Omit<InventoryAdjustment, 'id' | 'date'>) => void;
-
-  // Reviews
-  reviews: Review[];
-  addReview: (reviewData: {
-    productId: string;
-    productName: string;
-    rating: number;
-    comment: string;
-    userName: string;
-  }) => void;
-  updateReviewStatus: (reviewId: string, status: 'approved' | 'hidden') => void;
-  deleteReview: (reviewId: string) => void;
-
-  // Banners
-  banners: Banner[];
-  addBanner: (banner: Omit<Banner, 'id'>) => void;
-  updateBanner: (id: string, updates: Partial<Banner>) => void;
-  deleteBanner: (id: string) => void;
-
-  // Hero Slider
-  heroSlides: HeroSlide[];
-  addHeroSlide: (slide: Omit<HeroSlide, 'id'>) => void;
-  updateHeroSlide: (id: string, updates: Partial<HeroSlide>) => void;
-  deleteHeroSlide: (id: string) => void;
-  reorderHeroSlides: (slides: HeroSlide[]) => void;
-
-  // Settings
-  storeSettings: StoreSettings;
-  updateStoreSettings: (updates: Partial<StoreSettings>) => void;
-
-  // User & Auth
-  currentUser: User | null;
-  isAdmin: boolean;
-  isAuthLoading: boolean;
-  registerUser: (data: { name: string; email: string; phone?: string; password?: string; role?: 'customer' | 'admin' }) => boolean;
-  loginUser: (email: string, password?: string, role?: 'customer' | 'admin') => boolean;
-  loginWithGoogle: () => Promise<void>;
-  logoutUser: () => void;
-  switchRole: (role: 'customer' | 'admin') => void;
-  updateUserProfile: (updates: Partial<User>) => void;
-  addSavedAddress: (address: ShippingAddress) => void;
-  deleteSavedAddress: (index: number) => void;
-  setDefaultAddress: (index: number) => void;
-
-  // Search & Global State
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  isSearchOpen: boolean;
-  setIsSearchOpen: (open: boolean) => void;
-
-  // Notifications (Admin & System)
-  notifications: Notification[];
-  markNotificationAsRead: (id: string) => void;
-  clearNotifications: () => void;
-
-  // Toasts
-  toasts: Toast[];
-  showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
-
-  // Quick View Modal
-  quickViewProduct: Product | null;
-  setQuickViewProduct: (product: Product | null) => void;
-
-  // Delivery Personnel & Tracking
-  deliveryPersonnel: DeliveryPersonnel[];
-  deliveryAssignments: DeliveryAssignment[];
-  updateDeliveryAssignmentStatus: (
-    assignmentId: string,
-    status: DeliveryAssignment['status'],
-    notesOrData?: string | Partial<DeliveryAssignment>,
-    photoUrl?: string
-  ) => void;
-  assignDeliveryPerson: (orderId: string, deliveryPersonId: string) => void;
-
-  // Customer Inbox Messages
-  customerMessages: CustomerMessage[];
-  addCustomerMessage: (msg: Omit<CustomerMessage, "id" | "createdAt" | "status">) => void;
-  updateCustomerMessageStatus: (id: string, status: CustomerMessage["status"], replyNotes?: string) => void;
-  deleteCustomerMessage: (id: string) => void;
-
-  // Reset Demo Data & Backups
-  resetToDefaultData: () => void;
-  clearAllData: () => void;
-  exportStoreData: () => string;
-  importStoreData: (jsonStr: string) => boolean;
-}
-
-const StoreContext = createContext<StoreContextType | undefined>(undefined);
-
-// Guaranteed collision-free unique ID generator
-let globalIdCounter = 0;
-export const createUniqueId = (prefix: string = 'id'): string => {
-  globalIdCounter += 1;
-  const time = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).substring(2, 7);
-  return `${prefix}-${time}-${globalIdCounter}-${randomPart}`;
-};
-
-// Resilient safe storage helper that gracefully manages localStorage quota
-export const safeStorageSet = (key: string, value: any): boolean => {
-  try {
-    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-    localStorage.setItem(key, serialized);
-    return true;
-  } catch (err) {
-    console.warn(`[SafeStorage] Could not write key "${key}", attempting cache cleanup:`, err);
-    try {
-      // Clear non-critical or legacy cache keys to free up browser quota
-      const purgeKeys = [
-        'fs_products',
-        'fs_clean_products',
-        'fs_clean_orders',
-        'fs_clean_reviews',
-        'fs_v5_inventory_adj',
-        'fs_v5_expenses',
-        'fs_v5_support_threads',
-      ];
-      purgeKeys.forEach((k) => {
-        try {
-          localStorage.removeItem(k);
-        } catch {
-          // ignore
-        }
-      });
-      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-      localStorage.setItem(key, serialized);
-      return true;
-    } catch {
-      return false;
-    }
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
   }
-};
+}
 
-export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Navigation State
-  const [activePage, setActivePage] = useState<ActivePage>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(null);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
+  return errInfo;
+}
 
-  // Persistent States with Clean Storage and guaranteed unique IDs
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      ['fs_products', 'fs_clean_products', 'fs_orders', 'fs_clean_orders', 'fs_reviews', 'fs_clean_reviews', 'fs_coupons', 'fs_clean_coupons'].forEach((k) => localStorage.removeItem(k));
-    } catch {
-      // ignore
-    }
-    const saved = localStorage.getItem('fs_v5_products');
-    if (!saved) return [];
-    try {
-      const parsed: Product[] = JSON.parse(saved);
-      const seenIds = new Set<string>();
-      return parsed.map((p, idx) => {
-        if (!p.id || seenIds.has(p.id)) {
-          const uniqueId = createUniqueId(`fs-${idx}`);
-          return { ...p, id: uniqueId };
-        }
-        seenIds.add(p.id);
-        return p;
-      });
-    } catch {
-      return [];
-    }
-  });
-
-  const [categories, setCategories] = useState<Category[]>(() => {
-    // Ensure all categories are removed as requested by the user
-    const cleared = localStorage.getItem('fs_v6_categories_cleared_user');
-    if (!cleared) {
-      localStorage.setItem('fs_v6_categories_cleared_user', 'true');
-      localStorage.removeItem('fs_v5_categories');
-      return [];
-    }
-    const saved = localStorage.getItem('fs_v5_categories');
-    if (!saved) return [];
-    try {
-      const parsed: Category[] = JSON.parse(saved);
-      const seenIds = new Set<string>();
-      return parsed.map((cat, idx) => {
-        if (!cat.id || seenIds.has(cat.id)) {
-          const uniqueId = cat.slug || createUniqueId(`cat-${idx}`);
-          return { ...cat, id: uniqueId };
-        }
-        seenIds.add(cat.id);
-        return cat;
-      });
-    } catch {
-      return [];
-    }
-  });
-
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('fs_v5_cart');
-    if (!saved) return [];
-    try {
-      const parsed: CartItem[] = JSON.parse(saved);
-      const seen = new Set<string>();
-      return parsed.filter((item) => {
-        if (!item?.product?.id || seen.has(item.product.id)) return false;
-        seen.add(item.product.id);
-        return true;
-      });
-    } catch {
-      return [];
-    }
-  });
-
-  const [wishlist, setWishlist] = useState<string[]>(() => {
-    const saved = localStorage.getItem('fs_v5_wishlist');
-    if (!saved) return [];
-    try {
-      const parsed: string[] = JSON.parse(saved);
-      return Array.from(new Set(parsed));
-    } catch {
-      return [];
-    }
-  });
-
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('fs_v5_orders');
-    if (!saved) return [];
-    try {
-      const parsed: Order[] = JSON.parse(saved);
-      const seenIds = new Set<string>();
-      return parsed.map((o, idx) => {
-        if (!o.id || seenIds.has(o.id)) {
-          const uniqueId = `ORD-${Date.now().toString(36)}-${idx}-${Math.floor(1000 + Math.random() * 9000)}`;
-          return { ...o, id: uniqueId };
-        }
-        seenIds.add(o.id);
-        return o;
-      });
-    } catch {
-      return [];
-    }
-  });
-
-  // Coupons removed completely as requested
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-
-  const [reviews, setReviews] = useState<Review[]>(() => {
-    const saved = localStorage.getItem('fs_v5_reviews');
-    if (!saved) return [];
-    try {
-      const parsed: Review[] = JSON.parse(saved);
-      const seenIds = new Set<string>();
-      return parsed.map((r, idx) => {
-        if (!r.id || seenIds.has(r.id)) {
-          const uniqueId = createUniqueId(`rev-${idx}`);
-          return { ...r, id: uniqueId };
-        }
-        seenIds.add(r.id);
-        return r;
-      });
-    } catch {
-      return [];
-    }
-  });
-
-  const [banners, setBanners] = useState<Banner[]>(() => {
-    const saved = localStorage.getItem('fs_v5_banners');
-    if (!saved) return [];
-    try {
-      const parsed: Banner[] = JSON.parse(saved);
-      const seenIds = new Set<string>();
-      return parsed.map((b, idx) => {
-        if (!b.id || seenIds.has(b.id)) {
-          const uniqueId = createUniqueId(`b-${idx}`);
-          return { ...b, id: uniqueId };
-        }
-        seenIds.add(b.id);
-        return b;
-      });
-    } catch {
-      return [];
-    }
-  });
-
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-
-  // Sync Firebase Auth with App State
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setIsAuthLoading(true);
-      if (firebaseUser) {
-        // Fetch additional profile data from Firestore
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setCurrentUser({
-            id: firebaseUser.uid,
-            name: data.name || firebaseUser.displayName || 'User',
-            email: firebaseUser.email || '',
-            photoURL: data.photoURL || firebaseUser.photoURL || '',
-            role: data.role || 'customer',
-            phone: data.phone || '',
-            bio: data.bio || '',
-            city: data.city || '',
-            state: data.state || '',
-            addresses: data.addresses || [],
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          });
-        } else {
-          // New Google User - create minimal profile
-          const newUser: User = {
-            id: firebaseUser.uid,
-            name: firebaseUser.displayName || 'New User',
-            email: firebaseUser.email || '',
-            photoURL: firebaseUser.photoURL || '',
-            phone: firebaseUser.phoneNumber || '',
-            role: 'customer',
-            addresses: [],
-            createdAt: new Date().toISOString(),
-          };
-          
-          await setDoc(doc(db, 'users', firebaseUser.uid), {
-            ...newUser,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-          
-          setCurrentUser(newUser);
-        }
-      } else {
-        setCurrentUser(null);
-      }
-      setIsAuthLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Sync Orders from Firestore
-  useEffect(() => {
-    if (!currentUser) {
-      setOrders([]);
-      return;
-    }
-
-    let q = query(
-      collection(db, 'orders'),
-      where('userId', '==', currentUser.id),
-      orderBy('date', 'desc')
-    );
-
-    // Admins can see all orders
-    if (currentUser.role === 'admin') {
-      q = query(collection(db, 'orders'), orderBy('date', 'desc'));
-    }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedOrders = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
-      })) as Order[];
-      setOrders(fetchedOrders);
-    }, (error) => {
-      console.error("Error fetching orders:", error);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  const [expenses, setExpenses] = useState<Expense[]>(() => {
-    const saved = localStorage.getItem('fs_v5_expenses');
-    if (!saved) return [];
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return [];
-    }
-  });
-
-  const [supportThreads, setSupportThreads] = useState<SupportThread[]>(() => {
-    const saved = localStorage.getItem('fs_v5_support_threads');
-    if (!saved) return [];
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return [];
-    }
-  });
-
-  const [isSupportChatOpen, setIsSupportChatOpen] = useState(false);
-
-  const [inventoryAdjustments, setInventoryAdjustments] = useState<InventoryAdjustment[]>(() => {
-    const saved = localStorage.getItem('fs_v5_inventory_adj');
-    if (!saved) return [];
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('fs_v5_expenses', JSON.stringify(expenses));
-  }, [expenses]);
-
-  useEffect(() => {
-    localStorage.setItem('fs_v5_support_threads', JSON.stringify(supportThreads));
-  }, [supportThreads]);
-
-  useEffect(() => {
-    localStorage.setItem('fs_v5_inventory_adj', JSON.stringify(inventoryAdjustments));
-  }, [inventoryAdjustments]);
-
-  const DEFAULT_HERO_SLIDES: HeroSlide[] = [
+// Constants moved to top to avoid initialization errors
+const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
     id: 'slide-luxury-pens',
     badge: 'Exclusive Launch 2026',
@@ -648,131 +172,683 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   },
 ];
 
-  const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
-    const defaultSettings: StoreSettings = {
-      storeName: 'FATHIMA STORES',
-      tagline: 'Quality Stationery & Everyday Office Essentials',
-      logoType: 'text',
-      logoUrl: '',
-      logoHeight: 36,
-      contactEmail: 'care@fathimastores.com',
-      contactPhone: '+91 98450 12345',
-      address: 'Commercial Complex, MG Road, Trivandrum, Kerala 695001',
-      currency: '₹',
-      freeDeliveryThreshold: 500,
-      standardDeliveryFee: 40,
-      gstNumber: '32AABCF1234F1Z8',
-      upiId: 'fathimastores@oksbi',
-      upiMerchantName: 'FATHIMA STORES TRIVANDRUM',
-      enableGPay: true,
-      enablePhonePe: true,
-      enablePaytm: true,
-      enableCOD: true,
+const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
+  {
+    id: 'dp-1',
+    name: 'Rahul K. (Express)',
+    phone: '+91 98450 11111',
+    email: 'rahul@fathimaexpress.com',
+    vehicleType: 'Scooter',
+    vehicleNumber: 'KL-01-BK-8821',
+    status: 'available',
+    rating: 4.8,
+    totalDeliveries: 124,
+    currentLat: 8.5241,
+    currentLng: 76.9366,
+  },
+  {
+    id: 'dp-2',
+    name: 'Anjali S. (Bicycle)',
+    phone: '+91 98450 22222',
+    email: 'anjali@fathimaexpress.com',
+    vehicleType: 'E-Bike',
+    vehicleNumber: 'KL-01-EB-4512',
+    status: 'available',
+    rating: 4.9,
+    totalDeliveries: 89,
+    currentLat: 8.5245,
+    currentLng: 76.9370,
+  }
+];
 
-      showAnnouncement: false,
-      announcementText: '',
+interface Toast {
 
-      heroBadge: 'STATIONERY & ESSENTIALS',
-      heroHeadline: 'Everything You Need, All in One Place.',
-      heroSubheadline: 'Discover quality stationery, school supplies, office essentials, notebooks, pens, art materials and everyday products at honest prices.',
-      heroButtonText: 'Shop Now',
-      heroButtonTarget: 'shop',
-      heroTrustText: '1,000+ Students & Professionals trust us for daily essentials',
+  id: string;
+  message: string;
+  type: 'success' | 'info' | 'error';
+}
 
-      // Moving Hero Slides
-      heroSlides: DEFAULT_HERO_SLIDES,
-      heroSliderAutoplay: true,
-      heroSliderInterval: 4000,
+interface StoreContextType {
+  // Navigation & Page State
+  activePage: ActivePage;
+  setActivePage: (page: ActivePage) => void;
+  selectedProductId: string | null;
+  setSelectedProductId: (id: string | null) => void;
+  selectedCategorySlug: string | null;
+  setSelectedCategorySlug: (slug: string | null) => void;
+  selectedOrderId: string | null;
+  setSelectedOrderId: (id: string | null) => void;
+  navigateToProduct: (productId: string) => void;
+  navigateToCategory: (categorySlug: string) => void;
+  navigateToOrder: (orderId: string) => void;
 
-      showHeroSection: true,
-      showCategoryCircles: true,
-      showHomeFilters: true,
-      showBestSellers: true,
-      bestSellersTitle: 'Best Selling Products',
-      bestSellersSubtitle: 'Customer favorites for school term and office requirements',
-      showPromoBanner: true,
-      promoTitle: 'Special Seasonal Discounts',
-      promoSubtitle: 'Limited time offers on selected notebooks, student backpacks, art supplies and exam packs.',
-      promoBadge: 'Special Offer',
-      promoButtonText: 'Shop the Sale',
-      promoBgImage: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=1600&q=80',
-      promoBgOverlay: 'light',
-      promoBgOpacity: 85,
-      showNewArrivals: true,
-      newArrivalsTitle: 'New Arrivals & Fresh Stock',
-      newArrivalsSubtitle: 'Check out the latest tools, stationery gear, and additions to our catalog',
-      showBenefits: true,
-      showReviews: true,
-      showProductBadges: true,
+  // Products
+  products: Product[];
+  addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Promise<void>;
+  updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  deleteMultipleProducts: (ids: string[]) => Promise<void>;
+  duplicateProduct: (id: string) => Promise<void>;
+  quickUpdateStock: (id: string, newStock: number) => Promise<void>;
+  removeAllProductBadges: () => Promise<void>;
 
-      accentColor: '#71883F',
-      accentColorHover: '#5F7334',
-      accentColorLight: '#EFF4E6',
+  // Categories
+  categories: Category[];
+  addCategory: (category: Omit<Category, 'id'>) => Promise<void>;
+  updateCategory: (id: string, updates: Partial<Category>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
+  clearAllCategories: () => Promise<void>;
 
-      homeBgType: 'default',
-      homeBgImage: '',
-      homeBgColor: '#FFFFFF',
-      homeBgOverlay: 'light',
-      homeBgOpacity: 90,
+  // Cart
+  cart: CartItem[];
+  addToCart: (product: Product, quantity?: number) => void;
+  updateCartQuantity: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string) => void;
+  clearCart: () => void;
+  isCartOpen: boolean;
+  setIsCartOpen: (open: boolean) => void;
+  cartCount: number;
+  cartSubtotal: number;
+  cartDeliveryCharge: number;
+  cartDiscount: number;
+  cartTotal: number;
 
-      heroBgType: 'default',
-      heroBgImage: '',
-      heroBgColor: '#F7F8F3',
-      heroBgOverlay: 'light',
-      heroBgOpacity: 85,
 
-      // Modern Minimalist Customization & Features
-      fontFamily: 'Plus Jakarta Sans',
-      borderRadiusMode: 'rounded',
-      storeThemeMode: 'white',
-      enableWhatsAppSupport: true,
-      whatsAppNumber: '+91 98450 12345',
-      whatsAppGreeting: 'Hello Fathima Stores, I would like to inquire about stationery products!',
-      showQuickView: true,
-      showLowStockAlert: true,
-      lowStockThreshold: 10,
-      socialInstagram: 'https://instagram.com/fathimastores',
-      socialFacebook: 'https://facebook.com/fathimastores',
-      socialWhatsApp: 'https://wa.me/919845012345',
-    };
+  // Wishlist
+  wishlist: string[]; // product IDs
+  toggleWishlist: (productId: string) => void;
+  isInWishlist: (productId: string) => boolean;
 
-    const saved = localStorage.getItem('fs_v5_settings');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        const merged = { ...defaultSettings, ...parsed };
-        if (!merged.heroSlides || merged.heroSlides.length === 0) {
-          merged.heroSlides = DEFAULT_HERO_SLIDES;
+  // Coupon
+  appliedCoupon: Coupon | null;
+  applyCoupon: (code: string) => { success: boolean; message: string };
+  removeCoupon: () => void;
+  coupons: Coupon[];
+  addCoupon: (coupon: Coupon) => void;
+  updateCoupon: (code: string, updates: Partial<Coupon>) => void;
+  deleteCoupon: (code: string) => void;
+
+  // Orders
+  orders: Order[];
+  placeOrder: (orderData: {
+    customerName: string;
+    email: string;
+    phone: string;
+    shippingAddress: ShippingAddress;
+    paymentMethod: PaymentMethod;
+    deliveryMethod: string;
+  }) => Promise<Order>;
+  createDirectOrder: (orderData: Partial<Order>) => Promise<Order>;
+
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
+  deleteOrder: (orderId: string) => Promise<void>;
+  recordOrderPayment: (
+    orderId: string,
+    amount: number,
+    method: string,
+    reference: string,
+    type: 'advance' | 'installment' | 'final' | 'refund',
+    notes?: string
+  ) => Promise<void>;
+  updateOrderDeliveryStatus: (
+    orderId: string,
+    status: OrderStatus,
+    courierName?: string,
+    trackingNumber?: string,
+    note?: string
+  ) => Promise<void>;
+  requestOrderReturn: (orderId: string, reason: string) => Promise<void>;
+  processOrderReturn: (orderId: string, status: 'Approved' | 'Rejected' | 'Refunded') => Promise<void>;
+
+  // Expenses & Finance
+  expenses: Expense[];
+  addExpense: (expense: Omit<Expense, 'id'>) => Promise<void>;
+  updateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+
+  // Customer Support Chat
+  supportThreads: SupportThread[];
+  createSupportThread: (subject: string, message: string, orderId?: string) => Promise<SupportThread>;
+  sendSupportMessage: (threadId: string, message: string, senderRole?: 'customer' | 'admin') => Promise<void>;
+  updateSupportThreadStatus: (threadId: string, status: 'open' | 'in_progress' | 'resolved') => Promise<void>;
+  isSupportChatOpen: boolean;
+  setIsSupportChatOpen: (open: boolean) => void;
+
+  // Inventory Adjustments
+  inventoryAdjustments: InventoryAdjustment[];
+  recordInventoryAdjustment: (adj: Omit<InventoryAdjustment, 'id' | 'date'>) => Promise<void>;
+
+  // Reviews
+  reviews: Review[];
+  addReview: (reviewData: {
+    productId: string;
+    productName: string;
+    rating: number;
+    comment: string;
+    userName: string;
+  }) => Promise<void>;
+  updateReviewStatus: (reviewId: string, status: 'approved' | 'hidden') => Promise<void>;
+  deleteReview: (reviewId: string) => Promise<void>;
+  checkIfUserPurchasedProduct: (productId: string, userId: string) => Promise<boolean>;
+
+  // Banners
+  banners: Banner[];
+  addBanner: (banner: Omit<Banner, 'id'>) => Promise<void>;
+  updateBanner: (id: string, updates: Partial<Banner>) => Promise<void>;
+  deleteBanner: (id: string) => Promise<void>;
+
+  // Hero Slider
+  heroSlides: HeroSlide[];
+  addHeroSlide: (slide: Omit<HeroSlide, 'id'>) => Promise<void>;
+  updateHeroSlide: (id: string, updates: Partial<HeroSlide>) => Promise<void>;
+  deleteHeroSlide: (id: string) => Promise<void>;
+  reorderHeroSlides: (slides: HeroSlide[]) => Promise<void>;
+
+  // Settings
+  storeSettings: StoreSettings;
+  updateStoreSettings: (updates: Partial<StoreSettings>) => Promise<void>;
+
+  // User & Auth
+  currentUser: User | null;
+  allUsers: User[];
+  isAdmin: boolean;
+  isAuthLoading: boolean;
+  registerUser: (data: { name: string; email: string; phone?: string; password?: string; role?: 'customer' | 'admin' }) => Promise<boolean>;
+  loginUser: (email: string, password?: string, role?: 'customer' | 'admin') => Promise<boolean>;
+  loginWithGoogle: () => Promise<void>;
+  logoutUser: () => Promise<void>;
+  switchRole: (role: 'customer' | 'admin') => void;
+  updateUserProfile: (updates: Partial<User>) => Promise<void>;
+  addSavedAddress: (address: ShippingAddress) => Promise<void>;
+  deleteSavedAddress: (index: number) => Promise<void>;
+  setDefaultAddress: (index: number) => Promise<void>;
+
+
+  // Search & Global State
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  isSearchOpen: boolean;
+  setIsSearchOpen: (open: boolean) => void;
+
+  // Notifications (Admin & System)
+  notifications: Notification[];
+  markNotificationAsRead: (id: string) => void;
+  clearNotifications: () => void;
+
+  // Toasts
+  toasts: Toast[];
+  showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
+
+  // Quick View Modal
+  quickViewProduct: Product | null;
+  setQuickViewProduct: (product: Product | null) => void;
+
+  // Delivery Personnel & Tracking
+  deliveryPersonnel: DeliveryPersonnel[];
+  deliveryAssignments: DeliveryAssignment[];
+  updateDeliveryAssignmentStatus: (
+    assignmentId: string,
+    status: DeliveryAssignment['status'],
+    notesOrData?: string | Partial<DeliveryAssignment>,
+    photoUrl?: string
+  ) => Promise<void>;
+  assignDeliveryPerson: (orderId: string, deliveryPersonId: string) => Promise<void>;
+
+  // Customer Inbox Messages
+  customerMessages: CustomerMessage[];
+  addCustomerMessage: (msg: Omit<CustomerMessage, "id" | "createdAt" | "status">) => Promise<void>;
+  updateCustomerMessageStatus: (id: string, status: CustomerMessage["status"], replyNotes?: string) => Promise<void>;
+  deleteCustomerMessage: (id: string) => Promise<void>;
+
+  // Reset Demo Data & Backups
+  resetToDefaultData: () => Promise<void>;
+  clearAllData: () => Promise<void>;
+  exportStoreData: () => string;
+  importStoreData: (jsonStr: string) => boolean;
+  updateDeliveryPersonLocation: (personId: string, lat: number, lng: number) => Promise<void>;
+}
+
+const StoreContext = createContext<StoreContextType | undefined>(undefined);
+
+// Guaranteed collision-free unique ID generator
+let globalIdCounter = 0;
+export const createUniqueId = (prefix: string = 'id'): string => {
+  globalIdCounter += 1;
+  const time = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 7);
+  return `${prefix}-${time}-${globalIdCounter}-${randomPart}`;
+};
+
+// Resilient safe storage helper that gracefully manages localStorage quota
+export const safeStorageSet = (key: string, value: any): boolean => {
+  try {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    localStorage.setItem(key, serialized);
+    return true;
+  } catch (err) {
+    console.warn(`[SafeStorage] Could not write key "${key}", attempting cache cleanup:`, err);
+    try {
+      // Clear non-critical or legacy cache keys to free up browser quota
+      const purgeKeys = [
+        'fs_products',
+        'fs_clean_products',
+        'fs_clean_orders',
+        'fs_clean_reviews',
+        'fs_v5_inventory_adj',
+        'fs_v5_expenses',
+        'fs_v5_support_threads',
+      ];
+      purgeKeys.forEach((k) => {
+        try {
+          localStorage.removeItem(k);
+        } catch {
+          // ignore
         }
-        merged.showAnnouncement = false;
-        return merged;
-      } catch {
-        // ignore
-      }
+      });
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      localStorage.setItem(key, serialized);
+      return true;
+    } catch {
+      return false;
     }
-    return defaultSettings;
+  }
+};
+
+export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Navigation State
+  const [activePage, setActivePage] = useState<ActivePage>('home');
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+
+  // Firestore Sync States
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [supportThreads, setSupportThreads] = useState<SupportThread[]>([]);
+  const [inventoryAdjustments, setInventoryAdjustments] = useState<InventoryAdjustment[]>([]);
+  const [deliveryPersonnel, setDeliveryPersonnel] = useState<DeliveryPersonnel[]>([]);
+  const [deliveryAssignments, setDeliveryAssignments] = useState<DeliveryAssignment[]>([]);
+  const [customerMessages, setCustomerMessages] = useState<CustomerMessage[]>([]);
+  const [isSupportChatOpen, setIsSupportChatOpen] = useState(false);
+
+  
+  // Local-only states
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('fs_v5_cart');
+    if (!saved) return [];
+    try {
+      const parsed: CartItem[] = JSON.parse(saved);
+      const seen = new Set<string>();
+      return parsed.filter((item) => {
+        if (!item?.product?.id || seen.has(item.product.id)) return false;
+        seen.add(item.product.id);
+        return true;
+      });
+    } catch {
+      return [];
+    }
   });
 
-  // Customer Inbox Messages State
-  const DEFAULT_CUSTOMER_MESSAGES: CustomerMessage[] = [];
-
-  const [customerMessages, setCustomerMessages] = useState<CustomerMessage[]>(() => {
-    const saved = localStorage.getItem("fs_v5_customer_messages");
-    return saved ? JSON.parse(saved) : DEFAULT_CUSTOMER_MESSAGES;
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    const saved = localStorage.getItem('fs_v5_wishlist');
+    if (!saved) return [];
+    try {
+      const parsed: string[] = JSON.parse(saved);
+      return Array.from(new Set(parsed));
+    } catch {
+      return [];
+    }
   });
 
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+
+  // Sync Firebase Auth with App State
   useEffect(() => {
-    localStorage.setItem("fs_v5_customer_messages", JSON.stringify(customerMessages));
-  }, [customerMessages]);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setIsAuthLoading(true);
+      if (firebaseUser) {
+        // Fetch additional profile data from Firestore
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setCurrentUser({
+            id: firebaseUser.uid,
+            name: data.name || firebaseUser.displayName || 'User',
+            email: firebaseUser.email || '',
+            photoURL: data.photoURL || firebaseUser.photoURL || '',
+            role: data.role || 'customer',
+            phone: data.phone || '',
+            bio: data.bio || '',
+            city: data.city || '',
+            state: data.state || '',
+            addresses: data.addresses || [],
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          });
+        } else {
+          // New Google User - create minimal profile
+          const newUser: User = {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || 'New User',
+            email: firebaseUser.email || '',
+            photoURL: firebaseUser.photoURL || '',
+            phone: firebaseUser.phoneNumber || '',
+            role: 'customer',
+            addresses: [],
+            createdAt: new Date().toISOString(),
+          };
+          
+          await setDoc(doc(db, 'users', firebaseUser.uid), {
+            ...newUser,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          
+          setCurrentUser(newUser);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+      setIsAuthLoading(false);
+    });
 
-  const addCustomerMessage = (msgData: Omit<CustomerMessage, "id" | "createdAt" | "status">) => {
+    return () => unsubscribe();
+  }, []);
+
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+
+  // Helper for generic public collection sync with admin-only seeding
+  const useCollectionSync = (collectionName: string, setter: (data: any[]) => void, initialData?: any[], orderField: string = 'createdAt') => {
+    useEffect(() => {
+      try {
+        const q = query(collection(db, collectionName), orderBy(orderField, 'desc'));
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+          if (snapshot.empty && initialData && initialData.length > 0 && currentUser?.role === 'admin') {
+            // Seed the collection only if current user is admin
+            const batch = writeBatch(db);
+            initialData.forEach((item) => {
+              const docRef = doc(collection(db, collectionName), item.id || createUniqueId('seed'));
+              batch.set(docRef, {
+                ...item,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            });
+            await batch.commit().catch(err => console.warn(`Notice seeding ${collectionName}:`, err));
+          } else {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as any[];
+            setter(data);
+          }
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, collectionName);
+        });
+        return () => unsubscribe();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, collectionName);
+      }
+    }, [collectionName, currentUser?.role]);
+  };
+
+  // Sync public collections (open to all customers and storefront visitors)
+  useCollectionSync('products', setProducts, INITIAL_PRODUCTS);
+  useCollectionSync('categories', setCategories, INITIAL_CATEGORIES, 'slug');
+  useCollectionSync('banners', setBanners, INITIAL_BANNERS);
+  useCollectionSync('coupons', setCoupons, INITIAL_COUPONS, 'code');
+  useCollectionSync('reviews', setReviews, INITIAL_REVIEWS, 'date');
+  useCollectionSync('hero_slides', (data) => {
+    setStoreSettings(prev => ({ ...prev, heroSlides: data as HeroSlide[] }));
+  }, DEFAULT_HERO_SLIDES, 'order');
+
+  // Admin-only collections: strictly listened to when currentUser is admin
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') {
+      return;
+    }
+
+    const unsubExpenses = onSnapshot(
+      query(collection(db, 'expenses'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setExpenses(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Expense[]);
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'expenses')
+    );
+
+    const unsubInventory = onSnapshot(
+      query(collection(db, 'inventory_adjustments'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setInventoryAdjustments(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as InventoryAdjustment[]);
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'inventory_adjustments')
+    );
+
+    const unsubMessages = onSnapshot(
+      query(collection(db, 'customer_messages'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setCustomerMessages(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as CustomerMessage[]);
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'customer_messages')
+    );
+
+    const unsubPersonnel = onSnapshot(
+      query(collection(db, 'delivery_personnel'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setDeliveryPersonnel(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as DeliveryPersonnel[]);
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'delivery_personnel')
+    );
+
+    const unsubUsers = onSnapshot(
+      query(collection(db, 'users'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setAllUsers(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as User[]);
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'users')
+    );
+
+    return () => {
+      unsubExpenses();
+      unsubInventory();
+      unsubMessages();
+      unsubPersonnel();
+      unsubUsers();
+    };
+  }, [currentUser?.role]);
+
+  // Delivery assignments: admin or delivery personnel
+  useEffect(() => {
+    if (currentUser?.role !== 'admin' && currentUser?.role !== 'delivery') {
+      return;
+    }
+
+    const unsubAssignments = onSnapshot(
+      query(collection(db, 'delivery_assignments'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setDeliveryAssignments(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as DeliveryAssignment[]);
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'delivery_assignments')
+    );
+
+    return () => unsubAssignments();
+  }, [currentUser?.role]);
+
+  // Support Threads: Admin sees all, Customer sees their own
+  useEffect(() => {
+    if (!currentUser) {
+      setSupportThreads([]);
+      return;
+    }
+
+    try {
+      const q = currentUser.role === 'admin'
+        ? query(collection(db, 'support_threads'), orderBy('updatedAt', 'desc'))
+        : query(collection(db, 'support_threads'), where('customerId', '==', currentUser.id));
+
+      const unsubSupport = onSnapshot(
+        q,
+        (snapshot) => {
+          setSupportThreads(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as SupportThread[]);
+        },
+        (err) => handleFirestoreError(err, OperationType.GET, 'support_threads')
+      );
+
+      return () => unsubSupport();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, 'support_threads');
+    }
+  }, [currentUser?.id, currentUser?.role]);
+
+  // Orders Sync: Admin sees all orders, Customer sees their own orders
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    try {
+      const q = currentUser.role === 'admin'
+        ? query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
+        : query(collection(db, 'orders'), where('userId', '==', currentUser.id));
+
+      const unsubOrders = onSnapshot(
+        q,
+        (snapshot) => {
+          const firestoreOrders = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Order[];
+          setOrders(firestoreOrders);
+        },
+        (err) => handleFirestoreError(err, OperationType.GET, 'orders')
+      );
+
+      return () => unsubOrders();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, 'orders');
+    }
+  }, [currentUser?.id, currentUser?.role]);
+
+  // Sync Store Settings
+  useEffect(() => {
+    const settingsDoc = doc(db, 'settings', 'global');
+    const unsubscribe = onSnapshot(settingsDoc, (snapshot) => {
+      if (snapshot.exists()) {
+        setStoreSettings(snapshot.data() as StoreSettings);
+      } else if (currentUser?.role === 'admin') {
+        // Seed initial settings only if admin
+        setDoc(settingsDoc, {
+          ...storeSettings,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).catch(err => console.warn("Notice seeding store settings:", err));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
+    });
+    return () => unsubscribe();
+  }, [currentUser?.role]);
+
+
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>({
+    storeName: 'FATHIMA STORES',
+    tagline: 'Quality Stationery & Everyday Office Essentials',
+    contactEmail: 'care@fathimastores.com',
+    contactPhone: '+91 98450 12345',
+    address: 'Commercial Complex, MG Road, Trivandrum, Kerala 695001',
+    currency: '₹',
+    freeDeliveryThreshold: 500,
+    standardDeliveryFee: 40,
+    gstNumber: '32AABCF1234F1Z8',
+    upiId: 'fathimastores@oksbi',
+    upiMerchantName: 'FATHIMA STORES TRIVANDRUM',
+    enableGPay: true,
+    enablePhonePe: true,
+    enablePaytm: true,
+    enableCOD: true,
+    showAnnouncement: false,
+    announcementText: '',
+    heroBadge: 'STATIONERY & ESSENTIALS',
+    heroHeadline: 'Everything You Need, All in One Place.',
+    heroSubheadline: 'Discover quality stationery, school supplies, office essentials, notebooks, pens, art materials and everyday products at honest prices.',
+    heroButtonText: 'Shop Now',
+    heroButtonTarget: 'shop',
+    heroTrustText: '1,000+ Students & Professionals trust us for daily essentials',
+    heroSlides: DEFAULT_HERO_SLIDES,
+    heroSliderAutoplay: true,
+    heroSliderInterval: 4000,
+    showHeroSection: true,
+    showCategoryCircles: true,
+    showHomeFilters: true,
+    showBestSellers: true,
+    bestSellersTitle: 'Best Selling Products',
+    bestSellersSubtitle: 'Customer favorites for school term and office requirements',
+    showPromoBanner: true,
+    promoTitle: 'Special Seasonal Discounts',
+    promoSubtitle: 'Limited time offers on selected notebooks, student backpacks, art supplies and exam packs.',
+    promoBadge: 'Special Offer',
+    promoButtonText: 'Shop the Sale',
+    promoBgImage: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=1600&q=80',
+    promoBgOverlay: 'light',
+    promoBgOpacity: 85,
+    showNewArrivals: true,
+    newArrivalsTitle: 'New Arrivals & Fresh Stock',
+    newArrivalsSubtitle: 'Check out the latest tools, stationery gear, and additions to our catalog',
+    showBenefits: true,
+    showReviews: true,
+    showProductBadges: true,
+    accentColor: '#71883F',
+    accentColorHover: '#5F7334',
+    accentColorLight: '#EFF4E6',
+    homeBgType: 'default',
+    homeBgImage: '',
+    homeBgColor: '#FFFFFF',
+    homeBgOverlay: 'light',
+    homeBgOpacity: 90,
+    heroBgType: 'default',
+    heroBgImage: '',
+    heroBgColor: '#F7F8F3',
+    heroBgOverlay: 'light',
+    heroBgOpacity: 85,
+    fontFamily: 'Plus Jakarta Sans',
+    borderRadiusMode: 'rounded',
+    storeThemeMode: 'white',
+    enableWhatsAppSupport: true,
+    whatsAppNumber: '+91 98450 12345',
+    whatsAppGreeting: 'Hello Fathima Stores, I would like to inquire about stationery products!',
+    showQuickView: true,
+    showLowStockAlert: true,
+    lowStockThreshold: 10,
+    socialInstagram: 'https://instagram.com/fathimastores',
+    socialFacebook: 'https://facebook.com/fathimastores',
+    socialWhatsApp: 'https://wa.me/919845012345',
+    logoType: 'text',
+    logoUrl: '',
+    logoHeight: 36,
+  });
+
+
+
+
+  const addCustomerMessage = async (msgData: Omit<CustomerMessage, "id" | "createdAt" | "status">) => {
+    const id = createUniqueId("msg");
     const newMsg: CustomerMessage = {
       ...msgData,
-      id: createUniqueId("msg"),
+      id,
       createdAt: new Date().toISOString(),
       status: "unread",
     };
-    setCustomerMessages((prev) => [newMsg, ...prev]);
+    await setDoc(doc(db, 'customer_messages', id), {
+      ...newMsg,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
 
     setNotifications((prev) => [
       {
@@ -787,87 +863,67 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     ]);
   };
 
-  const updateCustomerMessageStatus = (
+
+  const updateCustomerMessageStatus = async (
     id: string,
     status: CustomerMessage["status"],
     replyNotes?: string
   ) => {
-    setCustomerMessages((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? { ...m, status, ...(replyNotes !== undefined ? { replyNotes } : {}) }
-          : m
-      )
-    );
+    await updateDoc(doc(db, 'customer_messages', id), {
+      status,
+      ...(replyNotes !== undefined ? { replyNotes } : {}),
+      updatedAt: serverTimestamp(),
+    });
   };
 
-  const deleteCustomerMessage = (id: string) => {
-    setCustomerMessages((prev) => prev.filter((m) => m.id !== id));
+  const deleteCustomerMessage = async (id: string) => {
+    await deleteDoc(doc(db, 'customer_messages', id));
   };
 
-  // Delivery Personnel State
-  const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [];
 
-  const [deliveryPersonnel, setDeliveryPersonnel] = useState<DeliveryPersonnel[]>(() => {
-    const saved = localStorage.getItem('fs_v5_delivery_personnel');
-    return saved ? JSON.parse(saved) : DEFAULT_DELIVERY_PERSONNEL;
-  });
 
-  const [deliveryAssignments, setDeliveryAssignments] = useState<DeliveryAssignment[]>(() => {
-    const saved = localStorage.getItem('fs_v5_delivery_assignments');
-    return saved ? JSON.parse(saved) : [];
-  });
 
-  useEffect(() => {
-    safeStorageSet('fs_v5_delivery_personnel', deliveryPersonnel);
-  }, [deliveryPersonnel]);
-
-  useEffect(() => {
-    safeStorageSet('fs_v5_delivery_assignments', deliveryAssignments);
-  }, [deliveryAssignments]);
-
-  const updateDeliveryAssignmentStatus = (
+  const updateDeliveryAssignmentStatus = async (
     assignmentId: string,
     status: DeliveryAssignment['status'],
     notesOrData?: string | Partial<DeliveryAssignment>,
     photoUrl?: string
   ) => {
-    setDeliveryAssignments((prev) =>
-      prev.map((a) => {
-        if (a.id === assignmentId) {
-          const extraData =
-            typeof notesOrData === 'object'
-              ? notesOrData
-              : notesOrData
-              ? { deliveryNotes: notesOrData }
-              : {};
-          const updated = {
-            ...a,
-            status,
-            ...extraData,
-            ...(photoUrl ? { proofPhotoUrl: photoUrl } : {}),
-            ...(status === 'Delivered' ? { completedAt: new Date().toISOString() } : {}),
-          };
-          if (a.orderId) {
-            let orderStatus: OrderStatus = 'Out for Delivery';
-            if (status === 'Delivered') orderStatus = 'Delivered';
-            if (status === 'Failed') orderStatus = 'Cancelled';
-            updateOrderStatus(a.orderId, orderStatus);
-          }
-          return updated;
-        }
-        return a;
-      })
-    );
+    const extraData =
+      typeof notesOrData === 'object'
+        ? notesOrData
+        : notesOrData
+        ? { deliveryNotes: notesOrData }
+        : {};
+    
+    const updateData: any = {
+      status,
+      ...extraData,
+      ...(photoUrl ? { proofPhotoUrl: photoUrl } : {}),
+      ...(status === 'Delivered' ? { completedAt: new Date().toISOString() } : {}),
+      updatedAt: serverTimestamp(),
+    };
+
+    await updateDoc(doc(db, 'delivery_assignments', assignmentId), updateData);
+
+    const assignment = deliveryAssignments.find(a => a.id === assignmentId);
+    if (assignment?.orderId) {
+      let orderStatus: OrderStatus = 'Out for Delivery';
+      if (status === 'Delivered') orderStatus = 'Delivered';
+      if (status === 'Failed') orderStatus = 'Cancelled';
+      updateOrderStatus(assignment.orderId, orderStatus);
+    }
   };
 
-  const assignDeliveryPerson = (orderId: string, deliveryPersonId: string) => {
+
+  const assignDeliveryPerson = async (orderId: string, deliveryPersonId: string) => {
     const worker = deliveryPersonnel.find((dp) => dp.id === deliveryPersonId);
     const order = orders.find((o) => o.id === orderId);
     if (!worker || !order) return;
 
+    const id = createUniqueId('da');
     const newAssignment: DeliveryAssignment = {
-      id: createUniqueId('da'),
+      id,
       orderId,
       deliveryPersonId,
       deliveryPersonName: worker.name,
@@ -879,10 +935,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       estimatedMinutes: 25,
     };
 
-    setDeliveryAssignments((prev) => [newAssignment, ...prev]);
+    await setDoc(doc(db, 'delivery_assignments', id), {
+      ...newAssignment,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    
     updateOrderStatus(orderId, 'Out for Delivery');
     showToast(`Order #${orderId.slice(-6)} assigned to ${worker.name}`, 'success');
   };
+
+
+  const updateDeliveryPersonLocation = async (personId: string, lat: number, lng: number) => {
+    await updateDoc(doc(db, 'delivery_personnel', personId), {
+      currentLat: lat,
+      currentLng: lng,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
@@ -940,19 +1011,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     storeSettings.borderRadiusMode,
   ]);
 
-  // Sync to localStorage safely with quota protection
-  useEffect(() => {
-    safeStorageSet('fs_v5_settings', storeSettings);
-  }, [storeSettings]);
-
-  useEffect(() => {
-    safeStorageSet('fs_v5_products', products);
-  }, [products]);
-
-  useEffect(() => {
-    safeStorageSet('fs_v5_categories', categories);
-  }, [categories]);
-
+  // Local state syncs for non-Firestore entities (Cart, Wishlist)
   useEffect(() => {
     safeStorageSet('fs_v5_cart', cart);
   }, [cart]);
@@ -961,17 +1020,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     safeStorageSet('fs_v5_wishlist', wishlist);
   }, [wishlist]);
 
-  useEffect(() => {
-    safeStorageSet('fs_v5_orders', orders);
-  }, [orders]);
-
-  useEffect(() => {
-    safeStorageSet('fs_v5_reviews', reviews);
-  }, [reviews]);
-
-  useEffect(() => {
-    safeStorageSet('fs_v5_banners', banners);
-  }, [banners]);
+  // Firestore collections are handled via real-time listeners, 
+  // so we don't need to sync them to localStorage anymore.
 
   useEffect(() => {
     if (currentUser) {
@@ -1133,14 +1183,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Order Placement
-  const placeOrder = (orderData: {
+  const placeOrder = async (orderData: {
     customerName: string;
     email: string;
     phone: string;
     shippingAddress: ShippingAddress;
     paymentMethod: PaymentMethod;
     deliveryMethod: string;
-  }): Order => {
+  }): Promise<Order> => {
+
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const newOrderId = `ORD-${randomNum}`;
 
@@ -1221,15 +1272,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       })
     );
 
-    // Save order to local state (optimistic) and Firestore
-    setOrders((prev) => [newOrder, ...prev]);
-    
-    // Fire and forget Firestore save - the onSnapshot will update the list
-    setDoc(doc(db, 'orders', newOrderId), {
-      ...newOrder,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }).catch(err => console.error("Error saving order to Firestore:", err));
+    // Save order to Firestore
+    try {
+      await setDoc(doc(db, 'orders', newOrderId), {
+        ...newOrder,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `orders/${newOrderId}`);
+    }
 
     // Send admin notification
     setNotifications((prev) => [
@@ -1249,7 +1301,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newOrder;
   };
 
-  const createDirectOrder = (orderData: Partial<Order>): Order => {
+
+  const createDirectOrder = async (orderData: Partial<Order>): Promise<Order> => {
+
     const id = orderData.id || `FS-${Math.floor(1000 + Math.random() * 9000)}`;
     const totalVal = orderData.total || orderData.subtotal || 450;
     const paidVal = orderData.paidAmount !== undefined ? orderData.paidAmount : (orderData.paymentStatus === 'Paid' ? totalVal : 0);
@@ -1310,31 +1364,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       returnStatus: 'None',
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
+    try {
+      await setDoc(doc(db, 'orders', id), {
+        ...newOrder,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `orders/${id}`);
+    }
+
     showToast(`Recorded order #${id} (₹${newOrder.total})`);
     return newOrder;
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const timelineStep: DeliveryTimelineStep = {
-          status,
-          timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-          note: `Order status updated to ${status}`,
-        };
-        return {
-          ...o,
-          orderStatus: status,
-          deliveryTimeline: [timelineStep, ...(o.deliveryTimeline || [])],
-        };
-      })
-    );
+
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const timelineStep: DeliveryTimelineStep = {
+      status,
+      timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      note: `Order status updated to ${status}`,
+    };
+
+    await updateDoc(doc(db, 'orders', orderId), {
+      orderStatus: status,
+      deliveryTimeline: [timelineStep, ...(order.deliveryTimeline || [])],
+      updatedAt: serverTimestamp(),
+    });
+
     showToast(`Order #${orderId} status set to "${status}"`);
   };
 
-  const recordOrderPayment = (
+  const recordOrderPayment = async (
     orderId: string,
     amount: number,
     method: string,
@@ -1342,124 +1406,130 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     type: 'advance' | 'installment' | 'final' | 'refund',
     notes?: string
   ) => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const currentPaid = o.paidAmount !== undefined ? o.paidAmount : (o.paymentStatus === 'Paid' ? o.total : 0);
-        const newPaid = type === 'refund' ? Math.max(0, currentPaid - amount) : currentPaid + amount;
-        const newOutstanding = Math.max(0, o.total - newPaid);
-        const newStatus: PaymentStatus =
-          newPaid >= o.total ? 'Paid' : newPaid > 0 ? 'Partial' : 'Pending';
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
 
-        const record: PaymentRecord = {
-          id: createUniqueId('pay'),
-          orderId,
-          amount,
-          date: new Date().toISOString().split('T')[0],
-          method,
-          reference: reference || `MAN-${Date.now().toString(36).toUpperCase()}`,
-          recordedBy: currentUser?.name || 'Store Admin',
-          type,
-          notes: notes || `${type.toUpperCase()} payment recorded`,
-        };
+    const currentPaid = order.paidAmount !== undefined ? order.paidAmount : (order.paymentStatus === 'Paid' ? order.total : 0);
+    const newPaid = type === 'refund' ? Math.max(0, currentPaid - amount) : currentPaid + amount;
+    const newOutstanding = Math.max(0, order.total - newPaid);
+    const newStatus: PaymentStatus =
+      newPaid >= order.total ? 'Paid' : newPaid > 0 ? 'Partial' : 'Pending';
 
-        return {
-          ...o,
-          paidAmount: newPaid,
-          outstandingBalance: newOutstanding,
-          paymentStatus: newStatus,
-          paymentRecords: [record, ...(o.paymentRecords || [])],
-        };
-      })
-    );
+    const record: PaymentRecord = {
+      id: createUniqueId('pay'),
+      orderId,
+      amount,
+      date: new Date().toISOString().split('T')[0],
+      method,
+      reference: reference || `MAN-${Date.now().toString(36).toUpperCase()}`,
+      recordedBy: currentUser?.name || 'Store Admin',
+      type,
+      notes: notes || `${type.toUpperCase()} payment recorded`,
+    };
+
+    await updateDoc(doc(db, 'orders', orderId), {
+      paidAmount: newPaid,
+      outstandingBalance: newOutstanding,
+      paymentStatus: newStatus,
+      paymentRecords: [record, ...(order.paymentRecords || [])],
+      updatedAt: serverTimestamp(),
+    });
+
     showToast(`Payment of ₹${amount} recorded for order #${orderId}`);
   };
 
-  const updateOrderDeliveryStatus = (
+  const updateOrderDeliveryStatus = async (
     orderId: string,
     status: OrderStatus,
     courierName?: string,
     trackingNumber?: string,
     note?: string
   ) => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const step: DeliveryTimelineStep = {
-          status,
-          timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-          note: note || `Order updated to ${status} via ${courierName || o.courierName || 'Courier'}`,
-        };
-        return {
-          ...o,
-          orderStatus: status,
-          courierName: courierName || o.courierName || 'BlueDart / Delhivery',
-          trackingNumber: trackingNumber || o.trackingNumber,
-          deliveryTimeline: [step, ...(o.deliveryTimeline || [])],
-        };
-      })
-    );
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const step: DeliveryTimelineStep = {
+      status,
+      timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      note: note || `Order updated to ${status} via ${courierName || order.courierName || 'Courier'}`,
+    };
+
+    await updateDoc(doc(db, 'orders', orderId), {
+      orderStatus: status,
+      courierName: courierName || order.courierName || 'BlueDart / Delhivery',
+      trackingNumber: trackingNumber || order.trackingNumber,
+      deliveryTimeline: [step, ...(order.deliveryTimeline || [])],
+      updatedAt: serverTimestamp(),
+    });
+
     showToast(`Order #${orderId} delivery status set to "${status}"`);
   };
 
-  const requestOrderReturn = (orderId: string, reason: string) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              returnRequested: true,
-              returnReason: reason,
-              returnStatus: 'Requested',
-            }
-          : o
-      )
-    );
+  const requestOrderReturn = async (orderId: string, reason: string) => {
+    await updateDoc(doc(db, 'orders', orderId), {
+      returnRequested: true,
+      returnReason: reason,
+      returnStatus: 'Requested',
+      updatedAt: serverTimestamp(),
+    });
     showToast(`Return request submitted for Order #${orderId}`);
   };
 
-  const processOrderReturn = (orderId: string, status: 'Approved' | 'Rejected' | 'Refunded') => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        // If refunded, restore stock
-        if (status === 'Refunded') {
-          o.items.forEach((item) => {
-            quickUpdateStock(item.productId, 999); // restore item
-          });
+  const processOrderReturn = async (orderId: string, status: 'Approved' | 'Rejected' | 'Refunded') => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // If refunded, restore stock
+    if (status === 'Refunded') {
+      for (const item of order.items) {
+        const prod = products.find(p => p.id === item.productId);
+        if (prod) {
+          await quickUpdateStock(item.productId, prod.stock + item.quantity);
         }
-        return {
-          ...o,
-          returnStatus: status,
-          orderStatus: status === 'Refunded' ? 'Cancelled' : o.orderStatus,
-        };
-      })
-    );
+      }
+    }
+
+    await updateDoc(doc(db, 'orders', orderId), {
+      returnStatus: status,
+      orderStatus: status === 'Refunded' ? 'Cancelled' : order.orderStatus,
+      updatedAt: serverTimestamp(),
+    });
+
     showToast(`Return for Order #${orderId} marked as "${status}"`);
   };
 
   // Expenses CRUD
-  const addExpense = (newExp: Omit<Expense, 'id'>) => {
+  const addExpense = async (newExp: Omit<Expense, 'id'>) => {
+    const id = createUniqueId('exp');
     const created: Expense = {
       ...newExp,
-      id: createUniqueId('exp'),
+      id,
     };
-    setExpenses((prev) => [created, ...prev]);
+    await setDoc(doc(db, 'expenses', id), {
+      ...created,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     showToast(`Recorded expense: ${created.title} (₹${created.amount})`);
   };
 
-  const updateExpense = (id: string, updates: Partial<Expense>) => {
-    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
+  const updateExpense = async (id: string, updates: Partial<Expense>) => {
+    await updateDoc(doc(db, 'expenses', id), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
     showToast('Expense record updated');
   };
 
-  const deleteExpense = (id: string) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  const deleteExpense = async (id: string) => {
+    await deleteDoc(doc(db, 'expenses', id));
     showToast('Expense removed', 'info');
   };
 
+
   // Customer Support Chat
-  const createSupportThread = (subject: string, message: string, orderId?: string): SupportThread => {
+  // Customer Support Chat
+  const createSupportThread = async (subject: string, message: string, orderId?: string): Promise<SupportThread> => {
     const threadId = createUniqueId('th');
     const msgId = createUniqueId('msg');
     const now = new Date().toISOString();
@@ -1486,12 +1556,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         },
       ],
     };
-    setSupportThreads((prev) => [newThread, ...prev]);
+    await setDoc(doc(db, 'support_threads', threadId), {
+      ...newThread,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     showToast('Support conversation started. A store representative will reply shortly!');
     return newThread;
   };
 
-  const sendSupportMessage = (threadId: string, message: string, senderRole: 'customer' | 'admin' = 'customer') => {
+  const sendSupportMessage = async (threadId: string, message: string, senderRole: 'customer' | 'admin' = 'customer') => {
+    const thread = supportThreads.find(t => t.id === threadId);
+    if (!thread) return;
+
     const msgId = createUniqueId('msg');
     const newMsg: SupportMessage = {
       id: msgId,
@@ -1503,209 +1580,293 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isRead: false,
     };
-    setSupportThreads((prev) =>
-      prev.map((t) =>
-        t.id === threadId
-          ? {
-              ...t,
-              updatedAt: new Date().toISOString(),
-              status: senderRole === 'admin' && t.status === 'open' ? 'in_progress' : t.status,
-              messages: [...t.messages, newMsg],
-            }
-          : t
-      )
-    );
+
+    const updatedMessages = [...thread.messages, newMsg];
+    await updateDoc(doc(db, 'support_threads', threadId), {
+      messages: updatedMessages,
+      updatedAt: serverTimestamp(),
+      status: senderRole === 'admin' && thread.status === 'open' ? 'in_progress' : thread.status,
+    });
   };
 
-  const updateSupportThreadStatus = (threadId: string, status: 'open' | 'in_progress' | 'resolved') => {
-    setSupportThreads((prev) =>
-      prev.map((t) => (t.id === threadId ? { ...t, status, updatedAt: new Date().toISOString() } : t))
-    );
+  const updateSupportThreadStatus = async (threadId: string, status: 'open' | 'in_progress' | 'resolved') => {
+    await updateDoc(doc(db, 'support_threads', threadId), {
+      status,
+      updatedAt: serverTimestamp(),
+    });
     showToast(`Support ticket status updated to "${status}"`);
   };
 
+
   // Inventory Adjustments
-  const recordInventoryAdjustment = (adj: Omit<InventoryAdjustment, 'id' | 'date'>) => {
+  // Inventory Adjustments
+  const recordInventoryAdjustment = async (adj: Omit<InventoryAdjustment, 'id' | 'date'>) => {
+    const id = createUniqueId('adj');
     const created: InventoryAdjustment = {
       ...adj,
-      id: createUniqueId('adj'),
+      id,
       date: new Date().toISOString().split('T')[0],
     };
-    setInventoryAdjustments((prev) => [created, ...prev]);
-    quickUpdateStock(adj.productId, adj.newStock);
+    await setDoc(doc(db, 'inventory_adjustments', id), {
+      ...created,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await quickUpdateStock(adj.productId, adj.newStock);
     showToast(`Stock for ${adj.productName} updated to ${adj.newStock}`);
   };
 
-  const deleteOrder = (orderId: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+
+  const deleteOrder = async (orderId: string) => {
+    await deleteDoc(doc(db, 'orders', orderId));
     showToast(`Order #${orderId} deleted`, 'info');
   };
 
   // Product CRUD
-  const addProduct = (newProd: Omit<Product, 'id' | 'createdAt'>) => {
+  const addProduct = async (newProd: Omit<Product, 'id' | 'createdAt'>) => {
     const id = createUniqueId('fs');
     const created: Product = {
       ...newProd,
       id,
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setProducts((prev) => [created, ...prev]);
+    await setDoc(doc(db, 'products', id), {
+      ...created,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     showToast(`Added product "${created.name}"`);
   };
 
-  const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    );
+  const updateProduct = async (id: string, updates: Partial<Product>) => {
+    await updateDoc(doc(db, 'products', id), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
     showToast('Product updated successfully');
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    setCart((prev) => prev.filter((item) => item.product.id !== id));
-    setWishlist((prev) => prev.filter((pId) => pId !== id));
+  const deleteProduct = async (id: string) => {
+    await deleteDoc(doc(db, 'products', id));
     showToast('Product removed from catalog', 'info');
   };
 
-  const deleteMultipleProducts = (ids: string[]) => {
+  const deleteMultipleProducts = async (ids: string[]) => {
     if (!ids || ids.length === 0) return;
-    const idSet = new Set(ids);
-    setProducts((prev) => prev.filter((p) => !idSet.has(p.id)));
-    setCart((prev) => prev.filter((item) => !idSet.has(item.product.id)));
-    setWishlist((prev) => prev.filter((pId) => !idSet.has(pId)));
-    showToast(`Deleted ${ids.length} item${ids.length === 1 ? '' : 's'} from catalog`, 'info');
+    const batch = writeBatch(db);
+    ids.forEach((id) => {
+      batch.delete(doc(db, 'products', id));
+    });
+    await batch.commit();
+    showToast(`Deleted ${ids.length} items from catalog`, 'info');
   };
 
-  const duplicateProduct = (id: string) => {
+  const duplicateProduct = async (id: string) => {
     const prod = products.find((p) => p.id === id);
     if (!prod) return;
-    const duplicated: Product = {
-      ...prod,
-      id: createUniqueId('fs'),
+    const { id: _, createdAt: __, ...rest } = prod;
+    await addProduct({
+      ...rest,
       name: `${prod.name} (Copy)`,
       sku: `${prod.sku}-COPY`,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    setProducts((prev) => [duplicated, ...prev]);
-    showToast(`Duplicated "${prod.name}"`);
+    });
   };
 
-  const quickUpdateStock = (id: string, newStock: number) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, stock: Math.max(0, newStock) } : p))
-    );
+  const quickUpdateStock = async (id: string, newStock: number) => {
+    await updateDoc(doc(db, 'products', id), {
+      stock: Math.max(0, newStock),
+      updatedAt: serverTimestamp(),
+    });
     showToast(`Stock updated to ${newStock}`);
   };
 
-  const removeAllProductBadges = () => {
-    setProducts((prev) =>
-      prev.map((p) => ({
-        ...p,
+  const removeAllProductBadges = async () => {
+    const batch = writeBatch(db);
+    products.forEach((p) => {
+      batch.update(doc(db, 'products', p.id), {
         badge: '',
         showBadge: false,
         showDiscountBadge: false,
-      }))
-    );
+        updatedAt: serverTimestamp(),
+      });
+    });
+    await batch.commit();
     showToast('Removed badges from all products in catalog');
   };
 
+
   // Category CRUD
-  const addCategory = (cat: Omit<Category, 'id'>) => {
+  const addCategory = async (cat: Omit<Category, 'id'>) => {
     const id = cat.slug || createUniqueId('cat');
     const newCat: Category = { ...cat, id };
-    setCategories((prev) => [...prev, newCat]);
+    await setDoc(doc(db, 'categories', id), {
+      ...newCat,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     showToast(`Category "${cat.name}" added`);
   };
 
-  const updateCategory = (id: string, updates: Partial<Category>) => {
-    setCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
-    );
+  const updateCategory = async (id: string, updates: Partial<Category>) => {
+    await updateDoc(doc(db, 'categories', id), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
     showToast('Category updated');
   };
 
-  const deleteCategory = (id: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== id));
+  const deleteCategory = async (id: string) => {
+    await deleteDoc(doc(db, 'categories', id));
     showToast('Category deleted', 'info');
   };
 
-  const clearAllCategories = () => {
-    setCategories([]);
-    localStorage.removeItem('fs_v5_categories');
+  const clearAllCategories = async () => {
+    const batch = writeBatch(db);
+    categories.forEach((cat) => {
+      batch.delete(doc(db, 'categories', cat.id));
+    });
+    await batch.commit();
     showToast('All categories removed', 'info');
   };
 
+
   // Review Handlers
-  const addReview = (reviewData: {
+  const addReview = async (reviewData: {
     productId: string;
     productName: string;
     rating: number;
     comment: string;
     userName: string;
   }) => {
+    if (!currentUser) {
+      showToast('You must be logged in to leave a review.', 'error');
+      return;
+    }
+
+    const reviewId = createUniqueId('rev');
+    const isVerified = await checkIfUserPurchasedProduct(reviewData.productId, currentUser.id);
+
     const newRev: Review = {
-      id: createUniqueId('rev'),
+      id: reviewId,
       productId: reviewData.productId,
+      userId: currentUser.id,
       productName: reviewData.productName,
       userName: reviewData.userName,
+      userAvatar: currentUser.photoURL || currentUser.avatar,
       rating: reviewData.rating,
       comment: reviewData.comment,
       date: new Date().toISOString().split('T')[0],
-      verifiedPurchase: true,
+      verifiedPurchase: isVerified,
       status: 'approved',
     };
-    setReviews((prev) => [newRev, ...prev]);
 
-    // Recalculate product rating
-    const prodReviews = [...reviews.filter((r) => r.productId === reviewData.productId), newRev];
-    const avg =
-      prodReviews.reduce((sum, r) => sum + r.rating, 0) / prodReviews.length;
+    try {
+      await setDoc(doc(db, 'reviews', reviewId), {
+        ...newRev,
+        userId: currentUser.id,
+        createdAt: serverTimestamp(),
+      });
 
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === reviewData.productId
-          ? { ...p, rating: parseFloat(avg.toFixed(1)), reviewCount: prodReviews.length }
-          : p
-      )
-    );
+      // Recalculate and update product rating in Firestore if it exists there, 
+      // otherwise just update local state (which will eventually sync if we add product sync)
+      const prodReviews = [...reviews.filter((r) => r.productId === reviewData.productId), newRev];
+      const avg = prodReviews.reduce((sum, r) => sum + r.rating, 0) / prodReviews.length;
+      const roundedAvg = parseFloat(avg.toFixed(1));
 
-    showToast('Thank you! Your review has been submitted.');
+      // Update local products state
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === reviewData.productId
+            ? { ...p, rating: roundedAvg, reviewCount: prodReviews.length }
+            : p
+        )
+      );
+
+      // Attempt to update product in Firestore if it exists
+      const productRef = doc(db, 'products', reviewData.productId);
+      const productSnap = await getDoc(productRef);
+      if (productSnap.exists()) {
+        await updateDoc(productRef, {
+          rating: roundedAvg,
+          reviewCount: prodReviews.length,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      showToast('Thank you! Your review has been submitted.');
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      showToast('Failed to submit review. Please try again.', 'error');
+    }
   };
 
-  const updateReviewStatus = (reviewId: string, status: 'approved' | 'hidden') => {
-    setReviews((prev) =>
-      prev.map((r) => (r.id === reviewId ? { ...r, status } : r))
-    );
+  const checkIfUserPurchasedProduct = async (productId: string, userId: string): Promise<boolean> => {
+    try {
+      const q = query(
+        collection(db, 'orders'),
+        where('userId', '==', userId),
+        where('orderStatus', '==', 'Delivered')
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      // Check if any order contains the productId
+      return snapshot.docs.some(orderDoc => {
+        const orderData = orderDoc.data() as Order;
+        return orderData.items.some(item => item.productId === productId);
+      });
+    } catch (error) {
+      console.error("Error verifying purchase:", error);
+      return false;
+    }
+  };
+
+  const updateReviewStatus = async (reviewId: string, status: 'approved' | 'hidden') => {
+    await updateDoc(doc(db, 'reviews', reviewId), {
+      status,
+      updatedAt: serverTimestamp(),
+    });
     showToast(`Review marked as ${status}`);
   };
 
-  const deleteReview = (reviewId: string) => {
-    setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+  const deleteReview = async (reviewId: string) => {
+    await deleteDoc(doc(db, 'reviews', reviewId));
     showToast('Review deleted', 'info');
   };
 
+
   // Banner Handlers
-  const addBanner = (banner: Omit<Banner, 'id'>) => {
-    const newBanner: Banner = { ...banner, id: createUniqueId('b') };
-    setBanners((prev) => [newBanner, ...prev]);
+  const addBanner = async (banner: Omit<Banner, 'id'>) => {
+    const id = createUniqueId('b');
+    const newBanner: Banner = { ...banner, id };
+    await setDoc(doc(db, 'banners', id), {
+      ...newBanner,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     showToast('Promotional banner added');
   };
 
-  const updateBanner = (id: string, updates: Partial<Banner>) => {
-    setBanners((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, ...updates } : b))
-    );
+  const updateBanner = async (id: string, updates: Partial<Banner>) => {
+    await updateDoc(doc(db, 'banners', id), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
     showToast('Promotional banner updated');
   };
 
-  const deleteBanner = (id: string) => {
-    setBanners((prev) => prev.filter((b) => b.id !== id));
+  const deleteBanner = async (id: string) => {
+    await deleteDoc(doc(db, 'banners', id));
     showToast('Banner removed', 'info');
   };
 
+
   // Settings Handlers
-  const updateStoreSettings = (updates: Partial<StoreSettings>) => {
-    setStoreSettings((prev) => ({ ...prev, ...updates }));
+  const updateStoreSettings = async (updates: Partial<StoreSettings>) => {
+    await updateDoc(doc(db, 'settings', 'global'), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
     showToast('Store settings saved successfully');
   };
 
@@ -1715,79 +1876,79 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ? storeSettings.heroSlides
       : DEFAULT_HERO_SLIDES;
 
-  const addHeroSlide = (slide: Omit<HeroSlide, 'id'>) => {
+  // Hero Slides Handlers
+  const addHeroSlide = async (slide: Omit<HeroSlide, 'id'>) => {
+    const id = createUniqueId('slide');
     const newSlide: HeroSlide = {
       ...slide,
-      id: createUniqueId('slide'),
+      id,
       order: (storeSettings.heroSlides?.length || 0),
     };
-    const updated = [...(storeSettings.heroSlides || DEFAULT_HERO_SLIDES), newSlide];
-    updateStoreSettings({ heroSlides: updated });
+    await setDoc(doc(db, 'hero_slides', id), {
+      ...newSlide,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
     showToast('New hero slide added successfully!', 'success');
   };
 
-  const updateHeroSlide = (id: string, updates: Partial<HeroSlide>) => {
-    const current = storeSettings.heroSlides || DEFAULT_HERO_SLIDES;
-    const updated = current.map((s) => (s.id === id ? { ...s, ...updates } : s));
-    updateStoreSettings({ heroSlides: updated });
+  const updateHeroSlide = async (id: string, updates: Partial<HeroSlide>) => {
+    await updateDoc(doc(db, 'hero_slides', id), {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
     showToast('Hero slide updated successfully!', 'success');
   };
 
-  const deleteHeroSlide = (id: string) => {
-    const current = storeSettings.heroSlides || DEFAULT_HERO_SLIDES;
-    if (current.length <= 1) {
+  const deleteHeroSlide = async (id: string) => {
+    if (heroSlides.length <= 1) {
       showToast('You must have at least one hero slide active.', 'error');
       return;
     }
-    const updated = current.filter((s) => s.id !== id);
-    updateStoreSettings({ heroSlides: updated });
+    await deleteDoc(doc(db, 'hero_slides', id));
     showToast('Hero slide deleted', 'info');
   };
 
-  const reorderHeroSlides = (slides: HeroSlide[]) => {
-    updateStoreSettings({ heroSlides: slides });
+  const reorderHeroSlides = async (slides: HeroSlide[]) => {
+    const batch = writeBatch(db);
+    slides.forEach((slide, idx) => {
+      batch.update(doc(db, 'hero_slides', slide.id), {
+        order: idx,
+        updatedAt: serverTimestamp(),
+      });
+    });
+    await batch.commit();
     showToast('Hero slides reordered');
   };
 
-  // Persistent User Accounts
-  const [registeredUsers, setRegisteredUsers] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem('fs_v5_accounts');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {
-      // ignore
-    }
-    return [];
-  });
 
-  useEffect(() => {
-    safeStorageSet('fs_v5_accounts', registeredUsers);
-  }, [registeredUsers]);
+
 
   // User & Auth Handlers
-  const registerUser = (data: {
+  const registerUser = async (data: {
     name: string;
     email: string;
     phone?: string;
     password?: string;
     role?: 'customer' | 'admin';
-  }): boolean => {
+  }): Promise<boolean> => {
     const trimmedEmail = data.email.trim().toLowerCase();
-    const existing = registeredUsers.find((u) => u.email.toLowerCase() === trimmedEmail);
-    if (existing) {
+    
+    // Check if user already exists in Firestore
+    const userRef = doc(db, 'users', trimmedEmail.replace(/[@.]/g, '_'));
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
       showToast('An account with this email already exists. Please sign in.', 'error');
       return false;
     }
 
-    const newUser = {
-      id: createUniqueId('usr'),
+    const userId = createUniqueId('usr');
+    const newUser: User = {
+      id: userId,
       name: data.name.trim(),
       email: trimmedEmail,
       phone: data.phone?.trim() || '+91 98450 12345',
-      password: data.password || 'password123',
       role: data.role || (trimmedEmail.includes('admin') ? 'admin' : 'customer'),
       createdAt: new Date().toISOString().split('T')[0],
       addresses: [],
@@ -1797,26 +1958,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       bio: 'Stationery and writing enthusiast',
     };
 
-    setRegisteredUsers((prev) => [...prev, newUser]);
+    await setDoc(userRef, {
+      ...newUser,
+      password: data.password || 'password123', // Still mock password for this demo logic
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
 
-    const activeUser: User = {
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      phone: newUser.phone,
-      role: newUser.role as 'customer' | 'admin',
-      addresses: newUser.addresses,
-      createdAt: newUser.createdAt,
-      avatar: newUser.avatar,
-      bio: newUser.bio,
-      city: newUser.city,
-      state: newUser.state,
-    };
-
-    setCurrentUser(activeUser);
+    setCurrentUser(newUser);
     showToast(`Account created successfully! Welcome, ${newUser.name}.`, 'success');
     return true;
   };
+
 
   const loginWithGoogle = async () => {
     setIsAuthLoading(true);
@@ -1831,18 +1984,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const loginUser = (
+  const loginUser = async (
     email: string,
     password?: string,
     role: 'customer' | 'admin' = 'customer'
-  ): boolean => {
+  ): Promise<boolean> => {
     const trimmedEmail = email.trim().toLowerCase();
+    const userRef = doc(db, 'users', trimmedEmail.replace(/[@.]/g, '_'));
+    const userSnap = await getDoc(userRef);
 
-
-
-    const found = registeredUsers.find((u) => u.email.toLowerCase() === trimmedEmail);
-
-    if (found) {
+    if (userSnap.exists()) {
+      const found = userSnap.data();
       if (password && found.password && found.password !== password) {
         showToast('Incorrect password. Please verify and try again.', 'error');
         return false;
@@ -1868,35 +2020,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     // If account doesn't exist, auto-create and sign in
-    const newUserRecord = {
-      id: createUniqueId('usr'),
+    const userId = createUniqueId('usr');
+    const newUser: User = {
+      id: userId,
       name: trimmedEmail.split('@')[0],
       email: trimmedEmail,
       phone: '+91 98450 12345',
-      password: password || 'password123',
       role: role,
       createdAt: new Date().toISOString().split('T')[0],
       addresses: [],
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
     };
 
-    setRegisteredUsers((prev) => [...prev, newUserRecord]);
+    await setDoc(userRef, {
+      ...newUser,
+      password: password || 'password123',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
 
-    const activeUser: User = {
-      id: newUserRecord.id,
-      name: newUserRecord.name,
-      email: newUserRecord.email,
-      phone: newUserRecord.phone,
-      role: newUserRecord.role as 'customer' | 'admin',
-      addresses: [],
-      createdAt: newUserRecord.createdAt,
-      avatar: newUserRecord.avatar,
-    };
-
-    setCurrentUser(activeUser);
-    showToast(`Welcome to Fathima Stores, ${newUserRecord.name}!`, 'success');
+    setCurrentUser(newUser);
+    showToast(`Welcome to Fathima Stores, ${newUser.name}!`, 'success');
     return true;
   };
+
 
 ;
 
@@ -1935,32 +2082,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const addSavedAddress = (address: ShippingAddress) => {
+  const addSavedAddress = async (address: ShippingAddress) => {
     if (!currentUser) return;
     const currentAddresses = currentUser.addresses || [];
     const newAddresses = address.isDefault
       ? [...currentAddresses.map((a) => ({ ...a, isDefault: false })), address]
       : [...currentAddresses, address];
-    updateUserProfile({ addresses: newAddresses });
+    await updateUserProfile({ addresses: newAddresses });
     showToast('Delivery address saved to your profile!', 'success');
   };
 
-  const deleteSavedAddress = (index: number) => {
+  const deleteSavedAddress = async (index: number) => {
     if (!currentUser) return;
     const currentAddresses = currentUser.addresses || [];
     const newAddresses = currentAddresses.filter((_, i) => i !== index);
-    updateUserProfile({ addresses: newAddresses });
+    await updateUserProfile({ addresses: newAddresses });
     showToast('Address removed from profile', 'info');
   };
 
-  const setDefaultAddress = (index: number) => {
+  const setDefaultAddress = async (index: number) => {
     if (!currentUser) return;
     const currentAddresses = currentUser.addresses || [];
     const newAddresses = currentAddresses.map((a, i) => ({
       ...a,
       isDefault: i === index,
     }));
-    updateUserProfile({ addresses: newAddresses });
+    await updateUserProfile({ addresses: newAddresses });
     showToast('Default address updated', 'success');
   };
 
@@ -1976,52 +2123,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Reset demo data
-  const resetToDefaultData = () => {
-    setProducts(INITIAL_PRODUCTS);
-    setCategories(INITIAL_CATEGORIES);
-    setOrders(INITIAL_ORDERS);
-    setCoupons(INITIAL_COUPONS);
-    setReviews(INITIAL_REVIEWS);
-    setBanners(INITIAL_BANNERS);
-    setCurrentUser(INITIAL_USER);
-    setCart([]);
-    setWishlist([]);
-    showToast('Demo store data restored to defaults');
+  const resetToDefaultData = async () => {
+    if (confirm('Are you sure you want to reset all store data to defaults? This will wipe your current database.')) {
+      await clearAllData();
+      showToast('Database wiped. Reloading to seed default data...', 'info');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    }
   };
 
   // Complete wipe of all store data
-  const clearAllData = () => {
-    setProducts([]);
-    setCategories([]);
-    setOrders([]);
-    setCoupons([]);
-    setReviews([]);
-    setBanners([]);
-    setExpenses([]);
-    setSupportThreads([]);
-    setInventoryAdjustments([]);
-    setCart([]);
-    setWishlist([]);
-    setNotifications([]);
+  const clearAllData = async () => {
+    const collectionsToClear = [
+      'products', 'categories', 'orders', 'coupons', 'reviews', 
+      'banners', 'expenses', 'support_threads', 'inventory_adjustments', 
+      'customer_messages', 'delivery_personnel', 'delivery_assignments', 'hero_slides'
+    ];
+
+    for (const collName of collectionsToClear) {
+      const q = query(collection(db, collName));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
 
     try {
-      localStorage.removeItem('fs_v5_products');
-      localStorage.removeItem('fs_v5_categories');
-      localStorage.removeItem('fs_v5_orders');
-      localStorage.removeItem('fs_v5_cart');
-      localStorage.removeItem('fs_v5_wishlist');
-      localStorage.removeItem('fs_v5_coupons');
-      localStorage.removeItem('fs_v5_reviews');
-      localStorage.removeItem('fs_v5_banners');
-      localStorage.removeItem('fs_v5_expenses');
-      localStorage.removeItem('fs_v5_support_threads');
-      localStorage.removeItem('fs_v5_inventory_adj');
+      localStorage.clear();
     } catch {
       // ignore
     }
 
-    showToast('All store catalog and transaction data wiped clean!', 'info');
+    showToast('All store catalog and transaction data wiped clean from cloud!', 'info');
   };
+
 
   // Export full store snapshot as JSON
   const exportStoreData = (): string => {
@@ -2170,6 +2306,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateStoreSettings,
 
         currentUser,
+        allUsers,
         isAdmin: currentUser?.role === 'admin',
         isAuthLoading,
         registerUser,
@@ -2210,6 +2347,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         clearAllData,
         exportStoreData,
         importStoreData,
+        updateDeliveryPersonLocation,
+        checkIfUserPurchasedProduct,
       }}
     >
       {children}

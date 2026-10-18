@@ -77,10 +77,10 @@ export const GoogleMapAddressSelector: React.FC<Props> = ({ onAddressSelect, pla
       let state = '';
       let pinCode = '';
 
-      place.addressComponents?.forEach(comp => {
-        if (comp.types.includes('locality')) city = comp.longText;
-        if (comp.types.includes('administrative_area_level_1')) state = comp.longText;
-        if (comp.types.includes('postal_code')) pinCode = comp.longText;
+      place.addressComponents?.forEach((comp: any) => {
+        if (comp.types.includes('locality')) city = comp.longText || comp.long_name;
+        if (comp.types.includes('administrative_area_level_1')) state = comp.longText || comp.long_name;
+        if (comp.types.includes('postal_code')) pinCode = comp.longText || comp.long_name;
       });
 
       onAddressSelect({
@@ -130,7 +130,7 @@ export const GoogleMapAddressSelector: React.FC<Props> = ({ onAddressSelect, pla
               <div>
                 <p className="text-xs font-bold text-[#171717]">{suggestion.placePrediction?.text.text}</p>
                 <p className="text-[10px] text-[#6B6B6B] mt-0.5">
-                  {suggestion.placePrediction?.structuredFormat.secondaryText?.text}
+                  {(suggestion.placePrediction as any)?.secondaryText?.text}
                 </p>
               </div>
             </button>

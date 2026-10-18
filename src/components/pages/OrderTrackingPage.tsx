@@ -19,6 +19,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { ProductImage } from '../common/ProductImage';
+import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
 
 export const OrderTrackingPage: React.FC = () => {
   const { orders, products, deliveryAssignments, deliveryPersonnel, setActivePage, addToCart, showToast } = useStore();
@@ -263,71 +264,13 @@ export const OrderTrackingPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Simulated Google Map Route Container */}
-                  <div className="relative h-64 sm:h-72 rounded-2xl overflow-hidden border border-[#E9E5DE] bg-[#E5E9E0] shadow-inner flex items-center justify-center select-none">
-                    
-                    {/* Map Grid Vector Background */}
-                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#C8D2C0_1px,transparent_1px),linear-gradient(to_bottom,#C8D2C0_1px,transparent_1px)] bg-[size:32px_32px] opacity-60" />
-                    
-                    {/* Simulated Route Polyline Vector */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                      <path d="M 80 180 Q 220 80 420 150 T 750 120" fill="none" stroke="#FFFFFF" strokeWidth="12" />
-                      <path d="M 80 180 Q 220 80 420 150 T 750 120" fill="none" stroke="#145A38" strokeWidth="6" strokeDasharray="8 4" className="animate-pulse" />
-                    </svg>
-
-                    {/* Store Hub Marker */}
-                    <div className="absolute left-8 bottom-12 z-10 flex flex-col items-center">
-                      <div className="px-2 py-0.5 bg-white text-[#202320] border border-[#145A38] rounded-md text-[9px] font-bold shadow-xs mb-1">
-                        Hub: Trivandrum Central
-                      </div>
-                      <div className="w-7 h-7 rounded-full bg-[#145A38] text-white flex items-center justify-center font-bold text-xs shadow-md border-2 border-white">
-                        H
-                      </div>
-                    </div>
-
-                    {/* Delivery Boy Live Moving Marker */}
-                    <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center animate-pulse">
-                      <div className="px-3 py-1 bg-[#145A38] text-white rounded-full text-[10px] font-mono font-bold shadow-lg flex items-center gap-1.5 mb-1">
-                        <Truck className="w-3.5 h-3.5 text-amber-300" />
-                        <span>{assignedWorker?.name || 'Rahul (Express)'} is 1.8 km away</span>
-                      </div>
-                      <div className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-amber-400/30">
-                        <Truck className="w-5 h-5" />
-                      </div>
-                    </div>
-
-                    {/* Customer Destination Marker */}
-                    <div className="absolute right-12 top-16 z-10 flex flex-col items-center">
-                      <div className="px-2 py-0.5 bg-[#171717] text-white rounded-md text-[9px] font-bold shadow-xs mb-1">
-                        Destination: {activeOrder.shippingAddress?.city || 'Customer Home'}
-                      </div>
-                      <div className="w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center font-bold text-xs shadow-md border-2 border-white">
-                        <MapPin className="w-4 h-4" />
-                      </div>
-                    </div>
-
-                    {/* Floating Contact Agent Button */}
-                    <div className="absolute bottom-3 left-3 right-3 z-30 bg-white/95 backdrop-blur-xs border border-[#E9E5DE] rounded-2xl p-3 shadow-lg flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-[#145A38] text-white flex items-center justify-center font-bold text-xs shrink-0">
-                          <Radio className="w-4 h-4 animate-spin" />
-                        </div>
-                        <div>
-                          <p className="font-extrabold text-[#202320]">Delivery Agent Active</p>
-                          <p className="text-[11px] text-[#77766F]">
-                            ETA ~12 mins • Distance: 1.8 km remaining
-                          </p>
-                        </div>
-                      </div>
-
-                      <a
-                        href={`tel:${assignedWorker?.phone || '+919845012345'}`}
-                        className="px-3.5 py-1.5 bg-[#145A38] hover:bg-[#0E4228] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors shrink-0"
-                      >
-                        <Phone className="w-3.5 h-3.5" />
-                        <span>Call Agent</span>
-                      </a>
-                    </div>
+                  {/* Real Google Map Route Tracking */}
+                  <div className="relative mt-2">
+                    <DeliveryTrackingMap 
+                      order={activeOrder}
+                      storeAddress="Commercial Complex, MG Road, Trivandrum, Kerala 695001"
+                      deliveryPerson={assignedWorker}
+                    />
                   </div>
                 </div>
               )}

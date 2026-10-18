@@ -5,40 +5,124 @@
       "description": "Public and private information for a store user",
       "type": "object",
       "properties": {
-        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$" },
-        "name": { "type": "string", "maxLength": 100 },
-        "email": { "type": "string", "format": "email" },
-        "photoURL": { "type": "string", "maxLength": 1000 },
-        "phone": { "type": "string", "maxLength": 20 },
-        "role": { "type": "string", "enum": ["customer", "admin"] },
-        "bio": { "type": "string", "maxLength": 500 },
-        "city": { "type": "string", "maxLength": 100 },
-        "state": { "type": "string", "maxLength": 100 },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["customer", "admin", "delivery"] },
+        "bio": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "addresses": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
       "required": ["uid", "email", "role"]
+    },
+    "Product": {
+      "title": "Store Product",
+      "description": "Product details and inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "mrp": { "type": "number" },
+        "stock": { "type": "number" },
+        "images": { "type": "array" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" }
+      }
     },
     "Order": {
       "title": "Store Order",
       "description": "Customer purchase record",
       "type": "object",
       "properties": {
-        "userId": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$" },
+        "userId": { "type": "string" },
         "total": { "type": "number" },
         "status": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string" },
+        "items": { "type": "array" }
+      }
+    },
+    "Category": {
+      "title": "Product Category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" }
+      }
+    },
+    "Review": {
+      "title": "Product Review",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" }
+      }
+    },
+    "StoreSettings": {
+      "title": "Store Global Settings",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "accentColor": { "type": "string" }
       }
     }
   },
   "firestore": {
     "users/{userId}": {
-      "schema": "User",
-      "description": "User profile documents"
+      "schema": "User"
+    },
+    "products/{productId}": {
+      "schema": "Product"
+    },
+    "categories/{categoryId}": {
+      "schema": "Category"
     },
     "orders/{orderId}": {
-      "schema": "Order",
-      "description": "Global orders collection"
+      "schema": "Order"
+    },
+    "reviews/{reviewId}": {
+      "schema": "Review"
+    },
+    "settings/global": {
+      "schema": "StoreSettings"
+    },
+    "banners/{bannerId}": {
+      "schema": "object"
+    },
+    "expenses/{expenseId}": {
+      "schema": "object"
+    },
+    "support_threads/{threadId}": {
+      "schema": "object"
+    },
+    "inventory_adjustments/{adjustmentId}": {
+      "schema": "object"
+    },
+    "hero_slides/{slideId}": {
+      "schema": "object"
+    },
+    "customer_messages/{messageId}": {
+      "schema": "object"
+    },
+    "coupons/{couponCode}": {
+      "schema": "object"
+    },
+    "delivery_personnel/{personnelId}": {
+      "schema": "object"
+    },
+    "delivery_assignments/{assignmentId}": {
+      "schema": "object"
     }
   }
 }
+

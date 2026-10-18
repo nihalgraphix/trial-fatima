@@ -40,6 +40,8 @@ import {
   Palette,
   Sparkles,
   Sliders,
+  Truck,
+  Crown,
 } from 'lucide-react';
 import { InvoiceModal } from '../checkout/InvoiceModal';
 import { ProductImage } from '../common/ProductImage';
@@ -48,6 +50,8 @@ import { LogoUploader } from './LogoUploader';
 import { AdminInboxView } from './AdminInboxView';
 import { AdminBillingPOS } from './AdminBillingPOS';
 import { AdminDeliveryMap } from './AdminDeliveryMap';
+import { AdminDeliveryManagement } from './AdminDeliveryManagement';
+import { AdminCustomerModal, AdminCustomerRecord } from './AdminCustomerModal';
 
 type AdminTab =
   | 'overview'
@@ -61,12 +65,14 @@ type AdminTab =
   | 'reviews'
   | 'banners'
   | 'hero-slides'
+  | 'deliveries'
   | 'reports'
   | 'settings';
 
 export const AdminDashboard: React.FC = () => {
   const {
     isAdmin,
+    allUsers,
     setActivePage,
     logoutUser,
     switchRole,
@@ -130,13 +136,9 @@ export const AdminDashboard: React.FC = () => {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [bannerModalOpen, setBannerModalOpen] = useState(false);
   const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
-  const [viewingCustomer, setViewingCustomer] = useState<{
-    name: string;
-    email: string;
-    phone: string;
-    totalSpent: number;
-    ordersCount: number;
-  } | null>(null);
+  const [viewingCustomer, setViewingCustomer] = useState<AdminCustomerRecord | null>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerFilter, setCustomerFilter] = useState<'all' | 'vip' | 'regular' | 'new' | 'registered' | 'orders'>('all');
 
   // In-App Deletion Modal States (Eliminates blocked browser window.confirm)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -563,23 +565,110 @@ export const AdminDashboard: React.FC = () => {
     });
   }, [products, prodCategoryFilter, prodStockFilter, adminSearch]);
 
-  // Customers unique list
-  const customersList = useMemo(() => {
-    const map = new Map<string, { name: string; email: string; phone: string; totalSpent: number; ordersCount: number }>();
-    orders.forEach((o) => {
-      const existing = map.get(o.email) || {
-        name: o.customerName,
-        email: o.email,
-        phone: o.phone,
+  // Customers comprehensive list (Aggregates registered users from Firestore and orders)
+  const customersList = useMemo<AdminCustomerRecord[]>(() => {
+    const map = new Map<string, AdminCustomerRecord>();
+
+    // 1. Add registered users
+    (allUsers || []).forEach((u) => {
+      const emailKey = (u.email || '').toLowerCase().trim();
+      if (!emailKey) return;
+      const defAddr = u.addresses?.find((a) => a.isDefault) || u.addresses?.[0];
+      map.set(emailKey, {
+        id: u.id,
+        name: u.name || 'Registered Customer',
+        email: u.email,
+        phone: u.phone || defAddr?.phone || '',
+        photoURL: u.photoURL,
+        role: u.role || 'customer',
+        city: u.city || defAddr?.city || '',
+        state: u.state || defAddr?.state || '',
+        bio: u.bio,
+        addresses: u.addresses || [],
+        defaultAddress: defAddr,
+        createdAt: u.createdAt,
         totalSpent: 0,
         ordersCount: 0,
+        lastOrderDate: undefined,
+        orders: [],
+        isRegistered: true,
+        status: 'New',
+      });
+    });
+
+    // 2. Associate / add customers from orders
+    orders.forEach((o) => {
+      const emailKey = (o.email || '').toLowerCase().trim();
+      const existing: AdminCustomerRecord = map.get(emailKey) || {
+        id: o.userId || `cust-${Math.abs(emailKey.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0))}`,
+        name: o.customerName || 'Customer',
+        email: o.email,
+        phone: o.phone || '',
+        city: o.shippingAddress?.city || '',
+        state: o.shippingAddress?.state || '',
+        addresses: o.shippingAddress ? [o.shippingAddress] : [],
+        defaultAddress: o.shippingAddress,
+        createdAt: o.date,
+        totalSpent: 0,
+        ordersCount: 0,
+        orders: [],
+        isRegistered: false,
+        status: 'New',
       };
+
       existing.totalSpent += o.total;
       existing.ordersCount += 1;
-      map.set(o.email, existing);
+      existing.orders.push(o);
+
+      if (!existing.phone && o.phone) existing.phone = o.phone;
+      if (!existing.city && o.shippingAddress?.city) existing.city = o.shippingAddress.city;
+      if (!existing.state && o.shippingAddress?.state) existing.state = o.shippingAddress.state;
+      if (o.shippingAddress && (!existing.addresses || existing.addresses.length === 0)) {
+        existing.addresses = [o.shippingAddress];
+        existing.defaultAddress = o.shippingAddress;
+      }
+      if (!existing.lastOrderDate || new Date(o.date) > new Date(existing.lastOrderDate)) {
+        existing.lastOrderDate = o.date;
+      }
+
+      if (existing.totalSpent >= 2500 || existing.ordersCount >= 3) {
+        existing.status = 'VIP';
+      } else if (existing.ordersCount >= 1) {
+        existing.status = 'Regular';
+      } else {
+        existing.status = 'New';
+      }
+
+      map.set(emailKey, existing);
     });
-    return Array.from(map.values());
-  }, [orders]);
+
+    return Array.from(map.values()).sort((a, b) => b.totalSpent - a.totalSpent || b.ordersCount - a.ordersCount);
+  }, [allUsers, orders]);
+
+  // Filtered and searched customer list
+  const filteredCustomersList = useMemo(() => {
+    return customersList.filter((c) => {
+      if (customerSearch.trim()) {
+        const query = customerSearch.toLowerCase().trim();
+        const matchesName = c.name.toLowerCase().includes(query);
+        const matchesEmail = c.email.toLowerCase().includes(query);
+        const matchesPhone = c.phone.toLowerCase().includes(query);
+        const matchesCity = (c.city || '').toLowerCase().includes(query);
+        const matchesState = (c.state || '').toLowerCase().includes(query);
+        if (!matchesName && !matchesEmail && !matchesPhone && !matchesCity && !matchesState) {
+          return false;
+        }
+      }
+
+      if (customerFilter === 'vip') return c.status === 'VIP';
+      if (customerFilter === 'regular') return c.status === 'Regular';
+      if (customerFilter === 'new') return c.status === 'New';
+      if (customerFilter === 'registered') return c.isRegistered;
+      if (customerFilter === 'orders') return c.ordersCount > 0;
+
+      return true;
+    });
+  }, [customersList, customerSearch, customerFilter]);
 
   // Dynamic Weekly Sales Performance computed from actual orders data
   const weeklySalesStats = useMemo(() => {
@@ -702,7 +791,7 @@ export const AdminDashboard: React.FC = () => {
     setProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const tagArray = prodForm.tags.split(',').map((t) => t.trim()).filter(Boolean);
 
@@ -718,7 +807,7 @@ export const AdminDashboard: React.FC = () => {
     } : undefined;
 
     if (editingProduct) {
-      updateProduct(editingProduct.id, {
+      await updateProduct(editingProduct.id, {
         name: prodForm.name,
         brand: prodForm.brand,
         category: prodForm.category || 'General',
@@ -740,7 +829,7 @@ export const AdminDashboard: React.FC = () => {
         offer: offerData,
       });
     } else {
-      addProduct({
+      await addProduct({
         name: prodForm.name,
         brand: prodForm.brand,
         category: prodForm.category || 'General',
@@ -773,11 +862,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Category Save Handler
-  const handleSaveCategory = (e: React.FormEvent) => {
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     const slug = catForm.slug.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || `cat-${Date.now()}`;
     if (editingCategory) {
-      updateCategory(editingCategory.id, {
+      await updateCategory(editingCategory.id, {
         name: catForm.name,
         slug,
         description: catForm.description,
@@ -786,7 +875,7 @@ export const AdminDashboard: React.FC = () => {
         featured: catForm.featured,
       });
     } else {
-      addCategory({
+      await addCategory({
         name: catForm.name,
         slug,
         description: catForm.description,
@@ -801,7 +890,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Manual Order Creation Handler
-  const handleCreateManualOrder = (e: React.FormEvent) => {
+  const handleCreateManualOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     const selProd = products.find((p) => p.id === manualOrderForm.productId) || products[0];
     const qty = Math.max(1, Number(manualOrderForm.quantity) || 1);
@@ -810,7 +899,7 @@ export const AdminDashboard: React.FC = () => {
     const deliveryCharge = subtotal >= (storeSettings?.freeDeliveryThreshold ?? 500) ? 0 : 40;
     const total = subtotal + deliveryCharge;
 
-    createDirectOrder({
+    await createDirectOrder({
       customerName: manualOrderForm.customerName || 'Direct Customer',
       phone: manualOrderForm.phone || '+91 98450 12345',
       email: manualOrderForm.email || 'customer@fathimastores.com',
@@ -862,10 +951,10 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Review Save Handler
-  const handleSaveReview = (e: React.FormEvent) => {
+  const handleSaveReview = async (e: React.FormEvent) => {
     e.preventDefault();
     const selProd = products.find((p) => p.id === reviewForm.productId) || products[0];
-    addReview({
+    await addReview({
       productId: selProd ? selProd.id : 'fs-general',
       productName: selProd ? selProd.name : reviewForm.productName || 'Stationery Item',
       rating: Number(reviewForm.rating) || 5,
@@ -876,10 +965,10 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Banner Save Handler
-  const handleSaveBanner = (e: React.FormEvent) => {
+  const handleSaveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingBanner) {
-      updateBanner(editingBanner.id, {
+      await updateBanner(editingBanner.id, {
         title: bannerForm.title,
         subtitle: bannerForm.subtitle,
         badge: bannerForm.badge,
@@ -891,7 +980,7 @@ export const AdminDashboard: React.FC = () => {
         active: bannerForm.active,
       });
     } else {
-      addBanner({
+      await addBanner({
         title: bannerForm.title,
         subtitle: bannerForm.subtitle,
         badge: bannerForm.badge,
@@ -924,14 +1013,14 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleSaveSlide = (e: React.FormEvent) => {
+  const handleSaveSlide = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!slideForm.title.trim()) {
       showToast('Slide headline is required', 'error');
       return;
     }
     if (editingSlide) {
-      updateHeroSlide(editingSlide.id, {
+      await updateHeroSlide(editingSlide.id, {
         badge: slideForm.badge,
         title: slideForm.title,
         subtitle: slideForm.subtitle,
@@ -946,7 +1035,7 @@ export const AdminDashboard: React.FC = () => {
         active: slideForm.active,
       });
     } else {
-      addHeroSlide({
+      await addHeroSlide({
         badge: slideForm.badge,
         title: slideForm.title,
         subtitle: slideForm.subtitle,
@@ -966,11 +1055,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Settings Save Handler with feedback & timestamp
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingSettings(true);
     try {
-      updateStoreSettings(settingsForm);
+      await updateStoreSettings(settingsForm);
       setLastSavedTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       showToast('All store customizations and settings saved successfully!', 'success');
     } catch (err) {
@@ -1124,9 +1213,9 @@ export const AdminDashboard: React.FC = () => {
         csvContent += `"${p.id}","${p.name}","${p.brand}","${p.category}","${p.sku}",${p.price},${p.mrp},${p.stock},${p.rating},${p.reviewCount}\n`;
       });
     } else {
-      csvContent += 'Customer Name,Email,Phone,Total Spent,Orders Count\n';
+      csvContent += 'Customer ID,Customer Name,Email,Phone,City,State,Account Type,Status,Total Spent,Orders Count,Last Order Date\n';
       customersList.forEach((c) => {
-        csvContent += `"${c.name}","${c.email}","${c.phone}",${c.totalSpent},${c.ordersCount}\n`;
+        csvContent += `"${c.id}","${c.name}","${c.email}","${c.phone}","${c.city || ''}","${c.state || ''}","${c.isRegistered ? 'Registered' : 'Guest'}","${c.status}",${c.totalSpent},${c.ordersCount},"${c.lastOrderDate || ''}"\n`;
       });
     }
 
@@ -1154,6 +1243,7 @@ export const AdminDashboard: React.FC = () => {
     { id: 'reviews' as const, label: 'Reviews', icon: MessageSquare },
     { id: 'banners' as const, label: 'Banners', icon: ImageIcon },
     { id: 'hero-slides' as const, label: 'Hero Slider', icon: Sliders, count: heroSlides.length },
+    { id: 'deliveries' as const, label: 'Live Delivery', icon: Truck },
     { id: 'reports' as const, label: 'Reports', icon: BarChart3 },
     { id: 'settings' as const, label: 'Settings', icon: Settings },
   ];
@@ -1829,9 +1919,7 @@ export const AdminDashboard: React.FC = () => {
                               <td className="py-3 px-4">
                                 <select
                                   value={order.orderStatus}
-                                  onChange={(e) =>
-                                    updateOrderStatus(order.id, e.target.value as OrderStatus)
-                                  }
+                                  onChange={async (e) => await updateOrderStatus(order.id, e.target.value as OrderStatus)}
                                   className="text-xs bg-[#F7F8F3] border border-[#E8E8E3] rounded-lg px-2 py-1 font-semibold text-[#171717] outline-none focus:border-[#71883F]"
                                 >
                                   <option value="Pending">Pending</option>
@@ -2155,8 +2243,8 @@ export const AdminDashboard: React.FC = () => {
                                 {/* Quick Remove Badge / Add Badge button */}
                                 {p.showBadge !== false && (p.badge || p.offer?.active || (p.discount > 0 && p.showDiscountBadge !== false)) ? (
                                   <button
-                                    onClick={() => {
-                                      updateProduct(p.id, {
+                                    onClick={async () => {
+                                      await updateProduct(p.id, {
                                         badge: '',
                                         showBadge: false,
                                         showDiscountBadge: false,
@@ -2171,8 +2259,8 @@ export const AdminDashboard: React.FC = () => {
                                   </button>
                                 ) : (
                                   <button
-                                    onClick={() => {
-                                      updateProduct(p.id, {
+                                    onClick={async () => {
+                                      await updateProduct(p.id, {
                                         badge: 'Special',
                                         showBadge: true,
                                         showDiscountBadge: true,
@@ -2188,8 +2276,8 @@ export const AdminDashboard: React.FC = () => {
 
                                 {p.offer?.active ? (
                                   <button
-                                    onClick={() => {
-                                      updateProduct(p.id, { offer: undefined });
+                                    onClick={async () => {
+                                      await updateProduct(p.id, { offer: undefined });
                                       showToast(`Turned off offer for "${p.name}"`, 'info');
                                     }}
                                     className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold transition-colors"
@@ -2214,7 +2302,7 @@ export const AdminDashboard: React.FC = () => {
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => duplicateProduct(p.id)}
+                                  onClick={async () => await duplicateProduct(p.id)}
                                   className="p-1.5 text-neutral-600 hover:text-sky-600 hover:bg-white rounded transition-colors"
                                   title="Duplicate"
                                 >
@@ -2318,19 +2406,19 @@ export const AdminDashboard: React.FC = () => {
                         <td className="py-3 px-4 text-right">
                           <div className="inline-flex items-center gap-1.5">
                             <button
-                              onClick={() => quickUpdateStock(p.id, Math.max(0, p.stock - 5))}
+                              onClick={async () => await quickUpdateStock(p.id, Math.max(0, p.stock - 5))}
                               className="px-2 py-1 bg-[#F7F8F3] hover:bg-neutral-200 rounded border border-[#E8E8E3] text-xs font-semibold"
                             >
                               -5
                             </button>
                             <button
-                              onClick={() => quickUpdateStock(p.id, p.stock + 10)}
+                              onClick={async () => await quickUpdateStock(p.id, p.stock + 10)}
                               className="px-2 py-1 bg-[#EFF4E6] hover:bg-[#dfeacb] text-[#71883F] rounded border border-[#71883F]/30 text-xs font-semibold"
                             >
                               +10
                             </button>
                             <button
-                              onClick={() => quickUpdateStock(p.id, p.stock + 50)}
+                              onClick={async () => await quickUpdateStock(p.id, p.stock + 50)}
                               className="px-2 py-1 bg-[#EFF4E6] hover:bg-[#dfeacb] text-[#71883F] rounded border border-[#71883F]/30 text-xs font-semibold"
                             >
                               +50
@@ -2487,69 +2575,315 @@ export const AdminDashboard: React.FC = () => {
           {/* 6. CUSTOMERS TAB */}
           {currentTab === 'customers' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl font-extrabold text-[#171717] tracking-tight">
-                    Customers ({customersList.length})
+                  <h1 className="text-2xl font-extrabold text-[#171717] tracking-tight flex items-center gap-2">
+                    Customers Directory
+                    <span className="text-sm font-bold px-2.5 py-0.5 rounded-full bg-[#EFF4E6] text-[#71883F] border border-[#71883F]/20">
+                      {customersList.length}
+                    </span>
                   </h1>
                   <p className="text-xs text-[#6B6B6B] mt-0.5">
-                    Customer contact records, order totals, and purchase history.
+                    Registered users, store clients, order records, lifetime value, and customer profiles. Click any customer to view full profile.
                   </p>
                 </div>
 
-                <button
-                  onClick={() => handleExportCSV('customers')}
-                  className="px-4 py-2 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded-lg text-xs font-semibold text-[#171717] flex items-center gap-1.5 shadow-2xs"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#71883F]" /> Export Customers CSV
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleExportCSV('customers')}
+                    className="px-4 py-2 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded-xl text-xs font-semibold text-[#171717] flex items-center gap-1.5 shadow-2xs hover:bg-[#FAFBF7] transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#71883F]" /> Export CSV
+                  </button>
+                </div>
               </div>
 
+              {/* KPI Summary Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-[#E8E8E3] shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#6B6B6B]">Total Customers</span>
+                    <div className="w-8 h-8 rounded-xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center">
+                      <Users className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-2xl font-extrabold text-[#171717] tabular-nums">
+                    {customersList.length}
+                  </div>
+                  <span className="text-[11px] text-[#6B6B6B] mt-0.5 block">
+                    {customersList.filter(c => c.isRegistered).length} registered accounts
+                  </span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-[#E8E8E3] shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#6B6B6B]">Total Customer Spend</span>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-2xl font-extrabold text-[#71883F] tabular-nums">
+                    ₹{customersList.reduce((acc, c) => acc + c.totalSpent, 0).toLocaleString('en-IN')}
+                  </div>
+                  <span className="text-[11px] text-[#6B6B6B] mt-0.5 block">
+                    Across {customersList.reduce((acc, c) => acc + c.ordersCount, 0)} total orders
+                  </span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-[#E8E8E3] shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#6B6B6B]">Avg. Order Value (AOV)</span>
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <ShoppingBag className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-2xl font-extrabold text-[#171717] tabular-nums">
+                    ₹{(() => {
+                      const totalOrders = customersList.reduce((acc, c) => acc + c.ordersCount, 0);
+                      const totalRevenue = customersList.reduce((acc, c) => acc + c.totalSpent, 0);
+                      return totalOrders > 0 ? Math.round(totalRevenue / totalOrders).toLocaleString('en-IN') : 0;
+                    })()}
+                  </div>
+                  <span className="text-[11px] text-[#6B6B6B] mt-0.5 block">
+                    Per completed purchase
+                  </span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-[#E8E8E3] shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#6B6B6B]">VIP Customers</span>
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                      <Crown className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-2xl font-extrabold text-amber-700 tabular-nums">
+                    {customersList.filter(c => c.status === 'VIP').length}
+                  </div>
+                  <span className="text-[11px] text-[#6B6B6B] mt-0.5 block">
+                    Spent ≥₹2,500 or 3+ orders
+                  </span>
+                </div>
+              </div>
+
+              {/* Filters & Search Toolbar */}
+              <div className="bg-white p-4 rounded-2xl border border-[#E8E8E3] shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  {/* Search Bar */}
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search customers by name, email, phone, city..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 bg-[#FAFBF7] border border-[#E8E8E3] focus:border-[#71883F] rounded-xl text-xs text-[#171717] focus:outline-hidden"
+                    />
+                    {customerSearch && (
+                      <button
+                        onClick={() => setCustomerSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    {[
+                      { id: 'all' as const, label: 'All Customers', count: customersList.length },
+                      { id: 'vip' as const, label: 'VIP', count: customersList.filter(c => c.status === 'VIP').length },
+                      { id: 'regular' as const, label: 'Regular', count: customersList.filter(c => c.status === 'Regular').length },
+                      { id: 'new' as const, label: 'New', count: customersList.filter(c => c.status === 'New').length },
+                      { id: 'orders' as const, label: 'With Orders', count: customersList.filter(c => c.ordersCount > 0).length },
+                      { id: 'registered' as const, label: 'Registered', count: customersList.filter(c => c.isRegistered).length },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setCustomerFilter(f.id)}
+                        className={`px-3 py-1.5 rounded-xl font-semibold transition-colors flex items-center gap-1.5 ${
+                          customerFilter === f.id
+                            ? 'bg-[#71883F] text-white shadow-2xs'
+                            : 'bg-[#FAFBF7] text-[#6B6B6B] hover:text-[#171717] border border-[#E8E8E3]'
+                        }`}
+                      >
+                        <span>{f.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                          customerFilter === f.id ? 'bg-white/20 text-white' : 'bg-neutral-200/60 text-neutral-600'
+                        }`}>
+                          {f.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Customers Table / Grid */}
               <div className="bg-white border border-[#E8E8E3] rounded-2xl overflow-hidden shadow-2xs">
-                {customersList.length === 0 ? (
+                {filteredCustomersList.length === 0 ? (
                   <div className="p-12 text-center space-y-3">
                     <div className="w-12 h-12 rounded-full bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto">
                       <Users className="w-6 h-6" />
                     </div>
-                    <h3 className="text-sm font-bold text-[#171717]">No Customer Records Yet</h3>
+                    <h3 className="text-sm font-bold text-[#171717]">
+                      {customersList.length === 0 ? 'No Customer Records Yet' : 'No Customers Match Filters'}
+                    </h3>
                     <p className="text-xs text-[#6B6B6B] max-w-sm mx-auto">
-                      Customer profiles are created automatically whenever an order is placed in the store.
+                      {customersList.length === 0
+                        ? 'Customer profiles are automatically created whenever a user registers or an order is placed.'
+                        : 'Try adjusting your search terms or clearing the selected filter.'}
                     </p>
+                    {(customerSearch || customerFilter !== 'all') && (
+                      <button
+                        onClick={() => {
+                          setCustomerSearch('');
+                          setCustomerFilter('all');
+                        }}
+                        className="px-3.5 py-1.5 bg-[#71883F] text-white rounded-xl text-xs font-semibold hover:bg-[#5b6f32]"
+                      >
+                        Reset Filters
+                      </button>
+                    )}
                   </div>
                 ) : (
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-[#F7F8F3] border-b border-[#E8E8E3] text-[#6B6B6B]">
-                      <tr>
-                        <th className="py-3 px-4 font-semibold">Customer</th>
-                        <th className="py-3 px-4 font-semibold">Phone</th>
-                        <th className="py-3 px-4 font-semibold">Email</th>
-                        <th className="py-3 px-4 font-semibold">Orders</th>
-                        <th className="py-3 px-4 font-semibold text-right">Total Spent</th>
-                        <th className="py-3 px-4 font-semibold text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E8E8E3]">
-                      {customersList.map((cust, idx) => (
-                        <tr key={idx} className="hover:bg-[#F7F8F3]/50">
-                          <td className="py-3 px-4 font-semibold text-[#171717]">{cust.name}</td>
-                          <td className="py-3 px-4 text-[#6B6B6B]">{cust.phone}</td>
-                          <td className="py-3 px-4 text-[#6B6B6B]">{cust.email}</td>
-                          <td className="py-3 px-4 tabular-nums">{cust.ordersCount} orders</td>
-                          <td className="py-3 px-4 font-bold text-[#71883F] text-right tabular-nums">
-                            ₹{cust.totalSpent}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => setViewingCustomer(cust)}
-                              className="px-2.5 py-1 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded text-[11px] font-semibold text-[#71883F]"
-                            >
-                              View Orders
-                            </button>
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-[#FAFBF7] border-b border-[#E8E8E3] text-[#6B6B6B]">
+                        <tr>
+                          <th className="py-3.5 px-4 font-semibold">Customer</th>
+                          <th className="py-3.5 px-4 font-semibold">Contact Info</th>
+                          <th className="py-3.5 px-4 font-semibold">Location</th>
+                          <th className="py-3.5 px-4 font-semibold">Orders</th>
+                          <th className="py-3.5 px-4 font-semibold text-right">Total Spent</th>
+                          <th className="py-3.5 px-4 font-semibold text-center">Tier</th>
+                          <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-[#E8E8E3]">
+                        {filteredCustomersList.map((cust) => {
+                          const initials = cust.name
+                            ? cust.name.trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase()
+                            : 'C';
+
+                          return (
+                            <tr
+                              key={cust.id}
+                              onClick={() => setViewingCustomer(cust)}
+                              className="hover:bg-[#FAFBF7] cursor-pointer transition-colors group"
+                            >
+                              {/* Customer Identity */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-3">
+                                  {cust.photoURL ? (
+                                    <img
+                                      src={cust.photoURL}
+                                      alt={cust.name}
+                                      className="w-9 h-9 rounded-xl object-cover border border-[#E8E8E3] shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#71883F] to-[#55692d] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                      {initials}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="font-bold text-[#171717] group-hover:text-[#71883F] transition-colors flex items-center gap-1.5">
+                                      {cust.name}
+                                      {cust.status === 'VIP' && (
+                                        <span title="VIP Customer" className="inline-flex">
+                                          <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-[11px] text-[#6B6B6B] mt-0.5">
+                                      {cust.isRegistered ? (
+                                        <span className="text-emerald-700 font-medium">Registered</span>
+                                      ) : (
+                                        <span>Guest Order</span>
+                                      )}
+                                      {cust.role && cust.role !== 'customer' && (
+                                        <>
+                                          <span>•</span>
+                                          <span className="font-semibold text-purple-700 uppercase text-[10px]">{cust.role}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Contact */}
+                              <td className="py-3.5 px-4">
+                                <div className="space-y-0.5">
+                                  <div className="text-[#171717] font-medium truncate max-w-[180px]" title={cust.email}>
+                                    {cust.email || 'No email provided'}
+                                  </div>
+                                  <div className="text-[11px] text-[#6B6B6B]">
+                                    {cust.phone || 'No phone'}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Location */}
+                              <td className="py-3.5 px-4 text-[#6B6B6B]">
+                                {[cust.city, cust.state].filter(Boolean).join(', ') || '—'}
+                              </td>
+
+                              {/* Orders */}
+                              <td className="py-3.5 px-4">
+                                <span className="font-semibold text-[#171717] block tabular-nums">
+                                  {cust.ordersCount} order{cust.ordersCount === 1 ? '' : 's'}
+                                </span>
+                                {cust.lastOrderDate && (
+                                  <span className="text-[10px] text-[#6B6B6B] block">
+                                    Last: {cust.lastOrderDate}
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Total Spent */}
+                              <td className="py-3.5 px-4 font-extrabold text-[#71883F] text-right tabular-nums text-sm">
+                                ₹{cust.totalSpent.toLocaleString('en-IN')}
+                              </td>
+
+                              {/* Tier Status */}
+                              <td className="py-3.5 px-4 text-center">
+                                {cust.status === 'VIP' && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                    <Crown className="w-2.5 h-2.5 fill-current" /> VIP
+                                  </span>
+                                )}
+                                {cust.status === 'Regular' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#EFF4E6] text-[#71883F] border border-[#71883F]/30">
+                                    Regular
+                                  </span>
+                                )}
+                                {cust.status === 'New' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-neutral-100 text-neutral-600">
+                                    New
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Action */}
+                              <td className="py-3.5 px-4 text-right">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewingCustomer(cust);
+                                  }}
+                                  className="px-3 py-1.5 bg-white border border-[#E8E8E3] group-hover:border-[#71883F] group-hover:bg-[#71883F] group-hover:text-white rounded-lg text-xs font-semibold text-[#71883F] transition-all shadow-2xs"
+                                >
+                                  View Details →
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
@@ -2626,7 +2960,7 @@ export const AdminDashboard: React.FC = () => {
 
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => updateReviewStatus(rev.id, rev.status === 'approved' ? 'hidden' : 'approved')}
+                          onClick={async () => await updateReviewStatus(rev.id, rev.status === 'approved' ? 'hidden' : 'approved')}
                           className={`px-3 py-1 text-xs font-semibold rounded-lg border ${
                             rev.status === 'approved'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -2636,7 +2970,7 @@ export const AdminDashboard: React.FC = () => {
                           {rev.status === 'approved' ? 'Approved' : 'Hidden'}
                         </button>
                         <button
-                          onClick={() => deleteReview(rev.id)}
+                          onClick={async () => await deleteReview(rev.id)}
                           className="p-1.5 text-neutral-400 hover:text-rose-600 rounded"
                           title="Delete"
                         >
@@ -2692,7 +3026,7 @@ export const AdminDashboard: React.FC = () => {
                       <span className="text-xs font-bold text-[#71883F] uppercase tracking-wider">{b.badge}</span>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => updateBanner(b.id, { active: !b.active })}
+                          onClick={async () => await updateBanner(b.id, { active: !b.active })}
                           className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
                             b.active ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-200 text-neutral-600'
                           }`}
@@ -2797,7 +3131,7 @@ export const AdminDashboard: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={storeSettings.heroSliderAutoplay !== false}
-                      onChange={(e) => updateStoreSettings({ heroSliderAutoplay: e.target.checked })}
+                      onChange={async (e) => await updateStoreSettings({ heroSliderAutoplay: e.target.checked })}
                       className="accent-[#71883F]"
                     />
                     <span>Auto-Play Moving Slides</span>
@@ -2808,7 +3142,7 @@ export const AdminDashboard: React.FC = () => {
                   <span className="text-[#6B6B6B] font-medium">Slide Interval:</span>
                   <select
                     value={storeSettings.heroSliderInterval || 5000}
-                    onChange={(e) => updateStoreSettings({ heroSliderInterval: Number(e.target.value) })}
+                    onChange={async (e) => await updateStoreSettings({ heroSliderInterval: Number(e.target.value) })}
                     className="px-3 py-1.5 bg-[#F7F8F3] border border-[#E8E8E3] rounded-lg font-semibold text-[#171717] outline-none"
                   >
                     <option value={3000}>3 Seconds (Fast)</option>
@@ -2832,7 +3166,7 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => updateHeroSlide(slide.id, { active: !slide.active })}
+                          onClick={async () => await updateHeroSlide(slide.id, { active: !slide.active })}
                           className={`text-xs px-2.5 py-0.5 rounded-full font-semibold cursor-pointer ${
                             slide.active ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-200 text-neutral-600'
                           }`}
@@ -3028,6 +3362,10 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {/* 10. SETTINGS TAB */}
+          {currentTab === 'deliveries' && (
+            <AdminDeliveryManagement />
+          )}
+
           {currentTab === 'settings' && (
             <div className="space-y-6 max-w-3xl">
               <div>
@@ -3055,8 +3393,8 @@ export const AdminDashboard: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        updateStoreSettings({ accentColor: settingsForm.accentColor });
+                      onClick={async () => {
+                        await updateStoreSettings({ accentColor: settingsForm.accentColor });
                         showToast(`Accent color updated to ${settingsForm.accentColor}! Applied live.`, 'success');
                       }}
                       className="px-3.5 py-1.5 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer shrink-0"
@@ -3088,9 +3426,9 @@ export const AdminDashboard: React.FC = () => {
                           <button
                             key={preset.hex}
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               setSettingsForm({ ...settingsForm, accentColor: preset.hex });
-                              updateStoreSettings({ accentColor: preset.hex });
+                              await updateStoreSettings({ accentColor: preset.hex });
                               showToast(`Switched accent color to ${preset.name}!`, 'success');
                             }}
                             className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
@@ -3170,10 +3508,10 @@ export const AdminDashboard: React.FC = () => {
                       </label>
                       <select
                         value={settingsForm.storeThemeMode || 'white'}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const mode = e.target.value as any;
                           setSettingsForm({ ...settingsForm, storeThemeMode: mode });
-                          updateStoreSettings({ storeThemeMode: mode });
+                          await updateStoreSettings({ storeThemeMode: mode });
                           showToast(`Store theme set to ${mode}!`, 'success');
                         }}
                         className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-xs font-medium"
@@ -3191,10 +3529,10 @@ export const AdminDashboard: React.FC = () => {
                       </label>
                       <select
                         value={settingsForm.fontFamily || 'Plus Jakarta Sans'}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const font = e.target.value as any;
                           setSettingsForm({ ...settingsForm, fontFamily: font });
-                          updateStoreSettings({ fontFamily: font });
+                          await updateStoreSettings({ fontFamily: font });
                           showToast(`Font family changed to ${font}!`, 'success');
                         }}
                         className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-xs font-medium"
@@ -3212,10 +3550,10 @@ export const AdminDashboard: React.FC = () => {
                       </label>
                       <select
                         value={settingsForm.borderRadiusMode || 'rounded'}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const mode = e.target.value as any;
                           setSettingsForm({ ...settingsForm, borderRadiusMode: mode });
-                          updateStoreSettings({ borderRadiusMode: mode });
+                          await updateStoreSettings({ borderRadiusMode: mode });
                           showToast(`Border radius mode updated!`, 'success');
                         }}
                         className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-xs font-medium"
@@ -3259,9 +3597,9 @@ export const AdminDashboard: React.FC = () => {
                       <input
                         type="checkbox"
                         checked={settingsForm.heroSliderAutoplay ?? true}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           setSettingsForm({ ...settingsForm, heroSliderAutoplay: e.target.checked });
-                          updateStoreSettings({ heroSliderAutoplay: e.target.checked });
+                          await updateStoreSettings({ heroSliderAutoplay: e.target.checked });
                           showToast(`Hero slider auto-play ${e.target.checked ? 'enabled' : 'disabled'}!`, 'info');
                         }}
                         className="accent-[#71883F] w-4 h-4 rounded cursor-pointer"
@@ -3281,10 +3619,10 @@ export const AdminDashboard: React.FC = () => {
                         max="8000"
                         step="500"
                         value={settingsForm.heroSliderInterval || 3000}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const val = Number(e.target.value);
                           setSettingsForm({ ...settingsForm, heroSliderInterval: val });
-                          updateStoreSettings({ heroSliderInterval: val });
+                          await updateStoreSettings({ heroSliderInterval: val });
                         }}
                         className="w-full accent-[#71883F] cursor-pointer mt-1"
                       />
@@ -3313,8 +3651,8 @@ export const AdminDashboard: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        updateStoreSettings({
+                      onClick={async () => {
+                        await updateStoreSettings({
                           homeBgImage: settingsForm.homeBgImage,
                           homeBgColor: settingsForm.homeBgColor,
                           homeBgOverlay: settingsForm.homeBgOverlay,
@@ -5293,9 +5631,9 @@ export const AdminDashboard: React.FC = () => {
                       <span className="text-[10px] text-[#6B6B6B] block">Fulfillment Status</span>
                       <select
                         value={viewingOrder.orderStatus}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const newStatus = e.target.value as OrderStatus;
-                          updateOrderStatus(viewingOrder.id, newStatus);
+                          await updateOrderStatus(viewingOrder.id, newStatus);
                           setViewingOrder({ ...viewingOrder, orderStatus: newStatus });
                         }}
                         className="mt-1 text-xs font-bold bg-white border border-[#E8E8E3] rounded-md px-2 py-1 outline-none w-full"
@@ -5526,74 +5864,23 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Customer Orders History Modal */}
+      {/* Customer Full Profile & Information Modal */}
       {viewingCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div
-            className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-[#E8E8E3] overflow-hidden flex flex-col max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-5 border-b border-[#E8E8E3] flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm text-[#171717]">{viewingCustomer.name}</h3>
-                <span className="text-[11px] text-[#6B6B6B]">{viewingCustomer.email} · {viewingCustomer.phone}</span>
-              </div>
-              <button
-                onClick={() => setViewingCustomer(null)}
-                className="p-1 text-neutral-400 hover:text-neutral-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-4 text-xs">
-              <div className="p-3 bg-[#F7F8F3] rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-[#6B6B6B] block">Lifetime Value</span>
-                  <span className="text-base font-extrabold text-[#71883F] tabular-nums">
-                    ₹{viewingCustomer.totalSpent}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#6B6B6B] block">Orders Placed</span>
-                  <span className="text-base font-bold text-[#171717] tabular-nums">
-                    {viewingCustomer.ordersCount}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <span className="font-bold text-[#171717] block">Order History:</span>
-                <div className="divide-y divide-[#E8E8E3] border border-[#E8E8E3] rounded-xl overflow-hidden">
-                  {orders
-                    .filter((o) => o.email === viewingCustomer.email)
-                    .map((o, idx) => (
-                      <div key={`${o.id}-${idx}`} className="p-3 flex items-center justify-between hover:bg-[#F7F8F3]/50">
-                        <div>
-                          <span className="font-bold text-[#171717] block">{o.id}</span>
-                          <span className="text-[10px] text-[#6B6B6B]">
-                            {o.date} · {o.items.length} items · {o.orderStatus}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold text-[#71883F] block tabular-nums">₹{o.total}</span>
-                          <button
-                            onClick={() => {
-                              setViewingOrder(o);
-                              setViewingCustomer(null);
-                            }}
-                            className="text-[10px] text-[#71883F] hover:underline"
-                          >
-                            Details →
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdminCustomerModal
+          customer={viewingCustomer}
+          onClose={() => setViewingCustomer(null)}
+          onViewOrder={(order) => {
+            setViewingOrder(order);
+            setViewingCustomer(null);
+          }}
+          onViewInvoice={(order) => {
+            setSelectedOrderForInvoice(order);
+          }}
+          onCreateOrder={() => {
+            setViewingCustomer(null);
+            setCurrentTab('billing');
+          }}
+        />
       )}
 
       {/* Review Add Modal */}
@@ -6087,8 +6374,8 @@ export const AdminDashboard: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteHeroSlide(slideToDelete.id);
+                onClick={async () => {
+                  await deleteHeroSlide(slideToDelete.id);
                   setSlideToDelete(null);
                 }}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700"
@@ -6145,10 +6432,10 @@ export const AdminDashboard: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const idToDelete = productToDelete.id;
                   const nameToDelete = productToDelete.name;
-                  deleteProduct(idToDelete);
+                  await deleteProduct(idToDelete);
                   setSelectedProductIds((prev) => prev.filter((id) => id !== idToDelete));
                   setProductToDelete(null);
                   showToast(`"${nameToDelete}" was deleted from the store`, 'info');
@@ -6237,8 +6524,8 @@ export const AdminDashboard: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteCategory(categoryToDelete.id);
+                onClick={async () => {
+                  await deleteCategory(categoryToDelete.id);
                   setCategoryToDelete(null);
                 }}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
@@ -6319,8 +6606,8 @@ export const AdminDashboard: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteBanner(bannerToDelete.id);
+                onClick={async () => {
+                  await deleteBanner(bannerToDelete.id);
                   setBannerToDelete(null);
                 }}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
@@ -6370,8 +6657,8 @@ export const AdminDashboard: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  clearAllData();
+                onClick={async () => {
+                  await clearAllData();
                   setShowClearAllDataModal(false);
                 }}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"

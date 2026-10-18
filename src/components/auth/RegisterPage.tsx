@@ -13,7 +13,7 @@ export const RegisterPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password) {
       showToast('Please fill out all required fields.', 'error');
@@ -31,7 +31,7 @@ export const RegisterPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const success = registerUser({
+    const success = await registerUser({
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim() || '+91 98450 12345',
@@ -45,6 +45,7 @@ export const RegisterPage: React.FC = () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
 
   return (
     <div className="bg-[#F7F8F3] min-h-[85vh] py-10 sm:py-16 flex items-center justify-center px-4">

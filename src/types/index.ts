@@ -238,6 +238,7 @@ export interface HeroSlide {
 export interface Review {
   id: string;
   productId: string;
+  userId: string;
   productName: string;
   userName: string;
   userAvatar?: string;

@@ -42,13 +42,13 @@ export const SupportChatWidget: React.FC = () => {
     }
   }, [activeThread?.messages?.length, isSupportChatOpen]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageText.trim()) return;
 
     if (!activeThread) {
       // Create new thread
-      const created = createSupportThread(
+      const created = await createSupportThread(
         newSubject,
         messageText.trim(),
         selectedOrderId || undefined
@@ -60,6 +60,7 @@ export const SupportChatWidget: React.FC = () => {
 
     setMessageText('');
   };
+
 
   const quickPrompts = [
     { label: '📦 Where is my order?', subject: 'Delivery & Shipping Update' },

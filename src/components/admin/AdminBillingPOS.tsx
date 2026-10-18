@@ -117,7 +117,7 @@ export const AdminBillingPOS: React.FC = () => {
   };
 
   // Generate Bill & Complete Sale
-  const handleGenerateBill = () => {
+  const handleGenerateBill = async () => {
     if (cart.length === 0) {
       showToast('Please select at least one item to generate a bill.', 'error');
       return;
@@ -166,12 +166,17 @@ export const AdminBillingPOS: React.FC = () => {
       outstandingBalance: 0,
     };
 
-    const createdOrder = createDirectOrder(newOrderData);
-    setGeneratedOrder(createdOrder);
-    setIsInvoiceOpen(true);
-
-    showToast(`Bill #${posInvoiceId} generated successfully! Total: ₹${grandTotal}`, 'success');
+    try {
+      const createdOrder = await createDirectOrder(newOrderData);
+      setGeneratedOrder(createdOrder);
+      setIsInvoiceOpen(true);
+      showToast(`Bill #${posInvoiceId} generated successfully! Total: ₹${grandTotal}`, 'success');
+    } catch (error) {
+      console.error("Error creating direct order:", error);
+      showToast("Failed to generate bill. Please try again.", "error");
+    }
   };
+
 
   return (
     <div className="p-4 sm:p-6 space-y-6 text-xs text-left">
