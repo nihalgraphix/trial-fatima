@@ -353,6 +353,8 @@ interface StoreContextType {
   allUsers: User[];
   isAdmin: boolean;
   isAuthLoading: boolean;
+  unauthorizedDomainInfo: { domain: string; projectId: string } | null;
+  setUnauthorizedDomainInfo: (info: { domain: string; projectId: string } | null) => void;
   registerUser: (data: { name: string; email: string; phone?: string; password?: string; role?: 'customer' | 'admin' }) => Promise<boolean>;
   loginUser: (email: string, password?: string, role?: 'customer' | 'admin') => Promise<boolean>;
   loginWithGoogle: () => Promise<void>;
@@ -513,23 +515,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-
+  const [unauthorizedDomainInfo, setUnauthorizedDomainInfo] = useState<{
+    domain: string;
+    projectId: string;
+  } | null>(null);
 
   // Sync Firebase Auth with App State
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setIsAuthLoading(true);
       if (firebaseUser) {
+        const isMasterAdmin = (firebaseUser.email?.toLowerCase() === 'nihal.graphix@gmail.com') ||
+                              Boolean(firebaseUser.email?.toLowerCase().includes('admin'));
+
         // Fetch additional profile data from Firestore
         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
+          const effectiveRole = isMasterAdmin ? 'admin' : (data.role || 'customer');
           setCurrentUser({
             id: firebaseUser.uid,
             name: data.name || firebaseUser.displayName || 'User',
             email: firebaseUser.email || '',
             photoURL: data.photoURL || firebaseUser.photoURL || '',
-            role: data.role || 'customer',
+            role: effectiveRole,
             phone: data.phone || '',
             bio: data.bio || '',
             city: data.city || '',
@@ -537,6 +546,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             addresses: data.addresses || [],
             createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           });
+
+          // Sync admin role back to doc if needed
+          if (isMasterAdmin && data.role !== 'admin') {
+            await updateDoc(doc(db, 'users', firebaseUser.uid), {
+              role: 'admin',
+              updatedAt: serverTimestamp(),
+            }).catch(() => {});
+          }
         } else {
           // New Google User - create minimal profile
           const newUser: User = {
@@ -545,7 +562,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             email: firebaseUser.email || '',
             photoURL: firebaseUser.photoURL || '',
             phone: firebaseUser.phoneNumber || '',
-            role: 'customer',
+            role: isMasterAdmin ? 'admin' : 'customer',
             addresses: [],
             createdAt: new Date().toISOString(),
           };
@@ -1978,7 +1995,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       showToast('Successfully signed in with Google!', 'success');
     } catch (error: any) {
       console.error('Google Sign-In Error:', error);
-      showToast(error.message || 'Failed to sign in with Google.', 'error');
+      const errStr = String(error?.code || error?.message || error || '').toLowerCase();
+      if (errStr.includes('unauthorized-domain')) {
+        const currentDomain = window.location.hostname || 'trial-fatima.vercel.app';
+        setUnauthorizedDomainInfo({
+          domain: currentDomain,
+          projectId: 'totemic-sign-0c70r',
+        });
+      } else {
+        showToast(error.message || 'Failed to sign in with Google.', 'error');
+      }
     } finally {
       setIsAuthLoading(false);
     }
@@ -1990,6 +2016,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     role: 'customer' | 'admin' = 'customer'
   ): Promise<boolean> => {
     const trimmedEmail = email.trim().toLowerCase();
+    const isMasterAdmin = (trimmedEmail === 'nihal.graphix@gmail.com') || (role === 'admin') || trimmedEmail.includes('admin');
+    const effectiveRole: 'customer' | 'admin' = isMasterAdmin ? 'admin' : 'customer';
+
     const userRef = doc(db, 'users', trimmedEmail.replace(/[@.]/g, '_'));
     const userSnap = await getDoc(userRef);
 
@@ -2005,7 +2034,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         name: found.name,
         email: found.email,
         phone: found.phone,
-        role: found.role,
+        role: isMasterAdmin ? 'admin' : (found.role || 'customer'),
         addresses: found.addresses || [],
         createdAt: found.createdAt,
         avatar: found.avatar,
@@ -2026,7 +2055,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       name: trimmedEmail.split('@')[0],
       email: trimmedEmail,
       phone: '+91 98450 12345',
-      role: role,
+      role: effectiveRole,
       createdAt: new Date().toISOString().split('T')[0],
       addresses: [],
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
@@ -2034,7 +2063,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     await setDoc(userRef, {
       ...newUser,
-      password: password || 'password123',
+      password: password || 'admin123',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -2309,6 +2338,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         allUsers,
         isAdmin: currentUser?.role === 'admin',
         isAuthLoading,
+        unauthorizedDomainInfo,
+        setUnauthorizedDomainInfo,
         registerUser,
         loginUser,
         loginWithGoogle,

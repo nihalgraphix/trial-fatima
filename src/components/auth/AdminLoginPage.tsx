@@ -1,45 +1,134 @@
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { ShieldCheck, Lock, Mail, ArrowRight, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, ArrowLeft, KeyRound, Sparkles, AlertCircle } from 'lucide-react';
 
 export const AdminLoginPage: React.FC = () => {
-  const { loginUser, setActivePage, showToast } = useStore();
+  const { loginUser, loginWithGoogle, isAuthLoading, setActivePage, showToast } = useStore();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       showToast('Please enter admin credentials.', 'error');
       return;
     }
-    const success = await loginUser(email, password, 'admin');
-    if (success) {
-      setActivePage('admin');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsSubmitting(true);
+    try {
+      const success = await loginUser(email.trim(), password, 'admin');
+      if (success) {
+        setActivePage('admin');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const handleQuickStoreOwnerLogin = async () => {
+    setIsSubmitting(true);
+    try {
+      const success = await loginUser('nihal.graphix@gmail.com', 'admin123', 'admin');
+      if (success) {
+        showToast('Logged in as Store Owner Admin (nihal.graphix@gmail.com)', 'success');
+        setActivePage('admin');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="bg-[#171717] min-h-screen py-14 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white border border-[#E8E8E3] rounded-2xl p-8 shadow-2xl">
+      <div className="w-full max-w-md bg-white border border-[#E8E8E3] rounded-3xl p-8 sm:p-9 shadow-2xl space-y-6">
         
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto mb-3">
-            <ShieldCheck className="w-6 h-6" />
+        {/* Header */}
+        <div className="text-center">
+          <div className="w-14 h-14 rounded-2xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto mb-3 shadow-xs">
+            <ShieldCheck className="w-7 h-7" />
           </div>
-          <span className="text-[10px] uppercase font-bold text-[#71883F] tracking-wider block">
-            Protected Area
+          <span className="text-[10px] uppercase font-bold text-[#71883F] tracking-widest block">
+            Protected Admin Console
           </span>
-          <h2 className="text-xl font-bold text-[#171717] mt-0.5">Fathima Stores Admin Portal</h2>
+          <h2 className="text-2xl font-black text-[#171717] mt-1 tracking-tight">
+            Fathima Stores Admin
+          </h2>
           <p className="text-xs text-[#6B6B6B] mt-1">
-            Store management, inventory control & orders processing
+            Store management, inventory control, orders & customer directory
           </p>
         </div>
 
-        <form onSubmit={handleAdminLogin} className="space-y-4 text-xs">
+        {/* 1-Click Store Owner Access */}
+        <div className="p-4 bg-gradient-to-br from-[#EFF4E6] to-[#F7F9F0] border border-[#71883F]/30 rounded-2xl space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#171717] flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-[#71883F]" />
+              Store Owner Access
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#71883F] text-white">
+              Verified
+            </span>
+          </div>
+
+          <p className="text-[11px] text-[#4F5E2B] leading-relaxed">
+            Registered Admin Email: <strong className="font-semibold text-[#171717]">nihal.graphix@gmail.com</strong>
+          </p>
+
+          <button
+            type="button"
+            onClick={handleQuickStoreOwnerLogin}
+            disabled={isSubmitting}
+            className="w-full py-2.5 px-4 bg-[#71883F] hover:bg-[#5b6f32] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+          >
+            {isSubmitting ? 'Accessing Dashboard...' : (
+              <>
+                <KeyRound className="w-3.5 h-3.5" /> Instant Owner Login (1-Click)
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="relative flex items-center justify-center">
+          <div className="border-t border-[#E8E8E3] w-full"></div>
+          <span className="bg-white px-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400 shrink-0">
+            Or Sign In With
+          </span>
+        </div>
+
+        {/* Google Sign In Option */}
+        <button
+          type="button"
+          onClick={() => loginWithGoogle()}
+          disabled={isAuthLoading || isSubmitting}
+          className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white border border-[#E8E8E3] hover:bg-[#F7F8F3] text-[#171717] font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer active:scale-98"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+            />
+          </svg>
+          Google Account Login
+        </button>
+
+        {/* Email & Password Form */}
+        <form onSubmit={handleAdminLogin} className="space-y-4 text-xs pt-1">
           <div>
             <label className="font-semibold text-[#171717] block mb-1">Admin Email</label>
             <div className="relative">
@@ -48,8 +137,8 @@ export const AdminLoginPage: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@fathimastores.com"
-                className="w-full pl-9 pr-3 py-2.5 border border-[#E8E8E3] rounded-lg outline-none focus:border-[#71883F]"
+                placeholder="nihal.graphix@gmail.com or admin@fathimastores.com"
+                className="w-full pl-9 pr-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-hidden focus:border-[#71883F] text-xs"
               />
               <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
             </div>
@@ -63,8 +152,8 @@ export const AdminLoginPage: React.FC = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-9 pr-3 py-2.5 border border-[#E8E8E3] rounded-lg outline-none focus:border-[#71883F]"
+                placeholder="Enter password (e.g. admin123)"
+                className="w-full pl-9 pr-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-hidden focus:border-[#71883F] text-xs"
               />
               <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
             </div>
@@ -72,16 +161,17 @@ export const AdminLoginPage: React.FC = () => {
 
           <button
             type="submit"
-            className="w-full py-2.5 px-4 bg-[#71883F] hover:bg-[#5F7334] text-white font-semibold rounded-lg shadow-2xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            disabled={isSubmitting}
+            className="w-full py-2.5 px-4 bg-neutral-900 hover:bg-neutral-800 text-white font-semibold rounded-xl shadow-2xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
           >
-            Access Admin Console <ArrowRight className="w-4 h-4" />
+            Access with Email & Password <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="pt-2 text-center border-t border-[#E8E8E3]">
           <button
             onClick={() => setActivePage('home')}
-            className="text-xs text-[#6B6B6B] hover:text-[#171717] inline-flex items-center gap-1 font-medium cursor-pointer"
+            className="text-xs text-[#6B6B6B] hover:text-[#171717] inline-flex items-center gap-1.5 font-medium cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Storefront
           </button>

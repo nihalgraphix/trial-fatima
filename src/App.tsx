@@ -34,9 +34,10 @@ import { WhatsAppButton } from './components/common/WhatsAppButton';
 import { LiveChatWidget } from './components/common/LiveChatWidget';
 
 import { ProfilePage } from './components/account/ProfilePage';
+import { UnauthorizedDomainModal } from './components/common/UnauthorizedDomainModal';
 
 const MainContent: React.FC = () => {
-  const { activePage, setActivePage,  storeSettings, isAuthLoading } = useStore();
+  const { activePage, setActivePage, storeSettings, isAuthLoading, unauthorizedDomainInfo, setUnauthorizedDomainInfo } = useStore();
 
   // Listen to browser hash or URL path
   useEffect(() => {
@@ -95,6 +96,13 @@ const MainContent: React.FC = () => {
       <>
         <AdminLoginPage />
         <ToastContainer />
+        {unauthorizedDomainInfo && (
+          <UnauthorizedDomainModal
+            domain={unauthorizedDomainInfo.domain}
+            projectId={unauthorizedDomainInfo.projectId}
+            onClose={() => setUnauthorizedDomainInfo(null)}
+          />
+        )}
       </>
     );
   }
@@ -179,6 +187,13 @@ const MainContent: React.FC = () => {
       <WhatsAppButton />
       <LiveChatWidget />
       <ToastContainer />
+      {unauthorizedDomainInfo && (
+        <UnauthorizedDomainModal
+          domain={unauthorizedDomainInfo.domain}
+          projectId={unauthorizedDomainInfo.projectId}
+          onClose={() => setUnauthorizedDomainInfo(null)}
+        />
+      )}
       
 
       {/* Consumer Footer */}

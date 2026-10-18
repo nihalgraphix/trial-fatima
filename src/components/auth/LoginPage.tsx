@@ -306,6 +306,20 @@ export const LoginPage: React.FC = () => {
           </form>
         )}
 
+        {/* Admin Link */}
+        <div className="mt-6 pt-4 border-t border-[#E8E8E3] text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setActivePage('admin-login');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="text-xs font-semibold text-[#71883F] hover:underline inline-flex items-center gap-1 cursor-pointer"
+          >
+            Store Owner / Administrator Access Portal →
+          </button>
+        </div>
+
       </div>
     </div>
   );

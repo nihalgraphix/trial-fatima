@@ -88,11 +88,6 @@ export const Header: React.FC = () => {
                   <span className="text-lg font-extrabold tracking-tight text-[#171717] block leading-tight">
                     {storeSettings.storeName || 'FATHIMA STORES'}
                   </span>
-                  {storeSettings.tagline && (
-                    <span className="text-[10px] text-[#6B6B6B] tracking-wider uppercase hidden sm:block">
-                      {storeSettings.tagline}
-                    </span>
-                  )}
                 </div>
               </>
             ) : (
@@ -104,9 +99,6 @@ export const Header: React.FC = () => {
                 <div>
                   <span className="text-lg font-extrabold tracking-tight text-[#171717] block leading-tight">
                     {storeSettings.storeName || 'FATHIMA STORES'}
-                  </span>
-                  <span className="text-[10px] text-[#6B6B6B] tracking-wider uppercase hidden sm:block">
-                    {storeSettings.tagline || 'Stationery & Essentials'}
                   </span>
                 </div>
               </>
