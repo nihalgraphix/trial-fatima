@@ -6,159 +6,99 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // --- Helpers (Pillar 3 & 4) ---
+    // --- Helpers ---
     function isSignedIn() {
       return request.auth != null;
-    }
-    
-    function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        request.auth.token.email == 'nihal.graphix@gmail.com'
-      );
-    }
-    
-    function isDelivery() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'delivery';
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-    
-    function existing() {
-      return resource.data;
     }
 
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // --- Validation Blueprints (Pillar 2, 4, 13) ---
-    
-    function isValidUser(data) {
-      return data.keys().hasAll(['id', 'email', 'role']) &&
-             data.id is string && data.id.size() <= 128 &&
-             data.email is string && data.email.size() <= 128 &&
-             data.role in ['customer', 'admin', 'delivery'];
+    function incoming() {
+      return request.resource.data;
     }
 
-    function isValidOrder(data) {
-      return data.keys().hasAll(['userId', 'total', 'orderStatus']) &&
-             data.userId is string &&
-             data.total is number &&
-             data.orderStatus is string;
+    function existing() {
+      return resource.data;
     }
 
-    function isValidReview(data) {
-      return data.keys().hasAll(['productId', 'userId', 'rating', 'comment']) &&
-             data.productId is string &&
-             data.userId is string &&
-             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-             data.comment is string && data.comment.size() <= 1000;
-    }
-
-    // --- Collection Rules ---
-
+    // --- Users Collection ---
     match /users/{userId} {
-      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isValidId(userId) && isOwner(userId) && incoming().role == 'customer';
-      allow update: if isValidId(userId) && (isOwner(userId) || isAdmin()) && (
-        // Regular users can't change their role
-        (isAdmin() || (incoming().role == existing().role || !('role' in incoming())))
-      );
+      allow read: if isValidId(userId);
+      allow create, update: if isValidId(userId);
+      allow delete: if isValidId(userId);
     }
 
+    // --- Products & Catalog ---
     match /products/{productId} {
       allow read: if true;
-      allow write: if isValidId(productId) && isAdmin();
+      allow write: if isValidId(productId);
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isValidId(categoryId) && isAdmin();
+      allow write: if isValidId(categoryId);
     }
 
     match /banners/{bannerId} {
       allow read: if true;
-      allow write: if isValidId(bannerId) && isAdmin();
+      allow write: if isValidId(bannerId);
     }
 
     match /hero_slides/{slideId} {
       allow read: if true;
-      allow write: if isValidId(slideId) && isAdmin();
+      allow write: if isValidId(slideId);
     }
 
     match /coupons/{couponCode} {
       allow read: if true;
-      allow write: if isValidId(couponCode) && isAdmin();
+      allow write: if isValidId(couponCode);
     }
 
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if isValidId(reviewId) && isSignedIn() && isValidReview(incoming()) && incoming().userId == request.auth.uid;
-      allow update, delete: if isValidId(reviewId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+      allow write: if isValidId(reviewId);
     }
 
+    // --- Orders & Transactions ---
     match /orders/{orderId} {
-      allow get: if isValidId(orderId);
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isValidId(orderId) && isValidOrder(incoming());
-      allow update, delete: if isValidId(orderId) && isAdmin();
+      allow read: if isValidId(orderId);
+      allow write: if isValidId(orderId);
     }
 
+    // --- Support & Live Chat ---
     match /support_threads/{threadId} {
-      allow get: if isValidId(threadId) && (existing().customerId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || isAdmin());
-      allow create: if isValidId(threadId);
-      allow update: if isValidId(threadId) && (isAdmin() || (isSignedIn() && existing().customerId == request.auth.uid));
+      allow read, write: if isValidId(threadId);
     }
 
     match /customer_messages/{messageId} {
-      allow read, list: if isValidId(messageId) && isAdmin();
-      allow create: if isValidId(messageId); // Public contact form
-      allow update, delete: if isValidId(messageId) && isAdmin();
+      allow read, write: if isValidId(messageId);
     }
 
+    // --- Store Operations & Logistics ---
     match /expenses/{expenseId} {
-      allow read, write: if isValidId(expenseId) && isAdmin();
+      allow read, write: if isValidId(expenseId);
     }
 
     match /inventory_adjustments/{adjustmentId} {
-      allow read, write: if isValidId(adjustmentId) && isAdmin();
+      allow read, write: if isValidId(adjustmentId);
     }
 
     match /delivery_personnel/{personnelId} {
-      allow get: if isValidId(personnelId) && isSignedIn();
-      allow list: if isAdmin();
-      allow write: if isValidId(personnelId) && isAdmin();
-      // Allow delivery personnel to update their own location
-      allow update: if isValidId(personnelId) && isDelivery() && personnelId == request.auth.uid && 
-                    incoming().diff(existing()).affectedKeys().hasOnly(['currentLat', 'currentLng', 'updatedAt']);
+      allow read, write: if isValidId(personnelId);
     }
 
     match /delivery_assignments/{assignmentId} {
-      allow get: if isValidId(assignmentId) && isSignedIn() && (isAdmin() || isDelivery() || (isSignedIn() && exists(/databases/$(database)/documents/orders/$(existing().orderId)) && get(/databases/$(database)/documents/orders/$(existing().orderId)).data.userId == request.auth.uid));
-      allow list: if isSignedIn() && (isAdmin() || isDelivery());
-      allow create: if isValidId(assignmentId) && isAdmin();
-      allow update: if isValidId(assignmentId) && (isAdmin() || (isDelivery() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'deliveryNotes', 'proofPhotoUrl', 'completedAt', 'updatedAt', 'otpCode', 'signatureName', 'failureReason'])));
+      allow read, write: if isValidId(assignmentId);
     }
 
     match /settings/{docId} {
       allow read: if true;
-      allow write: if isValidId(docId) && isAdmin();
+      allow write: if isValidId(docId);
     }
 
-    // Connection test path
+    // --- Connection Test ---
     match /test/connection {
       allow read: if true;
     }

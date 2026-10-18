@@ -84,6 +84,12 @@ export const CheckoutPage: React.FC = () => {
       return;
     }
 
+    if (paymentMethod === 'COD') {
+      setShowPaymentModal(false);
+      executeOrderPlacement('COD');
+      return;
+    }
+
     setShowPaymentModal(true);
   };
 
@@ -497,7 +503,7 @@ export const CheckoutPage: React.FC = () => {
         </form>
 
         <IndianPaymentGatewayModal
-          isOpen={showPaymentModal}
+          isOpen={showPaymentModal && paymentMethod === 'Online'}
           onClose={() => setShowPaymentModal(false)}
           amount={cartTotal}
           customerName={fullName}

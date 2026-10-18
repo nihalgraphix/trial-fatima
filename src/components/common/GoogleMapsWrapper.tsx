@@ -3,7 +3,7 @@ import { APIProvider } from '@vis.gl/react-google-maps';
 
 export const GoogleMapsWrapper: React.FC<PropsWithChildren> = ({ children }) => {
   const [quotaExceeded, setQuotaExceeded] = useState(false);
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyClPbU9W0uTkLSyHxIE9A9KQdWL-h5QsjM';
 
   useEffect(() => {
     const handleQuotaExceeded = () => setQuotaExceeded(true);

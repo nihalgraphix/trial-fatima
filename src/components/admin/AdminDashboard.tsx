@@ -72,6 +72,7 @@ type AdminTab =
 export const AdminDashboard: React.FC = () => {
   const {
     isAdmin,
+    currentUser,
     allUsers,
     setActivePage,
     logoutUser,
@@ -565,11 +566,37 @@ export const AdminDashboard: React.FC = () => {
     });
   }, [products, prodCategoryFilter, prodStockFilter, adminSearch]);
 
-  // Customers comprehensive list (Aggregates registered users from Firestore and orders)
+  // Customers comprehensive list (Aggregates registered users from Firestore, current store manager, and orders)
   const customersList = useMemo<AdminCustomerRecord[]>(() => {
     const map = new Map<string, AdminCustomerRecord>();
 
-    // 1. Add registered users
+    // 1. Ensure logged-in Store Manager account is always present in Admin Panel
+    if (currentUser?.email) {
+      const emailKey = currentUser.email.toLowerCase().trim();
+      const defAddr = currentUser.addresses?.find((a) => a.isDefault) || currentUser.addresses?.[0];
+      map.set(emailKey, {
+        id: currentUser.id,
+        name: currentUser.name ? `${currentUser.name} (Store Manager)` : 'Store Manager Admin',
+        email: currentUser.email,
+        phone: currentUser.phone || defAddr?.phone || '+91 98450 12345',
+        photoURL: currentUser.photoURL,
+        role: 'admin',
+        city: currentUser.city || defAddr?.city || 'Trivandrum',
+        state: currentUser.state || defAddr?.state || 'Kerala',
+        bio: currentUser.bio || 'Store Manager & Administrator',
+        addresses: currentUser.addresses || [],
+        defaultAddress: defAddr,
+        createdAt: currentUser.createdAt || new Date().toISOString(),
+        totalSpent: 0,
+        ordersCount: 0,
+        lastOrderDate: undefined,
+        orders: [],
+        isRegistered: true,
+        status: 'VIP',
+      });
+    }
+
+    // 2. Add registered users
     (allUsers || []).forEach((u) => {
       const emailKey = (u.email || '').toLowerCase().trim();
       if (!emailKey) return;
@@ -592,11 +619,11 @@ export const AdminDashboard: React.FC = () => {
         lastOrderDate: undefined,
         orders: [],
         isRegistered: true,
-        status: 'New',
+        status: u.role === 'admin' ? 'VIP' : 'New',
       });
     });
 
-    // 2. Associate / add customers from orders
+    // 3. Associate / add customers from orders
     orders.forEach((o) => {
       const emailKey = (o.email || '').toLowerCase().trim();
       const existing: AdminCustomerRecord = map.get(emailKey) || {
@@ -631,7 +658,9 @@ export const AdminDashboard: React.FC = () => {
         existing.lastOrderDate = o.date;
       }
 
-      if (existing.totalSpent >= 2500 || existing.ordersCount >= 3) {
+      if (existing.role === 'admin') {
+        existing.status = 'VIP';
+      } else if (existing.totalSpent >= 2500 || existing.ordersCount >= 3) {
         existing.status = 'VIP';
       } else if (existing.ordersCount >= 1) {
         existing.status = 'Regular';
@@ -642,8 +671,13 @@ export const AdminDashboard: React.FC = () => {
       map.set(emailKey, existing);
     });
 
-    return Array.from(map.values()).sort((a, b) => b.totalSpent - a.totalSpent || b.ordersCount - a.ordersCount);
-  }, [allUsers, orders]);
+    return Array.from(map.values()).sort((a, b) => {
+      // Store managers and admins first, then by total spent
+      if (a.role === 'admin' && b.role !== 'admin') return -1;
+      if (b.role === 'admin' && a.role !== 'admin') return 1;
+      return b.totalSpent - a.totalSpent || b.ordersCount - a.ordersCount;
+    });
+  }, [allUsers, orders, currentUser]);
 
   // Filtered and searched customer list
   const filteredCustomersList = useMemo(() => {
@@ -1276,6 +1310,38 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+          <div className="m-3 p-3 bg-gradient-to-br from-[#F7F9F0] to-white border border-[#71883F]/30 rounded-2xl shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              {currentUser?.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.name || 'Store Manager'}
+                  className="w-9 h-9 rounded-full object-cover border border-[#71883F] shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[#71883F] text-white flex items-center justify-center font-extrabold text-xs shrink-0 shadow-2xs">
+                  {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : 'SM'}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-[#171717] truncate block">
+                    {currentUser?.name || 'Store Manager'}
+                  </span>
+                  <span className="text-[9px] bg-[#71883F] text-white px-1.5 py-0.2 rounded font-extrabold uppercase shrink-0">
+                    Admin
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#6B6B6B] truncate font-medium mt-0.5">
+                  {currentUser?.email || 'nihal.graphix@gmail.com'}
+                </p>
+                <div className="flex items-center gap-1 mt-1 text-[9px] text-emerald-700 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Store Manager Account</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Nav Items */}
           <nav className="p-3 space-y-1">
@@ -1401,14 +1467,31 @@ export const AdminDashboard: React.FC = () => {
 
 
 
-            {/* Admin Badge */}
-            <div className="flex items-center gap-2 pl-3 border-l border-[#E8E8E3]">
-              <div className="w-8 h-8 rounded-full bg-[#EFF4E6] text-[#71883F] font-bold text-xs flex items-center justify-center">
-                FS
-              </div>
+            {/* Signed-in Store Manager Account Badge */}
+            <div className="flex items-center gap-2.5 pl-3 border-l border-[#E8E8E3]">
+              {currentUser?.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.name || 'Store Manager'}
+                  className="w-8 h-8 rounded-full object-cover border border-[#71883F] shadow-2xs"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[#EFF4E6] text-[#71883F] font-bold text-xs flex items-center justify-center border border-[#71883F]/30 shadow-2xs">
+                  {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : 'SM'}
+                </div>
+              )}
               <div className="hidden sm:block text-xs">
-                <span className="font-bold text-[#171717] block leading-none">Store Manager</span>
-                <span className="text-[10px] text-[#6B6B6B]">admin@fathimastores.com</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-[#171717] block leading-none">
+                    {currentUser?.name || 'Store Manager'}
+                  </span>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold uppercase">
+                    Admin
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#6B6B6B] block mt-0.5 truncate max-w-[180px]">
+                  {currentUser?.email || 'nihal.graphix@gmail.com'}
+                </span>
               </div>
             </div>
           </div>
@@ -3373,8 +3456,64 @@ export const AdminDashboard: React.FC = () => {
                   Store Settings & Configuration
                 </h1>
                 <p className="text-xs text-[#6B6B6B] mt-0.5">
-                  Update business profile, free shipping limits, delivery charges, and UPI merchant accounts.
+                  Update business profile, store manager account, delivery charges, and theme colors.
                 </p>
+              </div>
+
+              {/* Authenticated Store Manager Profile Box */}
+              <div className="bg-gradient-to-br from-[#EFF4E6] to-[#F7F9F0] border border-[#71883F]/40 rounded-2xl p-5 shadow-2xs text-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {currentUser?.photoURL ? (
+                      <img
+                        src={currentUser.photoURL}
+                        alt={currentUser.name || 'Store Manager'}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-[#71883F] shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-[#71883F] text-white flex items-center justify-center font-black text-sm shadow-sm">
+                        {currentUser?.name ? currentUser.name.substring(0, 2).toUpperCase() : 'SM'}
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm text-[#171717]">
+                          {currentUser?.name || 'Store Manager'}
+                        </h3>
+                        <span className="text-[10px] bg-[#71883F] text-white px-2 py-0.5 rounded-full font-bold uppercase">
+                          Store Manager (Admin)
+                        </span>
+                      </div>
+                      <p className="text-[#4F5E2B] text-xs font-semibold mt-0.5">
+                        {currentUser?.email || 'nihal.graphix@gmail.com'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white text-emerald-800 text-[11px] font-bold border border-emerald-200 shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Active Admin Session
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[#71883F]/20 text-[11px]">
+                  <div>
+                    <span className="text-[#6B6B6B] block">Account Role</span>
+                    <strong className="text-[#171717] capitalize">{currentUser?.role || 'admin'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[#6B6B6B] block">User ID</span>
+                    <span className="font-mono text-[#171717] truncate block">{currentUser?.id || 'admin_user'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[#6B6B6B] block">Console Status</span>
+                    <strong className="text-emerald-700">Full Access Granted</strong>
+                  </div>
+                  <div>
+                    <span className="text-[#6B6B6B] block">Phone Contact</span>
+                    <span className="text-[#171717]">{currentUser?.phone || '+91 98450 12345'}</span>
+                  </div>
+                </div>
               </div>
 
               <form onSubmit={handleSaveSettings} className="space-y-6">

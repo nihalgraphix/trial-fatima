@@ -29,7 +29,7 @@ interface IndianPaymentGatewayModalProps {
   onPaymentSuccess: (method: PaymentMethod) => void;
 }
 
-type PaymentTab = 'upi' | 'card' | 'netbanking' | 'cod';
+type PaymentTab = 'upi' | 'card' | 'netbanking';
 type UpiSubOption = 'gpay' | 'phonepe' | 'paytm' | 'vpa' | 'qr';
 
 export const IndianPaymentGatewayModal: React.FC<IndianPaymentGatewayModalProps> = ({
@@ -68,10 +68,6 @@ export const IndianPaymentGatewayModal: React.FC<IndianPaymentGatewayModalProps>
   const [selectedBank, setSelectedBank] = useState('HDFC Bank');
   const [isProcessingNetBanking, setIsProcessingNetBanking] = useState(false);
 
-  // COD Captcha
-  const [codCaptcha, setCodCaptcha] = useState(() => Math.floor(100 + Math.random() * 900).toString());
-  const [codInput, setCodInput] = useState('');
-
   // Reset states on open
   useEffect(() => {
     if (isOpen) {
@@ -80,8 +76,6 @@ export const IndianPaymentGatewayModal: React.FC<IndianPaymentGatewayModalProps>
       setShowOtpModal(false);
       setCustomVpa('');
       setVpaVerified(false);
-      setCodCaptcha(Math.floor(100 + Math.random() * 900).toString());
-      setCodInput('');
     }
   }, [isOpen]);
 
@@ -218,16 +212,6 @@ export const IndianPaymentGatewayModal: React.FC<IndianPaymentGatewayModalProps>
       showToast(`Authenticated with ${selectedBank}! Order placed.`, 'success');
       onPaymentSuccess('NetBanking');
     }, 1500);
-  };
-
-  // COD Submit
-  const handleCodSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (codInput.trim() !== codCaptcha) {
-      showToast('Incorrect security verification code. Please check.', 'error');
-      return;
-    }
-    onPaymentSuccess('COD');
   };
 
   return (
@@ -381,21 +365,6 @@ export const IndianPaymentGatewayModal: React.FC<IndianPaymentGatewayModalProps>
                 <span className="flex items-center gap-2.5">
                   <Building className="w-4 h-4 text-amber-600" />
                   <span>Net Banking</span>
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('cod')}
-                className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'cod'
-                    ? 'bg-white text-[#71883F] shadow-xs border border-[#E8E8E3]'
-                    : 'text-[#171717] hover:bg-white/60'
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Banknote className="w-4 h-4 text-emerald-600" />
-                  <span>Cash on Delivery</span>
                 </span>
               </button>
             </div>
@@ -828,64 +797,6 @@ export const IndianPaymentGatewayModal: React.FC<IndianPaymentGatewayModalProps>
                     )}
                   </button>
                 </div>
-              )}
-
-              {/* TAB 4: CASH ON DELIVERY */}
-              {activeTab === 'cod' && (
-                <form onSubmit={handleCodSubmit} className="space-y-4">
-                  <div>
-                    <h4 className="font-bold text-sm text-[#171717]">Cash on Delivery (Doorstep Verification)</h4>
-                    <p className="text-xs text-[#6B6B6B] mt-0.5">
-                      Pay cash or scan courier UPI QR when your order arrives.
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl space-y-3">
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-800">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-                      <div>
-                        <span className="font-bold">Flipkart-Style Confirmation:</span>
-                        <p className="text-[11px] mt-0.5">
-                          Please enter the 3-digit security captcha below to confirm your delivery address and book dispatch.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="px-4 py-2.5 bg-neutral-900 text-white font-mono text-base font-bold tracking-widest rounded-xl select-none">
-                        {codCaptcha}
-                      </div>
-
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          required
-                          maxLength={3}
-                          value={codInput}
-                          onChange={(e) => setCodInput(e.target.value)}
-                          placeholder="Type code here"
-                          className="w-full px-3 py-2.5 text-xs bg-white border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F] font-mono tracking-widest text-center"
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setCodCaptcha(Math.floor(100 + Math.random() * 900).toString())}
-                        className="p-2.5 bg-white border border-[#E8E8E3] rounded-xl hover:border-[#71883F]"
-                        title="Change Captcha"
-                      >
-                        <RefreshCw className="w-4 h-4 text-[#6B6B6B]" />
-                      </button>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-3 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
-                    >
-                      Confirm Order with Cash on Delivery (₹{amount})
-                    </button>
-                  </div>
-                </form>
               )}
 
             </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { ShieldCheck, Lock, Mail, ArrowRight, ArrowLeft, KeyRound, Sparkles, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, ArrowLeft } from 'lucide-react';
 
 export const AdminLoginPage: React.FC = () => {
   const { loginUser, loginWithGoogle, isAuthLoading, setActivePage, showToast } = useStore();
@@ -27,20 +27,6 @@ export const AdminLoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickStoreOwnerLogin = async () => {
-    setIsSubmitting(true);
-    try {
-      const success = await loginUser('nihal.graphix@gmail.com', 'admin123', 'admin');
-      if (success) {
-        showToast('Logged in as Store Owner Admin (nihal.graphix@gmail.com)', 'success');
-        setActivePage('admin');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <div className="bg-[#171717] min-h-screen py-14 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white border border-[#E8E8E3] rounded-3xl p-8 sm:p-9 shadow-2xl space-y-6">
@@ -59,44 +45,6 @@ export const AdminLoginPage: React.FC = () => {
           <p className="text-xs text-[#6B6B6B] mt-1">
             Store management, inventory control, orders & customer directory
           </p>
-        </div>
-
-        {/* 1-Click Store Owner Access */}
-        <div className="p-4 bg-gradient-to-br from-[#EFF4E6] to-[#F7F9F0] border border-[#71883F]/30 rounded-2xl space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#171717] flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-[#71883F]" />
-              Store Owner Access
-            </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#71883F] text-white">
-              Verified
-            </span>
-          </div>
-
-          <p className="text-[11px] text-[#4F5E2B] leading-relaxed">
-            Registered Admin Email: <strong className="font-semibold text-[#171717]">nihal.graphix@gmail.com</strong>
-          </p>
-
-          <button
-            type="button"
-            onClick={handleQuickStoreOwnerLogin}
-            disabled={isSubmitting}
-            className="w-full py-2.5 px-4 bg-[#71883F] hover:bg-[#5b6f32] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-          >
-            {isSubmitting ? 'Accessing Dashboard...' : (
-              <>
-                <KeyRound className="w-3.5 h-3.5" /> Instant Owner Login (1-Click)
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="relative flex items-center justify-center">
-          <div className="border-t border-[#E8E8E3] w-full"></div>
-          <span className="bg-white px-3 text-[10px] font-bold uppercase tracking-wider text-neutral-400 shrink-0">
-            Or Sign In With
-          </span>
         </div>
 
         {/* Google Sign In Option */}
