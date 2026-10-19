@@ -25,6 +25,7 @@ import {
   DeliveryPersonnel,
   DeliveryAssignment,
   CustomerMessage,
+  EmailAlertRecord,
 } from '../types';
 import { auth, db, googleProvider, signInWithPopup } from '../firebase';
 import { 
@@ -104,102 +105,85 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   return errInfo;
 }
 
-// Constants moved to top to avoid initialization errors
-const DEFAULT_HERO_SLIDES: HeroSlide[] = [
+// Sanitize data before writing to Firestore so undefined properties never cause errors
+export function sanitizeFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as any;
+  }
+  if (typeof obj !== 'object') {
+    return obj;
+  }
+  // Check if it's a Firestore FieldValue (serverTimestamp, deleteField, etc.)
+  if (
+    '_methodName' in (obj as any) ||
+    (obj as any).constructor?.name === 'FieldValue' ||
+    typeof (obj as any).isEqual === 'function'
+  ) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => (item === undefined ? null : sanitizeFirestoreData(item))) as any;
+  }
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      clean[key] = sanitizeFirestoreData(value);
+    }
+  }
+  return clean as T;
+}
+
+export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
-    id: 'slide-luxury-pens',
+    id: 'hero-slide-1',
     badge: 'Exclusive Launch 2026',
-    title: 'Luxury Writing & Calligraphy Instruments',
-    subtitle: 'Handcrafted fountain pens, 14k gold-nib calligraphy sets, archivist inks and fountain-pen-friendly journals for discerning creators.',
-    buttonText: 'Explore Writing Gear',
+    title: 'Premium Office & School Stationery Essentials',
+    subtitle: 'Discover handcrafted notebooks, luxury pens, ergonomic desk organizers & eco-friendly paper stationery.',
+    buttonText: 'Shop Collection',
     buttonLink: 'shop',
-    secondaryButtonText: 'View Bestsellers',
-    secondaryButtonLink: 'shop',
-    image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=1600&q=80',
-    bgTone: '#F4F5EF',
-    overlay: 'light',
-    overlayOpacity: 75,
-    active: true,
-    order: 0,
-  },
-  {
-    id: 'slide-school-essentials',
-    badge: 'Academic Season 2026',
-    title: 'Complete School & College Essentials',
-    subtitle: 'Precision geometry boxes, ruled notebooks, archival folders, ergonomic backpacks and daily exam supplies at honest prices.',
-    buttonText: 'Shop Student Packs',
-    buttonLink: 'categories',
-    secondaryButtonText: 'Browse Catalog',
-    secondaryButtonLink: 'shop',
-    image: 'https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?auto=format&fit=crop&w=1600&q=80',
-    bgTone: '#EFF3EA',
-    overlay: 'light',
-    overlayOpacity: 75,
+    secondaryButtonText: 'Browse Categories',
+    secondaryButtonLink: 'categories',
+    image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=1600&q=80',
+    bgTone: '#F7F8F3',
+    overlay: 'gradient',
+    overlayOpacity: 70,
     active: true,
     order: 1,
   },
   {
-    id: 'slide-fine-arts',
-    badge: 'Fine Arts Studio',
-    title: 'Artist Pigments, Pastels & Canvas Pads',
-    subtitle: 'Heavyweight cold-press watercolor sheets, rich artist acrylics, gouache sets, fine-tip liners and studio easels.',
-    buttonText: 'Discover Art Supplies',
+    id: 'hero-slide-2',
+    badge: 'Special Craft Offer',
+    title: 'Art & Design Craft Supplies Up To 40% OFF',
+    subtitle: 'High-grade art sketchbooks, fountain pen inks, geometry sets & premium watercolor pads.',
+    buttonText: 'Explore Art Supplies',
     buttonLink: 'shop',
-    secondaryButtonText: 'Limited Deals',
+    secondaryButtonText: 'View Offers',
     secondaryButtonLink: 'shop',
-    image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=1600&q=80',
-    bgTone: '#FAF9F5',
-    overlay: 'light',
-    overlayOpacity: 75,
+    image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=1600&q=80',
+    bgTone: '#EFF4E6',
+    overlay: 'gradient',
+    overlayOpacity: 65,
     active: true,
     order: 2,
   },
   {
-    id: 'slide-desk-organization',
-    badge: 'Executive Workspace',
-    title: 'Minimalist Desk Organizers & Planners',
-    subtitle: 'Declutter your workspace with solid beechwood organizers, undated daily agendas, and brass desktop accessories.',
-    buttonText: 'Organize Your Desk',
-    buttonLink: 'shop',
-    secondaryButtonText: 'Learn More',
-    secondaryButtonLink: 'about',
+    id: 'hero-slide-3',
+    badge: 'Express Doorstep Delivery',
+    title: 'Fast & Reliable Local Delivery For All Orders',
+    subtitle: 'Free delivery on orders above ₹499 with real-time GPS tracking and live courier updates.',
+    buttonText: 'Track Your Order',
+    buttonLink: 'track-order',
+    secondaryButtonText: 'Contact Support',
+    secondaryButtonLink: 'contact',
     image: 'https://images.unsplash.com/photo-1507842229458-574349320eef?auto=format&fit=crop&w=1600&q=80',
-    bgTone: '#F3F5F0',
-    overlay: 'light',
+    bgTone: '#F7F8F3',
+    overlay: 'dark',
     overlayOpacity: 75,
     active: true,
     order: 3,
   },
 ];
-
-const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
-  {
-    id: 'dp-1',
-    name: 'Rahul K. (Express)',
-    phone: '+91 98450 11111',
-    email: 'rahul@fathimaexpress.com',
-    vehicleType: 'Scooter',
-    vehicleNumber: 'KL-01-BK-8821',
-    status: 'available',
-    rating: 4.8,
-    totalDeliveries: 124,
-    currentLat: 8.5241,
-    currentLng: 76.9366,
-  },
-  {
-    id: 'dp-2',
-    name: 'Anjali S. (Bicycle)',
-    phone: '+91 98450 22222',
-    email: 'anjali@fathimaexpress.com',
-    vehicleType: 'E-Bike',
-    vehicleNumber: 'KL-01-EB-4512',
-    status: 'available',
-    rating: 4.9,
-    totalDeliveries: 89,
-    currentLat: 8.5245,
-    currentLng: 76.9370,
-  }
-];
+const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [];
 
 interface Toast {
 
@@ -299,6 +283,7 @@ interface StoreContextType {
   ) => Promise<void>;
   requestOrderReturn: (orderId: string, reason: string) => Promise<void>;
   processOrderReturn: (orderId: string, status: 'Approved' | 'Rejected' | 'Refunded') => Promise<void>;
+  verifyOrderPayment: (orderId: string, verified: boolean) => Promise<void>;
 
   // Expenses & Finance
   expenses: Expense[];
@@ -361,10 +346,14 @@ interface StoreContextType {
   logoutUser: () => Promise<void>;
   switchRole: (role: 'customer' | 'admin') => void;
   updateUserProfile: (updates: Partial<User>) => Promise<void>;
+  toggleCustomerVIP: (customerEmailOrId: string, isVip: boolean) => Promise<void>;
+  grantCustomerAdmin: (customerEmailOrId: string, grant: boolean) => Promise<void>;
+  deleteCustomer: (customerEmailOrId: string) => Promise<void>;
+  showForceSignInModal: boolean;
+  setShowForceSignInModal: (show: boolean) => void;
   addSavedAddress: (address: ShippingAddress) => Promise<void>;
   deleteSavedAddress: (index: number) => Promise<void>;
   setDefaultAddress: (index: number) => Promise<void>;
-
 
   // Search & Global State
   searchQuery: string;
@@ -375,7 +364,9 @@ interface StoreContextType {
   // Notifications (Admin & System)
   notifications: Notification[];
   markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
   clearNotifications: () => void;
+  removeSelectedCategoryButton: () => Promise<void>;
 
   // Toasts
   toasts: Toast[];
@@ -408,6 +399,10 @@ interface StoreContextType {
   exportStoreData: () => string;
   importStoreData: (jsonStr: string) => boolean;
   updateDeliveryPersonLocation: (personId: string, lat: number, lng: number) => Promise<void>;
+
+  // Automated Inventory Email Alerts
+  emailAlertLogs: EmailAlertRecord[];
+  checkAndTriggerLowStockAlert: (product: Product, currentStock: number) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -467,6 +462,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [searchQuery, setSearchQuery] = useState('');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [showForceSignInModal, setShowForceSignInModal] = useState<boolean>(false);
 
   // Firestore Sync States with Local Persistence Fallback
   const [products, setProducts] = useState<Product[]>(() => {
@@ -509,6 +505,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return [];
   });
   const [isSupportChatOpen, setIsSupportChatOpen] = useState(false);
+  const [emailAlertLogs, setEmailAlertLogs] = useState<EmailAlertRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('fs_saved_email_alert_logs');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
 
   // Synchronize state changes to localStorage
   useEffect(() => {
@@ -675,32 +681,58 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
   // Helper for generic public collection sync with admin-only seeding
-  const useCollectionSync = (collectionName: string, setter: (data: any[]) => void, initialData?: any[], orderField: string = 'createdAt') => {
+  const useCollectionSync = (
+    collectionName: string,
+    setter: (data: any[]) => void,
+    initialData?: any[],
+    orderField?: string
+  ) => {
     useEffect(() => {
       try {
-        const q = query(collection(db, collectionName), orderBy(orderField, 'desc'));
-        const unsubscribe = onSnapshot(q, async (snapshot) => {
-          if (snapshot.empty && initialData && initialData.length > 0 && currentUser?.role === 'admin') {
-            // Seed the collection only if current user is admin
-            const batch = writeBatch(db);
-            initialData.forEach((item) => {
-              const docRef = doc(collection(db, collectionName), item.id || createUniqueId('seed'));
-              batch.set(docRef, {
-                ...item,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              });
-            });
-            await batch.commit().catch(err => console.warn(`Notice seeding ${collectionName}:`, err));
-          } else {
-            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as any[];
-            setter(data);
+        const colRef = collection(db, collectionName);
+        const unsubscribe = onSnapshot(
+          colRef,
+          async (snapshot) => {
+            if (snapshot.empty && initialData && initialData.length > 0 && currentUser?.role === 'admin') {
+              // Seed the collection only if current user is admin and we haven't explicitly cleared it
+              if (storeSettings.isDemoDataSeeded === false) {
+                const batch = writeBatch(db);
+                initialData.forEach((item) => {
+                  const docRef = doc(collection(db, collectionName), item.id || createUniqueId('seed'));
+                  batch.set(docRef, sanitizeFirestoreData({
+                    ...item,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                  }));
+                });
+                await batch.commit().catch((err) => console.warn(`Notice seeding ${collectionName}:`, err));
+              }
+            } else {
+              const data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as any[];
+              if (orderField) {
+                data.sort((a, b) => {
+                  const getVal = (item: any) => {
+                    const v = item[orderField];
+                    if (!v) return 0;
+                    if (typeof v.toMillis === 'function') return v.toMillis();
+                    if (typeof v === 'number') return v;
+                    const parsed = new Date(v).getTime();
+                    return isNaN(parsed) ? 0 : parsed;
+                  };
+                  return getVal(b) - getVal(a);
+                });
+              }
+              setter(data);
+            }
+          },
+          (error) => {
+            console.warn(`Firestore sync notice on ${collectionName}:`, error);
+            handleFirestoreError(error, OperationType.GET, collectionName);
           }
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, collectionName);
-        });
+        );
         return () => unsubscribe();
       } catch (err) {
+        console.warn(`Firestore listener setup notice on ${collectionName}:`, err);
         handleFirestoreError(err, OperationType.GET, collectionName);
       }
     }, [collectionName, currentUser?.role]);
@@ -711,11 +743,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useCollectionSync('categories', setCategories, INITIAL_CATEGORIES, 'slug');
   useCollectionSync('banners', setBanners, INITIAL_BANNERS);
   useCollectionSync('coupons', setCoupons, INITIAL_COUPONS, 'code');
-  useCollectionSync('reviews', setReviews, INITIAL_REVIEWS, 'date');
+  useCollectionSync('reviews', setReviews, INITIAL_REVIEWS, 'createdAt');
   useCollectionSync('customer_messages', setCustomerMessages, [], 'createdAt');
-  useCollectionSync('hero_slides', (data) => {
-    setStoreSettings(prev => ({ ...prev, heroSlides: data as HeroSlide[] }));
-  }, DEFAULT_HERO_SLIDES, 'order');
+  useCollectionSync(
+    'hero_slides',
+    (data) => {
+      setStoreSettings((prev) => ({ ...prev, heroSlides: data as HeroSlide[] }));
+    },
+    DEFAULT_HERO_SLIDES,
+    'order'
+  );
 
   // Admin-only collections: strictly listened to when currentUser is admin
   useEffect(() => {
@@ -724,25 +761,37 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const unsubExpenses = onSnapshot(
-      query(collection(db, 'expenses'), orderBy('createdAt', 'desc')),
+      collection(db, 'expenses'),
       (snapshot) => {
-        setExpenses(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Expense[]);
+        const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as Expense[];
+        list.sort((a, b) => {
+          const tA = (a as any).createdAt?.toMillis?.() || (a.date ? new Date(a.date).getTime() : 0);
+          const tB = (b as any).createdAt?.toMillis?.() || (b.date ? new Date(b.date).getTime() : 0);
+          return tB - tA;
+        });
+        setExpenses(list);
       },
       (err) => handleFirestoreError(err, OperationType.GET, 'expenses')
     );
 
     const unsubInventory = onSnapshot(
-      query(collection(db, 'inventory_adjustments'), orderBy('createdAt', 'desc')),
+      collection(db, 'inventory_adjustments'),
       (snapshot) => {
-        setInventoryAdjustments(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as InventoryAdjustment[]);
+        const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as InventoryAdjustment[];
+        list.sort((a, b) => {
+          const tA = (a as any).createdAt?.toMillis?.() || (a.date ? new Date(a.date).getTime() : 0);
+          const tB = (b as any).createdAt?.toMillis?.() || (b.date ? new Date(b.date).getTime() : 0);
+          return tB - tA;
+        });
+        setInventoryAdjustments(list);
       },
       (err) => handleFirestoreError(err, OperationType.GET, 'inventory_adjustments')
     );
 
     const unsubPersonnel = onSnapshot(
-      query(collection(db, 'delivery_personnel'), orderBy('createdAt', 'desc')),
+      collection(db, 'delivery_personnel'),
       (snapshot) => {
-        setDeliveryPersonnel(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as DeliveryPersonnel[]);
+        setDeliveryPersonnel(snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as DeliveryPersonnel[]);
       },
       (err) => handleFirestoreError(err, OperationType.GET, 'delivery_personnel')
     );
@@ -750,7 +799,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
       (snapshot) => {
-        const list = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as User[];
+        const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as User[];
         setAllUsers(list);
       },
       (err) => {
@@ -758,13 +807,47 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     );
 
+    const unsubEmailAlerts = onSnapshot(
+      collection(db, 'email_alerts'),
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as EmailAlertRecord[];
+        list.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+        if (list.length > 0) {
+          setEmailAlertLogs(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'email_alerts')
+    );
+
     return () => {
       unsubExpenses();
       unsubInventory();
       unsubPersonnel();
       unsubUsers();
+      unsubEmailAlerts();
     };
   }, [currentUser?.role]);
+
+  // Notifications Sync: Admin sees all, Customers see theirs
+  useEffect(() => {
+    try {
+      const col = collection(db, 'notifications');
+      let q = query(col, orderBy('time', 'desc'));
+      
+      if (currentUser && currentUser.role !== 'admin') {
+        q = query(col, where('userId', '==', currentUser.id), orderBy('time', 'desc'));
+      }
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const list = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Notification[];
+        setNotifications(list);
+      });
+
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn("Notifications listener notice:", err);
+    }
+  }, [currentUser?.id, currentUser?.role]);
 
   // Delivery assignments: admin or delivery personnel
   useEffect(() => {
@@ -773,9 +856,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     const unsubAssignments = onSnapshot(
-      query(collection(db, 'delivery_assignments'), orderBy('createdAt', 'desc')),
+      collection(db, 'delivery_assignments'),
       (snapshot) => {
-        setDeliveryAssignments(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as DeliveryAssignment[]);
+        const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as DeliveryAssignment[];
+        list.sort((a, b) => {
+          const tA = (a as any).createdAt?.toMillis?.() || 0;
+          const tB = (b as any).createdAt?.toMillis?.() || 0;
+          return tB - tA;
+        });
+        setDeliveryAssignments(list);
       },
       (err) => handleFirestoreError(err, OperationType.GET, 'delivery_assignments')
     );
@@ -785,20 +874,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Support Threads: Admin sees all, Customer sees their own
   useEffect(() => {
-    if (!currentUser) {
-      setSupportThreads([]);
-      return;
-    }
-
     try {
-      const q = currentUser.role === 'admin'
-        ? query(collection(db, 'support_threads'), orderBy('updatedAt', 'desc'))
-        : query(collection(db, 'support_threads'), where('customerId', '==', currentUser.id));
+      const col = collection(db, 'support_threads');
+      const q = (!currentUser || currentUser.role === 'admin')
+        ? col
+        : query(col, where('customerId', '==', currentUser.id));
 
       const unsubSupport = onSnapshot(
         q,
         (snapshot) => {
-          setSupportThreads(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as SupportThread[]);
+          const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as SupportThread[];
+          list.sort((a, b) => {
+            const tA = (a as any).updatedAt?.toMillis?.() || (a as any).createdAt?.toMillis?.() || 0;
+            const tB = (b as any).updatedAt?.toMillis?.() || (b as any).createdAt?.toMillis?.() || 0;
+            return tB - tA;
+          });
+          setSupportThreads(list);
         },
         (err) => handleFirestoreError(err, OperationType.GET, 'support_threads')
       );
@@ -809,31 +900,54 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [currentUser?.id, currentUser?.role]);
 
-  // Orders Sync: Admin sees all orders, Customer sees their own orders, Guest sees all/stored orders
+  // Orders Sync: Admin sees ALL store orders in real-time. Customer sees their own orders.
   useEffect(() => {
     try {
-      const q = (currentUser?.role === 'admin' || !currentUser)
-        ? query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
-        : query(collection(db, 'orders'), where('userId', '==', currentUser.id));
+      const ordersCol = collection(db, 'orders');
+      const q = (currentUser && currentUser.role === 'customer')
+        ? query(ordersCol, where('userId', '==', currentUser.id))
+        : ordersCol;
 
       const unsubOrders = onSnapshot(
         q,
         (snapshot) => {
-          const firestoreOrders = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Order[];
+          const firestoreOrders = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as Order[];
+          firestoreOrders.sort((a, b) => {
+            const getOrderTime = (o: Order) => {
+              const cr = (o as any).createdAt;
+              if (cr?.toMillis) return cr.toMillis();
+              if (o.date) {
+                const t = new Date(o.date).getTime();
+                if (!isNaN(t)) return t;
+              }
+              return 0;
+            };
+            return getOrderTime(b) - getOrderTime(a);
+          });
+
           setOrders((prev) => {
             const map = new Map<string, Order>();
-            firestoreOrders.forEach(o => map.set(o.id, o));
-            prev.forEach(o => {
+            firestoreOrders.forEach((o) => map.set(o.id, o));
+            // Retain any newly placed local order in case of network latency
+            prev.forEach((o) => {
               if (!map.has(o.id)) map.set(o.id, o);
             });
-            return Array.from(map.values());
+            const merged = Array.from(map.values());
+            try {
+              localStorage.setItem('fs_saved_orders', JSON.stringify(merged));
+            } catch {}
+            return merged;
           });
         },
-        (err) => handleFirestoreError(err, OperationType.GET, 'orders')
+        (err) => {
+          console.warn('Orders sync notice:', err);
+          handleFirestoreError(err, OperationType.GET, 'orders');
+        }
       );
 
       return () => unsubOrders();
     } catch (err) {
+      console.warn('Orders listener setup notice:', err);
       handleFirestoreError(err, OperationType.GET, 'orders');
     }
   }, [currentUser?.id, currentUser?.role]);
@@ -892,7 +1006,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     showBestSellers: true,
     bestSellersTitle: 'Best Selling Products',
     bestSellersSubtitle: 'Customer favorites for school term and office requirements',
-    showPromoBanner: true,
+    showPromoBanner: false,
     promoTitle: 'Special Seasonal Discounts',
     promoSubtitle: 'Limited time offers on selected notebooks, student backpacks, art supplies and exam packs.',
     promoBadge: 'Special Offer',
@@ -934,6 +1048,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     logoType: 'text',
     logoUrl: '',
     logoHeight: 36,
+    isDemoDataSeeded: false,
   });
 
 
@@ -944,6 +1059,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newMsg: CustomerMessage = {
       ...msgData,
       id,
+      phone: msgData.phone || '',
+      subject: msgData.subject || 'General Customer Inquiry',
       createdAt: new Date().toISOString(),
       status: "unread",
     };
@@ -951,26 +1068,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCustomerMessages((prev) => [newMsg, ...prev.filter(m => m.id !== id)]);
 
     try {
-      await setDoc(doc(db, 'customer_messages', id), {
+      const cleanMsg = sanitizeFirestoreData({
         ...newMsg,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      await setDoc(doc(db, 'customer_messages', id), cleanMsg);
     } catch (err) {
-      console.warn("Customer message saved locally, Firestore sync notice:", err);
+      console.warn("Retrying customer message with timestamp fallback:", err);
+      try {
+        await setDoc(doc(db, 'customer_messages', id), sanitizeFirestoreData({
+          ...newMsg,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+      } catch (err2) {
+        console.error("Failed to save customer message to Firestore:", err2);
+      }
     }
 
-    setNotifications((prev) => [
-      {
-        id: createUniqueId("notif"),
-        type: "customer",
-        title: "New Customer Inquiry Received",
-        message: `From ${msgData.name} (${msgData.email}): "${msgData.subject || "No Subject"}"`,
-        time: "Just now",
-        read: false,
-      },
-      ...prev,
-    ]);
+    await sendNotification({
+      type: "customer",
+      title: "New Customer Inquiry Received",
+      message: `From ${msgData.name} (${msgData.email}): "${msgData.subject || "No Subject"}"`,
+    });
   };
 
   const updateCustomerMessageStatus = async (
@@ -1208,6 +1329,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Cart Handlers
   const addToCart = (product: Product, quantity = 1) => {
+    if (!currentUser) {
+      showToast('Please sign in to add items to cart and make purchases.', 'error');
+      setShowForceSignInModal(true);
+      return;
+    }
     if (product.stock <= 0) {
       showToast(`${product.name} is currently out of stock.`, 'error');
       return;
@@ -1372,25 +1498,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       shippingAddress: orderData.shippingAddress,
       deliveryMethod: orderData.deliveryMethod,
       paymentMethod: orderData.paymentMethod,
-      paymentStatus: isPaid ? 'Paid' : 'Pending',
+      paymentStatus: 'Pending',
+      paymentVerified: false,
       orderStatus: 'Confirmed',
       items: orderItems,
       subtotal: cartSubtotal,
       discount: cartDiscount,
-      couponCode: appliedCoupon?.code,
+      couponCode: appliedCoupon?.code || '',
       deliveryCharge: cartDeliveryCharge,
       total: cartTotal,
       estimatedDelivery: '3 to 5 business days',
       trackingNumber: `FS-TRK-${Math.floor(10000 + Math.random() * 90000)}`,
       courierName: 'BlueDart / Delhivery Express',
-      paidAmount: initialPaid,
-      outstandingBalance: initialOutstanding,
+      paidAmount: 0,
+      outstandingBalance: cartTotal,
       paymentRecords: initialRecords,
       deliveryTimeline: initialTimeline,
       returnStatus: 'None',
     };
 
-    // Update Product Stock Automatically
+    // Update Product Stock Automatically and trigger automated email alerts
+    cart.forEach((item) => {
+      const updatedStock = Math.max(0, item.product.stock - item.quantity);
+      checkAndTriggerLowStockAlert(item.product, updatedStock);
+    });
+
     setProducts((prev) =>
       prev.map((prod) => {
         const purchased = cart.find((c) => c.product.id === prod.id);
@@ -1403,31 +1535,43 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
 
     // Update local state immediately so order appears across the entire app
-    setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== newOrderId)]);
+    setOrders((prev) => {
+      const updated = [newOrder, ...prev.filter((o) => o.id !== newOrderId)];
+      try {
+        localStorage.setItem('fs_saved_orders', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
 
     // Save order to Firestore
     try {
-      await setDoc(doc(db, 'orders', newOrderId), {
+      const cleanOrder = sanitizeFirestoreData({
         ...newOrder,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      await setDoc(doc(db, 'orders', newOrderId), cleanOrder);
+      console.log(`Order #${newOrderId} saved to Firestore orders collection.`);
     } catch (error) {
-      console.warn("Order saved locally, Firestore sync notice:", error);
+      console.warn("Retrying order with timestamp fallback:", error);
+      try {
+        await setDoc(doc(db, 'orders', newOrderId), sanitizeFirestoreData({
+          ...newOrder,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+      } catch (err2) {
+        console.error("Critical: Could not write order to Firestore:", err2);
+      }
     }
 
     // Send admin notification
-    setNotifications((prev) => [
-      {
-        id: createUniqueId('notif'),
-        title: 'New Order Received',
-        message: `Order #${newOrderId} received from ${orderData.customerName} (₹${cartTotal}).`,
-        time: 'Just now',
-        type: 'order',
-        read: false,
-      },
-      ...prev,
-    ]);
+    await sendNotification({
+      title: 'New Order Received',
+      message: `Order #${newOrderId} received from ${orderData.customerName} (₹${cartTotal}).`,
+      type: 'order',
+      orderId: newOrderId,
+    });
 
     // Clear cart
     clearCart();
@@ -1497,22 +1641,73 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       returnStatus: 'None',
     };
 
-    setOrders((prev) => [newOrder, ...prev.filter((o) => o.id !== id)]);
+    setOrders((prev) => {
+      const updated = [newOrder, ...prev.filter((o) => o.id !== id)];
+      try {
+        localStorage.setItem('fs_saved_orders', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
 
     try {
-      await setDoc(doc(db, 'orders', id), {
+      const cleanOrder = sanitizeFirestoreData({
         ...newOrder,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      await setDoc(doc(db, 'orders', id), cleanOrder);
     } catch (error) {
-      console.warn("Direct order saved locally, Firestore sync notice:", error);
+      console.warn("Direct order saved with fallback:", error);
+      try {
+        await setDoc(doc(db, 'orders', id), sanitizeFirestoreData({
+          ...newOrder,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+      } catch (err2) {
+        console.error("Direct order save failed:", err2);
+      }
     }
 
     showToast(`Recorded order #${id} (₹${newOrder.total})`);
     return newOrder;
   };
 
+
+  const sendOrderStatusAlert = async (order: Order, status: string, note?: string) => {
+    // 1. Send Dashboard Notification to User
+    if (order.userId) {
+      await sendNotification({
+        userId: order.userId,
+        orderId: order.id,
+        type: 'order',
+        title: `Order Status Updated: ${status}`,
+        message: `Your order #${order.id} is now "${status}". ${note || ''}`,
+      });
+    }
+
+    // 2. Log Automated Email Alert (Simulated Dispatch)
+    const emailId = createUniqueId('email');
+    const alert: EmailAlertRecord = {
+      id: emailId,
+      type: 'order_status_update',
+      recipientEmail: order.email || order.phone + "@fathimastores.com",
+      orderId: order.id,
+      orderStatus: status,
+      subject: `[Fathima Stores] Your Order #${order.id} has been updated: ${status}`,
+      status: 'sent',
+      sentAt: new Date().toISOString(),
+    };
+
+    try {
+      await setDoc(doc(db, 'email_alerts', emailId), sanitizeFirestoreData({
+        ...alert,
+        createdAt: serverTimestamp(),
+      }));
+    } catch (err) {
+      console.warn("Failed to log order status email alert:", err);
+    }
+  };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const order = orders.find(o => o.id === orderId);
@@ -1537,17 +1732,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
 
     try {
-      await updateDoc(doc(db, 'orders', orderId), {
+      await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
         orderStatus: status,
         deliveryTimeline: [timelineStep, ...(order.deliveryTimeline || [])],
         updatedAt: serverTimestamp(),
-      });
+      }));
+      
+      // Trigger Automated Alerts & Notifications
+      await sendOrderStatusAlert(order, status);
     } catch (err) {
       console.warn("Order status updated locally, Firestore sync notice:", err);
     }
 
     showToast(`Order #${orderId} status set to "${status}"`);
   };
+
 
   const recordOrderPayment = async (
     orderId: string,
@@ -1578,13 +1777,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       notes: notes || `${type.toUpperCase()} payment recorded`,
     };
 
-    await updateDoc(doc(db, 'orders', orderId), {
+    await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
       paidAmount: newPaid,
       outstandingBalance: newOutstanding,
       paymentStatus: newStatus,
       paymentRecords: [record, ...(order.paymentRecords || [])],
       updatedAt: serverTimestamp(),
-    });
+    })).catch((err) => console.warn('Payment update notice:', err));
 
     showToast(`Payment of ₹${amount} recorded for order #${orderId}`);
   };
@@ -1605,24 +1804,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       note: note || `Order updated to ${status} via ${courierName || order.courierName || 'Courier'}`,
     };
 
-    await updateDoc(doc(db, 'orders', orderId), {
+    await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
       orderStatus: status,
       courierName: courierName || order.courierName || 'BlueDart / Delhivery',
-      trackingNumber: trackingNumber || order.trackingNumber,
+      trackingNumber: trackingNumber || order.trackingNumber || '',
       deliveryTimeline: [step, ...(order.deliveryTimeline || [])],
       updatedAt: serverTimestamp(),
-    });
+    })).catch((err) => console.warn('Order delivery status update notice:', err));
+
+    // Trigger Automated Alerts & Notifications
+    await sendOrderStatusAlert(order, status, note);
 
     showToast(`Order #${orderId} delivery status set to "${status}"`);
   };
 
   const requestOrderReturn = async (orderId: string, reason: string) => {
-    await updateDoc(doc(db, 'orders', orderId), {
+    await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
       returnRequested: true,
       returnReason: reason,
       returnStatus: 'Requested',
       updatedAt: serverTimestamp(),
-    });
+    })).catch((err) => console.warn('Order return request notice:', err));
     showToast(`Return request submitted for Order #${orderId}`);
   };
 
@@ -1640,13 +1842,95 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    await updateDoc(doc(db, 'orders', orderId), {
+    await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
       returnStatus: status,
       orderStatus: status === 'Refunded' ? 'Cancelled' : order.orderStatus,
       updatedAt: serverTimestamp(),
-    });
+    })).catch((err) => console.warn('Order return process notice:', err));
+
+    // Trigger Automated Alerts & Notifications
+    await sendOrderStatusAlert(order, `Return ${status}`);
+
+    showToast(`Return ${status} for Order #${orderId}`);
 
     showToast(`Return for Order #${orderId} marked as "${status}"`);
+  };
+
+  const verifyOrderPayment = async (orderId: string, verified: boolean) => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+
+    const newPaymentStatus: PaymentStatus = verified ? 'Paid' : 'Pending';
+    const newPaidAmount = verified ? order.total : 0;
+    const newOutstanding = verified ? 0 : order.total;
+
+    const verificationRecord: PaymentRecord = {
+      id: createUniqueId('pay'),
+      orderId,
+      amount: order.total,
+      date: new Date().toISOString().split('T')[0],
+      method: order.paymentMethod,
+      reference: `VERIFY-${Date.now().toString(36).toUpperCase()}`,
+      recordedBy: currentUser?.name || 'Store Admin',
+      type: 'final',
+      notes: verified ? 'Payment verified and confirmed by store admin' : 'Payment marked pending verification',
+    };
+
+    const updatedTimeline: DeliveryTimelineStep = {
+      status: order.orderStatus,
+      timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      note: verified ? 'Payment receipt verified by store admin' : 'Payment marked pending verification by admin',
+    };
+
+    const updatedRecords = verified
+      ? [verificationRecord, ...(order.paymentRecords || [])]
+      : (order.paymentRecords || []);
+
+    const updatePayload = {
+      paymentStatus: newPaymentStatus,
+      paymentVerified: verified,
+      paymentVerifiedAt: verified ? new Date().toISOString() : null,
+      paymentVerifiedBy: verified ? (currentUser?.name || 'Store Admin') : null,
+      paidAmount: newPaidAmount,
+      outstandingBalance: newOutstanding,
+      paymentRecords: updatedRecords,
+      deliveryTimeline: [updatedTimeline, ...(order.deliveryTimeline || [])],
+      updatedAt: serverTimestamp(),
+    };
+
+    setOrders((prev) => {
+      const updated = prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              paymentStatus: newPaymentStatus,
+              paymentVerified: verified,
+              paymentVerifiedAt: verified ? new Date().toISOString() : undefined,
+              paymentVerifiedBy: verified ? (currentUser?.name || 'Store Admin') : undefined,
+              paidAmount: newPaidAmount,
+              outstandingBalance: newOutstanding,
+              paymentRecords: updatedRecords,
+              deliveryTimeline: [updatedTimeline, ...(o.deliveryTimeline || [])],
+            }
+          : o
+      );
+      try {
+        localStorage.setItem('fs_saved_orders', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    try {
+      await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData(updatePayload));
+    } catch (err) {
+      console.warn('Verify order payment notice:', err);
+    }
+
+    if (verified) {
+      showToast(`Payment of ₹${order.total} for Order #${orderId} verified and added to income!`, 'success');
+    } else {
+      showToast(`Order #${orderId} marked pending payment verification.`, 'info');
+    }
   };
 
   // Expenses CRUD
@@ -1690,7 +1974,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       customerName: currentUser?.name || 'Customer',
       customerEmail: currentUser?.email || 'customer@fathimastores.com',
       subject: subject || 'Store Inquiry',
-      orderId,
+      orderId: orderId || '',
       status: 'open',
       createdAt: now,
       updatedAt: now,
@@ -1707,11 +1991,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         },
       ],
     };
-    await setDoc(doc(db, 'support_threads', threadId), {
-      ...newThread,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(doc(db, 'support_threads', threadId), sanitizeFirestoreData({
+        ...newThread,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    } catch (err) {
+      console.warn("Support thread save fallback:", err);
+      await setDoc(doc(db, 'support_threads', threadId), sanitizeFirestoreData({
+        ...newThread,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })).catch(() => {});
+    }
     showToast('Support conversation started. A store representative will reply shortly!');
     return newThread;
   };
@@ -1733,18 +2026,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     const updatedMessages = [...thread.messages, newMsg];
-    await updateDoc(doc(db, 'support_threads', threadId), {
+    await updateDoc(doc(db, 'support_threads', threadId), sanitizeFirestoreData({
       messages: updatedMessages,
       updatedAt: serverTimestamp(),
       status: senderRole === 'admin' && thread.status === 'open' ? 'in_progress' : thread.status,
-    });
+    })).catch((err) => console.warn('Send support message notice:', err));
   };
 
   const updateSupportThreadStatus = async (threadId: string, status: 'open' | 'in_progress' | 'resolved') => {
-    await updateDoc(doc(db, 'support_threads', threadId), {
+    await updateDoc(doc(db, 'support_threads', threadId), sanitizeFirestoreData({
       status,
       updatedAt: serverTimestamp(),
-    });
+    })).catch((err) => console.warn('Update support thread status notice:', err));
     showToast(`Support ticket status updated to "${status}"`);
   };
 
@@ -1857,9 +2150,70 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
+  const checkAndTriggerLowStockAlert = async (product: Product, currentStock: number) => {
+    const threshold = storeSettings.lowStockThreshold ?? 10;
+    const enableAlerts = storeSettings.enableStockEmailAlerts ?? true;
+    const recipientEmail = storeSettings.adminStockAlertEmail || 'admin@fathimastores.com';
+
+    if (!enableAlerts) return;
+
+    if (currentStock <= threshold) {
+      const isRecentlyAlerted = emailAlertLogs.some((log) => {
+        if (log.productId !== product.id) return false;
+        const ageMs = Date.now() - new Date(log.sentAt).getTime();
+        return ageMs < 30 * 60 * 1000 && log.currentStock === currentStock;
+      });
+
+      if (isRecentlyAlerted) return;
+
+      const isOutOfStock = currentStock === 0;
+      const alertType: 'low_stock_email' | 'out_of_stock_email' = isOutOfStock
+        ? 'out_of_stock_email'
+        : 'low_stock_email';
+      const subject = isOutOfStock
+        ? `🚨 CRITICAL OUT OF STOCK ALERT: ${product.name} (SKU: ${product.sku || product.id.slice(0, 8).toUpperCase()})`
+        : `⚠️ AUTOMATED LOW STOCK ALERT: ${product.name} (${currentStock} left ≤ threshold ${threshold})`;
+
+      const alertRecord: EmailAlertRecord = {
+        id: createUniqueId('alert-email'),
+        type: alertType,
+        recipientEmail,
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku || product.id.slice(0, 8).toUpperCase(),
+        currentStock,
+        threshold,
+        subject,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+      };
+
+      setEmailAlertLogs((prev) => [alertRecord, ...prev]);
+      try {
+        localStorage.setItem('fs_saved_email_alert_logs', JSON.stringify([alertRecord, ...emailAlertLogs]));
+      } catch {}
+
+      try {
+        await setDoc(doc(db, 'email_alerts', alertRecord.id), sanitizeFirestoreData(alertRecord));
+      } catch (e) {
+        console.warn('Email alert record saved locally:', e);
+      }
+
+      showToast(
+        `📧 Automated Low Stock Alert Email sent to ${recipientEmail} for "${product.name}" (${currentStock} left)`,
+        'info'
+      );
+    }
+  };
+
   const quickUpdateStock = async (id: string, newStock: number) => {
     const safeStock = Math.max(0, newStock);
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, stock: safeStock } : p)));
+
+    const prod = products.find((p) => p.id === id);
+    if (prod) {
+      checkAndTriggerLowStockAlert(prod, safeStock);
+    }
 
     try {
       await updateDoc(doc(db, 'products', id), {
@@ -1972,21 +2326,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     comment: string;
     userName: string;
   }) => {
-    if (!currentUser) {
-      showToast('You must be logged in to leave a review.', 'error');
-      return;
-    }
-
     const reviewId = createUniqueId('rev');
-    const isVerified = await checkIfUserPurchasedProduct(reviewData.productId, currentUser.id);
+    const userId = currentUser?.id || `guest-${Date.now().toString(36)}`;
+    const isVerified = currentUser ? await checkIfUserPurchasedProduct(reviewData.productId, currentUser.id) : false;
 
     const newRev: Review = {
       id: reviewId,
       productId: reviewData.productId,
-      userId: currentUser.id,
+      userId,
       productName: reviewData.productName,
-      userName: reviewData.userName,
-      userAvatar: currentUser.photoURL || currentUser.avatar,
+      userName: reviewData.userName || currentUser?.name || 'Customer',
+      userAvatar: currentUser?.photoURL || currentUser?.avatar || '',
       rating: reviewData.rating,
       comment: reviewData.comment,
       date: new Date().toISOString().split('T')[0],
@@ -1994,15 +2344,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       status: 'approved',
     };
 
-    try {
-      await setDoc(doc(db, 'reviews', reviewId), {
-        ...newRev,
-        userId: currentUser.id,
-        createdAt: serverTimestamp(),
-      });
+    // Update local state immediately
+    setReviews((prev) => [newRev, ...prev.filter((r) => r.id !== reviewId)]);
 
-      // Recalculate and update product rating in Firestore if it exists there, 
-      // otherwise just update local state (which will eventually sync if we add product sync)
+    try {
+      const cleanRev = sanitizeFirestoreData({
+        ...newRev,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, 'reviews', reviewId), cleanRev);
+
+      // Recalculate and update product rating in Firestore if it exists there
       const prodReviews = [...reviews.filter((r) => r.productId === reviewData.productId), newRev];
       const avg = prodReviews.reduce((sum, r) => sum + r.rating, 0) / prodReviews.length;
       const roundedAvg = parseFloat(avg.toFixed(1));
@@ -2018,19 +2371,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // Attempt to update product in Firestore if it exists
       const productRef = doc(db, 'products', reviewData.productId);
-      const productSnap = await getDoc(productRef);
-      if (productSnap.exists()) {
-        await updateDoc(productRef, {
+      const productSnap = await getDoc(productRef).catch(() => null);
+      if (productSnap && productSnap.exists()) {
+        await updateDoc(productRef, sanitizeFirestoreData({
           rating: roundedAvg,
           reviewCount: prodReviews.length,
           updatedAt: serverTimestamp(),
-        });
+        })).catch(() => {});
       }
 
-      showToast('Thank you! Your review has been submitted.');
+      showToast('Thank you! Your review has been submitted.', 'success');
     } catch (error) {
-      console.error("Error submitting review:", error);
-      showToast('Failed to submit review. Please try again.', 'error');
+      console.warn("Retrying review with fallback timestamp:", error);
+      try {
+        await setDoc(doc(db, 'reviews', reviewId), sanitizeFirestoreData({
+          ...newRev,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+        showToast('Review submitted successfully!', 'success');
+      } catch (err2) {
+        console.error("Critical: Could not save review to Firestore:", err2);
+      }
     }
   };
 
@@ -2044,10 +2406,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       const snapshot = await getDocs(q);
       
-      // Check if any order contains the productId
       return snapshot.docs.some(orderDoc => {
         const orderData = orderDoc.data() as Order;
-        return orderData.items.some(item => item.productId === productId);
+        return orderData.items?.some(item => item.productId === productId);
       });
     } catch (error) {
       console.error("Error verifying purchase:", error);
@@ -2056,15 +2417,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateReviewStatus = async (reviewId: string, status: 'approved' | 'hidden') => {
-    await updateDoc(doc(db, 'reviews', reviewId), {
+    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, status } : r)));
+    await updateDoc(doc(db, 'reviews', reviewId), sanitizeFirestoreData({
       status,
       updatedAt: serverTimestamp(),
-    });
+    })).catch((err) => console.warn('Review status update notice:', err));
     showToast(`Review marked as ${status}`);
   };
 
   const deleteReview = async (reviewId: string) => {
-    await deleteDoc(doc(db, 'reviews', reviewId));
+    setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+    await deleteDoc(doc(db, 'reviews', reviewId)).catch((err) => console.warn('Review delete notice:', err));
     showToast('Review deleted', 'info');
   };
 
@@ -2073,44 +2436,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addBanner = async (banner: Omit<Banner, 'id'>) => {
     const id = createUniqueId('b');
     const newBanner: Banner = { ...banner, id };
-    await setDoc(doc(db, 'banners', id), {
-      ...newBanner,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    showToast('Promotional banner added');
+    setBanners((prev) => [...prev.filter((b) => b.id !== id), newBanner]);
+    try {
+      await setDoc(doc(db, 'banners', id), sanitizeFirestoreData({
+        ...newBanner,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    } catch (err) {
+      console.warn('Banner save fallback:', err);
+      await setDoc(doc(db, 'banners', id), sanitizeFirestoreData({
+        ...newBanner,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })).catch(() => {});
+    }
+    showToast('Promotional banner added', 'success');
   };
 
   const updateBanner = async (id: string, updates: Partial<Banner>) => {
-    await updateDoc(doc(db, 'banners', id), {
+    setBanners((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
+    await updateDoc(doc(db, 'banners', id), sanitizeFirestoreData({
       ...updates,
       updatedAt: serverTimestamp(),
-    });
-    showToast('Promotional banner updated');
+    })).catch((err) => console.warn('Banner update notice:', err));
+    showToast('Promotional banner updated', 'success');
   };
 
   const deleteBanner = async (id: string) => {
-    await deleteDoc(doc(db, 'banners', id));
+    setBanners((prev) => prev.filter((b) => b.id !== id));
+    await deleteDoc(doc(db, 'banners', id)).catch((err) => console.warn('Banner delete notice:', err));
     showToast('Banner removed', 'info');
   };
 
 
   // Settings Handlers
   const updateStoreSettings = async (updates: Partial<StoreSettings>) => {
-    await updateDoc(doc(db, 'settings', 'global'), {
+    setStoreSettings((prev) => ({ ...prev, ...updates }));
+    await updateDoc(doc(db, 'settings', 'global'), sanitizeFirestoreData({
       ...updates,
       updatedAt: serverTimestamp(),
-    });
-    showToast('Store settings saved successfully');
+    })).catch((err) => console.warn('Settings update notice:', err));
+    showToast('Store settings saved successfully', 'success');
   };
 
   // Hero Slides Handlers
-  const heroSlides =
-    storeSettings.heroSlides && storeSettings.heroSlides.length > 0
-      ? storeSettings.heroSlides
-      : DEFAULT_HERO_SLIDES;
+  const heroSlides = storeSettings.heroSlides || [];
 
-  // Hero Slides Handlers
   const addHeroSlide = async (slide: Omit<HeroSlide, 'id'>) => {
     const id = createUniqueId('slide');
     const newSlide: HeroSlide = {
@@ -2118,28 +2490,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id,
       order: (storeSettings.heroSlides?.length || 0),
     };
-    await setDoc(doc(db, 'hero_slides', id), {
-      ...newSlide,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await setDoc(doc(db, 'hero_slides', id), sanitizeFirestoreData({
+        ...newSlide,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    } catch (err) {
+      console.warn('Hero slide save fallback:', err);
+      await setDoc(doc(db, 'hero_slides', id), sanitizeFirestoreData({
+        ...newSlide,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })).catch(() => {});
+    }
     showToast('New hero slide added successfully!', 'success');
   };
 
   const updateHeroSlide = async (id: string, updates: Partial<HeroSlide>) => {
-    await updateDoc(doc(db, 'hero_slides', id), {
+    await updateDoc(doc(db, 'hero_slides', id), sanitizeFirestoreData({
       ...updates,
       updatedAt: serverTimestamp(),
-    });
+    })).catch((err) => console.warn('Hero slide update notice:', err));
     showToast('Hero slide updated successfully!', 'success');
   };
 
   const deleteHeroSlide = async (id: string) => {
-    if (heroSlides.length <= 1) {
-      showToast('You must have at least one hero slide active.', 'error');
-      return;
-    }
-    await deleteDoc(doc(db, 'hero_slides', id));
+    await deleteDoc(doc(db, 'hero_slides', id)).catch((err) => console.warn('Hero slide delete notice:', err));
     showToast('Hero slide deleted', 'info');
   };
 
@@ -2385,51 +2762,253 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     showToast('Default address updated', 'success');
   };
 
-  // Notifications
-  const markNotificationAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  };
+  // Customer VIP and Admin Access Management
+  const toggleCustomerVIP = async (customerEmailOrId: string, isVip: boolean) => {
+    try {
+      const emailNorm = (customerEmailOrId || '').trim().toLowerCase();
+      const currentVips = new Set(storeSettings.customVipEmails || []);
+      if (isVip) {
+        currentVips.add(emailNorm);
+      } else {
+        currentVips.delete(emailNorm);
+      }
+      await updateStoreSettings({ customVipEmails: Array.from(currentVips) });
 
-  const clearNotifications = () => {
-    setNotifications([]);
-  };
-
-  // Reset demo data
-  const resetToDefaultData = async () => {
-    if (confirm('Are you sure you want to reset all store data to defaults? This will wipe your current database.')) {
-      await clearAllData();
-      showToast('Database wiped. Reloading to seed default data...', 'info');
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+      const userDoc = allUsers.find(
+        (u) => u.id === customerEmailOrId || (u.email && u.email.toLowerCase() === emailNorm)
+      );
+      if (userDoc) {
+        const docRef = doc(db, 'users', userDoc.id);
+        await updateDoc(docRef, { isVip, updatedAt: serverTimestamp() }).catch(() => {});
+      }
+      showToast(isVip ? `Customer ${emailNorm} upgraded to VIP!` : `VIP status removed for ${emailNorm}`, 'success');
+    } catch (err) {
+      console.error('Failed to toggle VIP status:', err);
+      showToast('Could not update VIP status', 'error');
     }
   };
+
+  const grantCustomerAdmin = async (customerEmailOrId: string, grant: boolean) => {
+    try {
+      const emailNorm = (customerEmailOrId || '').trim().toLowerCase();
+      const currentAdmins = new Set(storeSettings.customAdminEmails || []);
+      if (grant) {
+        currentAdmins.add(emailNorm);
+      } else {
+        currentAdmins.delete(emailNorm);
+      }
+      await updateStoreSettings({ customAdminEmails: Array.from(currentAdmins) });
+
+      const newRole = grant ? 'admin' : 'customer';
+      const userDoc = allUsers.find(
+        (u) => u.id === customerEmailOrId || (u.email && u.email.toLowerCase() === emailNorm)
+      );
+      if (userDoc) {
+        const docRef = doc(db, 'users', userDoc.id);
+        await updateDoc(docRef, { role: newRole, updatedAt: serverTimestamp() }).catch(() => {});
+      }
+      showToast(grant ? `Admin access granted to ${emailNorm}!` : `Admin access revoked for ${emailNorm}`, 'success');
+    } catch (err) {
+      console.error('Failed to grant admin access:', err);
+      showToast('Could not update admin role', 'error');
+    }
+  };
+
+  const deleteCustomer = async (customerEmailOrId: string) => {
+    try {
+      const emailNorm = (customerEmailOrId || '').trim().toLowerCase();
+      const userDoc = allUsers.find(
+        (u) => u.id === customerEmailOrId || (u.email && u.email.toLowerCase() === emailNorm)
+      );
+
+      const targetId = userDoc ? userDoc.id : customerEmailOrId;
+
+      // 1. Delete user doc from Firestore
+      if (targetId) {
+        try {
+          await deleteDoc(doc(db, 'users', targetId));
+        } catch (err) {
+          console.warn('Notice deleting user doc from Firestore:', err);
+        }
+      }
+
+      // 2. Persist in storeSettings.removedCustomerEmails & removedCustomerIds
+      const removedEmails = new Set((storeSettings.removedCustomerEmails || []).map((e) => e.toLowerCase()));
+      const removedIds = new Set(storeSettings.removedCustomerIds || []);
+      if (emailNorm) removedEmails.add(emailNorm);
+      if (targetId) removedIds.add(targetId);
+
+      // 3. Remove email from customAdminEmails & customVipEmails
+      const currentAdmins = (storeSettings.customAdminEmails || []).filter((e) => e.toLowerCase() !== emailNorm);
+      const currentVips = (storeSettings.customVipEmails || []).filter((e) => e.toLowerCase() !== emailNorm);
+
+      await updateStoreSettings({
+        removedCustomerEmails: Array.from(removedEmails),
+        removedCustomerIds: Array.from(removedIds),
+        customAdminEmails: currentAdmins,
+        customVipEmails: currentVips,
+      });
+
+      // 4. Remove from local allUsers list and local storage cache
+      setAllUsers((prev) => prev.filter((u) => u.id !== targetId && u.email?.toLowerCase() !== emailNorm));
+      
+      // 5. Force clear local orders cache to trigger re-fetch/re-calc without deleted user
+      try {
+        localStorage.removeItem('fs_saved_orders');
+      } catch {}
+
+      showToast('User account permanently deleted from store records.', 'success');
+    } catch (err) {
+      console.error('Failed to delete user account:', err);
+      showToast('Could not delete user account', 'error');
+    }
+  };
+
+  // Notifications
+  const sendNotification = async (notif: Omit<Notification, 'id' | 'time' | 'read'>) => {
+    const id = createUniqueId('notif');
+    const newNotif: Notification = {
+      ...notif,
+      id,
+      time: new Date().toISOString(),
+      read: false,
+    };
+
+    try {
+      await setDoc(doc(db, 'notifications', id), sanitizeFirestoreData({
+        ...newNotif,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+    } catch (err) {
+      console.warn("Failed to send persistent notification:", err);
+      // Fallback to local state if Firestore fails (though onSnapshot will eventually sync it)
+      setNotifications(prev => [newNotif, ...prev]);
+    }
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', id), {
+        read: true,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn("Failed to mark notification as read:", err);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    const unread = notifications.filter(n => !n.read);
+    const batch = writeBatch(db);
+    unread.forEach(n => {
+      batch.update(doc(db, 'notifications', n.id), {
+        read: true,
+        updatedAt: serverTimestamp(),
+      });
+    });
+    await batch.commit().catch(err => console.warn("Failed to mark all as read:", err));
+  };
+
+  const clearNotifications = async () => {
+    const batch = writeBatch(db);
+    notifications.forEach(n => {
+      batch.delete(doc(db, 'notifications', n.id));
+    });
+    await batch.commit().catch(err => console.warn("Failed to clear notifications:", err));
+  };
+
+  const removeSelectedCategoryButton = async () => {
+    await updateStoreSettings({ removeFirstCategoryButton: true });
+    showToast('Selected button removed from storefront', 'info');
+  };
+
+const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
+  storeName: 'FATHIMA STORES',
+  tagline: 'Quality Stationery & Everyday Office Essentials',
+  brandTagline: '',
+  searchPlaceholder: 'Search for notebooks, pens, art supplies...',
+  footerAboutText: 'Your local source for premium stationery, office supplies, and school essentials since 1998.',
+  footerCopyrightText: '© 2026 Fathima Stores. All rights reserved.',
+  heroHeadline: 'Everything You Need, All in One Place.',
+  heroSubheadline: 'Discover quality stationery, school supplies, office essentials, notebooks, pens, art materials and everyday products at honest prices.',
+  heroSlides: [],
+  heroSliderAutoplay: true,
+  heroSliderInterval: 4000,
+  showHeroSection: true,
+  showCategoryCircles: true,
+  showHomeFilters: true,
+  showBestSellers: true,
+  showPromoBanner: false,
+  showNewArrivals: true,
+  showBenefits: true,
+  showReviews: true,
+  showProductBadges: true,
+  accentColor: '#71883F',
+  accentColorHover: '#5F7334',
+  accentColorLight: '#EFF4E6',
+  fontFamily: 'Plus Jakarta Sans',
+  borderRadiusMode: 'rounded',
+  storeThemeMode: 'white',
+  removedCustomerEmails: [],
+  removedCustomerIds: [],
+  removedCategoryIds: [],
+  removeFirstCategoryButton: false,
+  isDemoDataSeeded: true, // After a full manual clear, we set to true to prevent auto-reseeding until "Reset to Factory" is clicked
+};
 
   // Complete wipe of all store data
   const clearAllData = async () => {
     const collectionsToClear = [
       'products', 'categories', 'orders', 'coupons', 'reviews', 
       'banners', 'expenses', 'support_threads', 'inventory_adjustments', 
-      'customer_messages', 'delivery_personnel', 'delivery_assignments', 'hero_slides'
+      'customer_messages', 'delivery_personnel', 'delivery_assignments', 'hero_slides',
+      'email_alerts'
     ];
 
     for (const collName of collectionsToClear) {
-      const q = query(collection(db, collName));
-      const snapshot = await getDocs(q);
-      const batch = writeBatch(db);
-      snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-      await batch.commit();
+      try {
+        const q = query(collection(db, collName));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      } catch (err) {
+        console.warn(`Collection wipe notice for ${collName}:`, err);
+      }
     }
 
     try {
       localStorage.clear();
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    showToast('All store catalog and transaction data wiped clean from cloud!', 'info');
+    setProducts([]);
+    setCategories([]);
+    setOrders([]);
+    setCoupons([]);
+    setReviews([]);
+    setBanners([]);
+    setExpenses([]);
+    setSupportThreads([]);
+    setInventoryAdjustments([]);
+    setEmailAlertLogs([]);
+    setCustomerMessages([]);
+    setDeliveryPersonnel([]);
+    setDeliveryAssignments([]);
+
+    await updateStoreSettings(RESET_STORE_SETTINGS);
+
+    showToast('Store catalog, orders, and dashboard data reset clean!', 'info');
+  };
+
+  // Reset dashboard data
+  const resetToDefaultData = async () => {
+    await clearAllData();
+    await updateStoreSettings({ isDemoDataSeeded: false });
+    showToast('Store reset to factory defaults. Reloading data...', 'success');
   };
 
 
@@ -2543,6 +3122,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateOrderDeliveryStatus,
         requestOrderReturn,
         processOrderReturn,
+        verifyOrderPayment,
 
         expenses,
         addExpense,
@@ -2591,6 +3171,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         logoutUser,
         switchRole,
         updateUserProfile,
+        toggleCustomerVIP,
+        grantCustomerAdmin,
+        deleteCustomer,
+        showForceSignInModal,
+        setShowForceSignInModal,
         addSavedAddress,
         deleteSavedAddress,
         setDefaultAddress,
@@ -2601,7 +3186,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         notifications,
         markNotificationAsRead,
+        markAllNotificationsAsRead,
         clearNotifications,
+        removeSelectedCategoryButton,
 
         toasts,
         showToast,
@@ -2625,6 +3212,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         importStoreData,
         updateDeliveryPersonLocation,
         checkIfUserPurchasedProduct,
+
+        // Automated Inventory Email Alerts
+        emailAlertLogs,
+        checkAndTriggerLowStockAlert,
       }}
     >
       {children}

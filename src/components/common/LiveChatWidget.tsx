@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send, Bot, CheckCheck, Clock, Sparkles } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, CheckCheck, Clock, Sparkles, BookOpen } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 
 export const LiveChatWidget: React.FC = () => {
@@ -91,6 +91,20 @@ export const LiveChatWidget: React.FC = () => {
   // Check if there is an unread admin reply
   const unreadReplies = myMessages.filter((m) => m.replyNotes && m.status === 'replied');
 
+  // Render Web Store Logo Icon
+  const renderStoreLogoIcon = (sizeClass = 'w-5 h-5') => {
+    if (storeSettings?.logoUrl) {
+      return (
+        <img
+          src={storeSettings.logoUrl}
+          alt={storeSettings.storeName || 'Fathima Stores'}
+          className={`${sizeClass} object-contain rounded-full bg-white p-0.5`}
+        />
+      );
+    }
+    return <BookOpen className={sizeClass} />;
+  };
+
   return (
     <>
       {/* Floating Web Live Chat Button */}
@@ -98,12 +112,14 @@ export const LiveChatWidget: React.FC = () => {
         <button
           onClick={() => setIsOpen(!isOpen)}
           style={{ marginLeft: '0px', marginRight: '-73px', marginBottom: '46px' }}
-          className="flex items-center gap-2 bg-[#71883F] hover:bg-[#5F7334] text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 cursor-pointer relative group"
-          title="Live Support Chat"
+          className="flex items-center gap-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 cursor-pointer relative group"
+          title={`${storeSettings?.storeName || 'FATHIMA STORES'} Live Support Chat`}
         >
-          <MessageCircle className="w-5 h-5 shrink-0" />
+          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+            {renderStoreLogoIcon('w-4 h-4 text-white')}
+          </div>
           <span className="text-xs font-bold tracking-tight hidden sm:inline-block">
-            Web Support Chat
+            FATHIMA STORES Live Support
           </span>
 
           {unreadReplies.length > 0 && (
@@ -121,8 +137,8 @@ export const LiveChatWidget: React.FC = () => {
           <div className="p-4 bg-[#71883F] text-white flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
               <div className="relative">
-                <div className="w-9 h-9 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-sm">
-                  <Bot className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-sm overflow-hidden p-1">
+                  {renderStoreLogoIcon('w-6 h-6 text-white')}
                 </div>
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 absolute bottom-0 right-0 ring-2 ring-[#71883F]" />
               </div>
@@ -148,12 +164,12 @@ export const LiveChatWidget: React.FC = () => {
           <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-[#FAF7F2]">
             {/* Store Greeting */}
             <div className="flex items-start gap-2 max-w-[88%]">
-              <div className="w-7 h-7 rounded-full bg-[#71883F] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5 shadow-2xs">
-                FS
+              <div className="w-7 h-7 rounded-full bg-[#71883F] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5 shadow-2xs overflow-hidden p-1">
+                {renderStoreLogoIcon('w-4 h-4 text-white')}
               </div>
               <div className="p-3 bg-white border border-[#E8E8E3] rounded-2xl rounded-tl-xs text-xs text-[#171717] shadow-2xs leading-relaxed">
-                <p className="font-bold text-[#71883F] mb-0.5">Fathima Stores Support</p>
-                Hello! Welcome to Fathima Stores. How can we assist you today with stationery products, school supplies, or order delivery?
+                <p className="font-bold text-[#71883F] mb-0.5">{storeSettings?.storeName || 'Fathima Stores'} Support</p>
+                {storeSettings?.liveSupportGreeting || 'Hello! Welcome to Fathima Stores. How can we assist you today with stationery products, school supplies, or order delivery?'}
               </div>
             </div>
 

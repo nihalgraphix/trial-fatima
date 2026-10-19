@@ -22,7 +22,17 @@ import { ProductImage } from '../common/ProductImage';
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
 
 export const OrderTrackingPage: React.FC = () => {
-  const { orders, products, deliveryAssignments, deliveryPersonnel, setActivePage, addToCart, showToast } = useStore();
+  const { 
+    orders, 
+    products, 
+    deliveryAssignments, 
+    deliveryPersonnel, 
+    setActivePage, 
+    addToCart, 
+    showToast,
+    selectedOrderId,
+    setSelectedOrderId
+  } = useStore();
 
   const [searchOrderId, setSearchOrderId] = useState('');
   const [searchEmailOrPhone, setSearchEmailOrPhone] = useState('');
@@ -39,13 +49,26 @@ export const OrderTrackingPage: React.FC = () => {
     ? deliveryPersonnel.find((dp) => dp.id === activeAssignment.deliveryPersonId)
     : undefined;
 
-  // Default to first order on load
+  // Sync with selectedOrderId from store or default to first order
   useEffect(() => {
-    if (orders && orders.length > 0) {
+    if (selectedOrderId) {
+      const found = orders.find(o => o.id === selectedOrderId);
+      if (found) {
+        setActiveOrder(found);
+        setSearchOrderId(found.id);
+        setHasSearched(true);
+      }
+    } else if (orders && orders.length > 0) {
       setActiveOrder(orders[0]);
       setSearchOrderId(orders[0].id);
     }
-  }, [orders]);
+
+    return () => {
+      // Clear selection on unmount to not interfere with next visit
+      if (selectedOrderId) setSelectedOrderId(null);
+    };
+  }, [orders, selectedOrderId, setSelectedOrderId]);
+
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +97,7 @@ export const OrderTrackingPage: React.FC = () => {
     }
   };
 
-  const handleSelectSampleOrder = (orderToSelect: Order) => {
+  const handleSelectOrder = (orderToSelect: Order) => {
     setSearchOrderId(orderToSelect.id);
     setActiveOrder(orderToSelect);
     setHasSearched(true);
@@ -184,7 +207,7 @@ export const OrderTrackingPage: React.FC = () => {
                   <button
                     key={ord.id}
                     type="button"
-                    onClick={() => handleSelectSampleOrder(ord)}
+                    onClick={() => handleSelectOrder(ord)}
                     className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all cursor-pointer ${
                       activeOrder?.id === ord.id
                         ? 'bg-[#EFF4E6] border-[#145A38] text-[#145A38] font-bold'

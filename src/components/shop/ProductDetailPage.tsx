@@ -461,8 +461,51 @@ export const ProductDetailPage: React.FC = () => {
           {activeTab === 'reviews' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
+              {/* Star Rating Summary Breakdown */}
+              <div className="lg:col-span-12 mb-2">
+                <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-6 flex flex-col md:flex-row gap-8 items-center">
+                  <div className="text-center md:border-r border-[#E8E8E3] md:pr-10">
+                    <h5 className="text-4xl font-black text-[#171717]">{product.rating}</h5>
+                    <div className="flex text-amber-500 justify-center my-1.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'fill-current' : 'text-neutral-300'}`} />
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[#6B6B6B] font-bold uppercase tracking-wider">{product.reviewCount} Verified Reviews</p>
+                  </div>
+
+                  <div className="flex-1 w-full max-w-sm space-y-2">
+                    {[5, 4, 3, 2, 1].map((star) => {
+                      const count = productReviews.filter(r => r.rating === star).length;
+                      const percentage = productReviews.length > 0 ? Math.round((count / productReviews.length) * 100) : 0;
+                      return (
+                        <div key={star} className="flex items-center gap-3 text-xs">
+                          <span className="w-12 font-bold text-[#171717] flex items-center gap-1">
+                            {star} <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                          </span>
+                          <div className="flex-1 h-2 bg-[#E8E8E3] rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-amber-500 rounded-full transition-all duration-500" 
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <span className="w-8 text-right text-[#6B6B6B] font-mono">{percentage}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="md:pl-6 text-center md:text-left">
+                    <p className="text-xs text-[#6B6B6B] leading-relaxed max-w-[200px]">
+                      Authentic feedback from verified Fathima Stores customers who purchased this item.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Existing Reviews */}
               <div className="lg:col-span-7 space-y-4">
+
                 <h4 className="text-sm font-bold text-[#171717]">Customer Feedback</h4>
                 {productReviews.length === 0 ? (
                   <p className="text-xs text-[#6B6B6B]">

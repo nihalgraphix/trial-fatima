@@ -31,13 +31,16 @@ export const Header: React.FC = () => {
     logoutUser,
     loginWithGoogle,
     customerMessages,
+    notifications,
     categories,
     storeSettings,
   } = useStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const unreadAdminRepliesCount = (customerMessages || []).filter((m) => m.replyNotes || m.status === 'replied').length;
+  const unreadNotificationsCount = (notifications || []).filter(n => !n.read).length;
+  const unreadAdminRepliesCount = (customerMessages || []).filter((m) => (m.replyNotes || m.status === 'replied') && m.status !== 'read').length;
+  const totalAlertsCount = unreadNotificationsCount + unreadAdminRepliesCount;
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
   const navLinks = [
@@ -147,11 +150,12 @@ export const Header: React.FC = () => {
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
-              {unreadAdminRepliesCount > 0 && (
+              {totalAlertsCount > 0 && (
                 <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center tabular-nums animate-pulse">
-                  {unreadAdminRepliesCount}
+                  {totalAlertsCount}
                 </span>
               )}
+
             </button>
 
             {/* Wishlist */}
@@ -372,61 +376,152 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation Drawer */}
+        {/* Mobile Side Drawer Navigation Bar */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-[#E8E8E3] bg-white px-4 py-4 space-y-3 animate-in fade-in slide-in-from-top-2">
-            <div className="space-y-1">
-              {navLinks.map((item) => (
-                <button
-                  key={item.label}
-                  onClick={() => handleNavClick(item.page)}
-                  className={`w-full text-left px-3 py-2 text-sm rounded-lg font-medium ${
-                    activePage === item.page
-                      ? 'bg-[#EFF4E6] text-[#71883F]'
-                      : 'text-[#171717] hover:bg-[#F7F8F3]'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+          <div className="md:hidden fixed inset-0 z-50 flex">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+              onClick={() => setMobileMenuOpen(false)}
+            />
 
-            <div className="pt-3 border-t border-[#E8E8E3] flex flex-col gap-2">
-              {isAdmin ? (
-                <button
-                  onClick={() => {
-                    setActivePage('admin');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full py-2.5 px-3 text-xs font-semibold text-white bg-[#71883F] rounded-lg flex items-center justify-center gap-2"
-                >
-                  <ShieldCheck className="w-4 h-4" /> Admin Console
-                </button>
-              ) : currentUser ? (
-                <button
-                  onClick={() => {
-                    setActivePage('account');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full py-2.5 px-3 text-xs font-semibold text-[#171717] bg-[#F7F8F3] border border-[#E8E8E3] rounded-lg text-center"
-                >
-                  My Orders & Profile ({currentUser.name})
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  
-                  <button
-                    onClick={() => {
-                      setActivePage('login');
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full py-2.5 px-3 text-xs font-semibold text-white bg-[#71883F] rounded-lg text-center"
-                  >
-                    Email Sign In / Register
-                  </button>
+            {/* Sidebar Content */}
+            <aside className="relative w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col z-50 overflow-y-auto animate-in slide-in-from-left duration-300">
+              {/* Brand Top Header */}
+              <div className="p-4 border-b border-[#E8E8E3] bg-[#FAFBF7] flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  {storeSettings?.logoUrl ? (
+                    <img
+                      src={storeSettings.logoUrl}
+                      alt={storeSettings.storeName || 'Fathima Stores'}
+                      className="h-8 w-auto object-contain"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-[#71883F] text-white flex items-center justify-center font-bold text-xs">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-extrabold text-sm text-[#171717] tracking-tight">
+                      {storeSettings?.storeName || 'FATHIMA STORES'}
+                    </h3>
+                    <span className="text-[10px] text-[#71883F] font-semibold block">
+                      {storeSettings?.brandTagline || 'Stationery & Supplies'}
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1.5 text-neutral-500 hover:text-neutral-900 rounded-lg cursor-pointer"
+                  aria-label="Close menu"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* User Identity Banner */}
+              <div className="p-4 bg-[#EFF4E6]/50 border-b border-[#E8E8E3]">
+                {currentUser ? (
+                  <div className="flex items-center gap-3">
+                    {currentUser.photoURL ? (
+                      <img src={currentUser.photoURL} alt="" className="w-10 h-10 rounded-full border border-[#71883F]" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-[#71883F] text-white flex items-center justify-center font-bold text-xs">
+                        <UserIcon className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="overflow-hidden flex-1">
+                      <p className="text-xs font-bold text-[#171717] truncate">{currentUser.name}</p>
+                      <p className="text-[10px] text-[#6B6B6B] truncate">{currentUser.email}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-[#171717]">Welcome Guest</span>
+                    <button
+                      onClick={() => {
+                        setActivePage('login');
+                        setMobileMenuOpen(false);
+                      }}
+                      className="px-3 py-1 bg-[#71883F] text-white rounded-lg text-xs font-bold shadow-2xs"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Navigation Links List */}
+              <div className="flex-1 p-4 space-y-1">
+                <span className="text-[10px] font-bold text-[#71883F] uppercase tracking-wider block mb-2 px-2">
+                  Navigation Menu
+                </span>
+
+                {navLinks.map((item) => {
+                  const isActive = activePage === item.page;
+                  return (
+                    <button
+                      key={item.label}
+                      onClick={() => handleNavClick(item.page)}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                        isActive
+                          ? 'bg-[#71883F] text-white shadow-2xs'
+                          : 'text-[#171717] hover:bg-[#F7F8F3]'
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </button>
+                  );
+                })}
+
+                <div className="pt-3 mt-3 border-t border-[#E8E8E3] space-y-1">
+                  <span className="text-[10px] font-bold text-[#71883F] uppercase tracking-wider block mb-2 px-2">
+                    My Account & Support
+                  </span>
+
+                  <button
+                    onClick={() => handleNavClick('wishlist')}
+                    className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-[#171717] hover:bg-[#F7F8F3] rounded-xl flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-rose-500" /> Saved Wishlist
+                    </span>
+                    <span className="text-[10px] font-bold bg-[#EFF4E6] text-[#71883F] px-2 py-0.5 rounded-full">
+                      {wishlist.length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => handleNavClick('order-tracking')}
+                    className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-[#171717] hover:bg-[#F7F8F3] rounded-xl flex items-center gap-2"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-[#71883F]" /> Real-time Order Tracker
+                  </button>
+
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setActivePage('admin');
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl flex items-center gap-2 shadow-2xs mt-2"
+                    >
+                      <ShieldCheck className="w-4 h-4" /> Admin Console
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom Quick Help Bar */}
+              <div className="p-4 border-t border-[#E8E8E3] bg-[#FAFBF7] space-y-1 text-xs">
+                <p className="font-bold text-[#171717]">Need Assistance?</p>
+                <p className="text-[11px] text-[#6B6B6B]">
+                  Call: <a href={`tel:${storeSettings?.contactPhone || '+919845012345'}`} className="font-bold text-[#71883F]">{storeSettings?.contactPhone || '+91 98450 12345'}</a>
+                </p>
+              </div>
+            </aside>
           </div>
         )}
         <CustomerNotificationsModal

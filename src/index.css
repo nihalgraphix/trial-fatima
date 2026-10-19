@@ -11,12 +11,25 @@
     --color-text-secondary: #6B6B6B;
     --color-border: #E8E8E3;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    
+    /* Responsive Font Scaling */
+    font-size: 14px;
+  }
+
+  @media (min-width: 640px) {
+    :root { font-size: 15px; }
+  }
+  @media (min-width: 1024px) {
+    :root { font-size: 16px; }
   }
 
   body {
     background-color: #FFFFFF;
     color: #171717;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 }
 

@@ -34,10 +34,28 @@ import { WhatsAppButton } from './components/common/WhatsAppButton';
 import { LiveChatWidget } from './components/common/LiveChatWidget';
 
 import { ProfilePage } from './components/account/ProfilePage';
+import { ForceSignInModal } from './components/common/ForceSignInModal';
 import { UnauthorizedDomainModal } from './components/common/UnauthorizedDomainModal';
 
 const MainContent: React.FC = () => {
-  const { activePage, setActivePage, storeSettings, isAuthLoading, unauthorizedDomainInfo, setUnauthorizedDomainInfo } = useStore();
+  const {
+    activePage,
+    setActivePage,
+    storeSettings,
+    isAuthLoading,
+    currentUser,
+    showForceSignInModal,
+    setShowForceSignInModal,
+    unauthorizedDomainInfo,
+    setUnauthorizedDomainInfo,
+  } = useStore();
+
+  // Trigger Force Sign-In modal if user is not signed in
+  useEffect(() => {
+    if (!isAuthLoading && !currentUser && activePage !== 'admin' && activePage !== 'admin-login') {
+      setShowForceSignInModal(true);
+    }
+  }, [isAuthLoading, currentUser, activePage, setShowForceSignInModal]);
 
   // Listen to browser hash or URL path
   useEffect(() => {
@@ -181,6 +199,10 @@ const MainContent: React.FC = () => {
       </main>
 
       {/* Global Modals & Drawers */}
+      <ForceSignInModal
+        isOpen={showForceSignInModal || (!currentUser && (activePage === 'cart' || activePage === 'checkout'))}
+        onClose={() => setShowForceSignInModal(false)}
+      />
       <CartDrawer />
       <SearchModal />
       <QuickViewModal />

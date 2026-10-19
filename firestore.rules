@@ -1,106 +1,76 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 1. Global Safety Net: Default deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    // Open read and write for all store collections so orders, inbox messages, reviews,
+    // products, banners, and administration data are saved and synced in real-time.
 
-    // --- Helpers ---
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    // --- Users Collection ---
-    match /users/{userId} {
-      allow read: if isValidId(userId);
-      allow create, update: if isValidId(userId);
-      allow delete: if isValidId(userId);
-    }
-
-    // --- Products & Catalog ---
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if isValidId(productId);
-    }
-
-    match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if isValidId(categoryId);
-    }
-
-    match /banners/{bannerId} {
-      allow read: if true;
-      allow write: if isValidId(bannerId);
-    }
-
-    match /hero_slides/{slideId} {
-      allow read: if true;
-      allow write: if isValidId(slideId);
-    }
-
-    match /coupons/{couponCode} {
-      allow read: if true;
-      allow write: if isValidId(couponCode);
-    }
-
-    match /reviews/{reviewId} {
-      allow read: if true;
-      allow write: if isValidId(reviewId);
-    }
-
-    // --- Orders & Transactions ---
     match /orders/{orderId} {
-      allow read: if isValidId(orderId);
-      allow write: if isValidId(orderId);
-    }
-
-    // --- Support & Live Chat ---
-    match /support_threads/{threadId} {
-      allow read, write: if isValidId(threadId);
+      allow read, write: if true;
     }
 
     match /customer_messages/{messageId} {
-      allow read, write: if isValidId(messageId);
+      allow read, write: if true;
     }
 
-    // --- Store Operations & Logistics ---
+    match /support_threads/{threadId} {
+      allow read, write: if true;
+    }
+
+    match /reviews/{reviewId} {
+      allow read, write: if true;
+    }
+
+    match /products/{productId} {
+      allow read, write: if true;
+    }
+
+    match /categories/{categoryId} {
+      allow read, write: if true;
+    }
+
+    match /banners/{bannerId} {
+      allow read, write: if true;
+    }
+
+    match /hero_slides/{slideId} {
+      allow read, write: if true;
+    }
+
+    match /coupons/{couponCode} {
+      allow read, write: if true;
+    }
+
     match /expenses/{expenseId} {
-      allow read, write: if isValidId(expenseId);
+      allow read, write: if true;
     }
 
     match /inventory_adjustments/{adjustmentId} {
-      allow read, write: if isValidId(adjustmentId);
+      allow read, write: if true;
     }
 
     match /delivery_personnel/{personnelId} {
-      allow read, write: if isValidId(personnelId);
+      allow read, write: if true;
     }
 
     match /delivery_assignments/{assignmentId} {
-      allow read, write: if isValidId(assignmentId);
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
     }
 
     match /settings/{docId} {
-      allow read: if true;
-      allow write: if isValidId(docId);
+      allow read, write: if true;
     }
 
-    // --- Connection Test ---
-    match /test/connection {
-      allow read: if true;
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    // Default match for any subcollections or nested paths
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }

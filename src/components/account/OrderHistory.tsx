@@ -5,10 +5,17 @@ import { Order } from '../../types';
 import { InvoiceModal } from '../checkout/InvoiceModal';
 
 export const OrderHistory: React.FC = () => {
-  const { orders, currentUser, setActivePage } = useStore();
+  const { orders, currentUser, setActivePage, setSelectedOrderId, showToast } = useStore();
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
+
+  const handleCopyInvoiceLink = (orderId: string) => {
+    const link = `${window.location.origin}/invoice/${orderId}`;
+    navigator.clipboard.writeText(link);
+    showToast('Invoice link copied to clipboard!', 'success');
+  };
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -123,24 +130,32 @@ export const OrderHistory: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => setSelectedInvoiceOrder(order)}
-                    className="flex-1 sm:flex-none px-4 py-2 bg-[#F7F8F3] border border-[#E8E8E3] hover:bg-white text-[10px] font-black uppercase tracking-wider text-[#171717] rounded-xl flex items-center justify-center gap-2 transition-all"
+                    className="px-3 py-1.5 bg-[#F7F8F3] border border-[#E8E8E3] hover:bg-white text-[9px] font-black uppercase tracking-wider text-[#171717] rounded-lg flex items-center gap-1.5 transition-all"
                   >
-                    <Printer className="w-3.5 h-3.5 text-[#71883F]" /> Invoice
+                    <Printer className="w-3 h-3 text-[#71883F]" /> Invoice
+                  </button>
+                  <button
+                    onClick={() => handleCopyInvoiceLink(order.id)}
+                    className="px-3 py-1.5 bg-[#F7F8F3] border border-[#E8E8E3] hover:bg-white text-[9px] font-black uppercase tracking-wider text-[#171717] rounded-lg flex items-center gap-1.5 transition-all"
+                    title="Copy Invoice Link"
+                  >
+                    Share
                   </button>
                   <button
                     onClick={() => {
-                      // Logic to view order details would go here
-                      // For now we reuse the success page or similar
-                      setActivePage('order-success');
+                      setSelectedOrderId(order.id);
+                      setActivePage('order-tracking');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className="flex-1 sm:flex-none px-4 py-2 bg-[#71883F] text-white text-[10px] font-black uppercase tracking-wider rounded-xl shadow-xs hover:bg-[#5F7334] transition-all"
+                    className="px-4 py-1.5 bg-[#171717] text-white text-[9px] font-black uppercase tracking-wider rounded-lg shadow-2xs hover:bg-black transition-all"
                   >
                     Track Order
                   </button>
                 </div>
+
               </div>
 
               {/* Collapsible Items Preview */}

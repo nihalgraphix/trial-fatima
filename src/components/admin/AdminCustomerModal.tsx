@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Order, ShippingAddress } from '../../types';
+import { useStore } from '../../context/StoreContext';
 import {
   X,
   Mail,
@@ -19,6 +20,7 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 export interface AdminCustomerRecord {
@@ -57,8 +59,10 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
   onViewInvoice,
   onCreateOrder,
 }) => {
+  const { toggleCustomerVIP, grantCustomerAdmin, deleteCustomer } = useStore();
   const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'products' | 'profile'>('orders');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -216,6 +220,67 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
                     <MapPin className="w-3.5 h-3.5 text-neutral-400" />
                     <span>{[customer.city, customer.state].filter(Boolean).join(', ')}</span>
                   </div>
+                )}
+              </div>
+
+              {/* VIP & Admin Management Controls */}
+              <div className="pt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleCustomerVIP(customer.email || customer.id, customer.status !== 'VIP')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                    customer.status === 'VIP'
+                      ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'
+                      : 'bg-amber-500 hover:bg-amber-600 text-white'
+                  }`}
+                >
+                  <Crown className="w-3.5 h-3.5 fill-current" />
+                  <span>{customer.status === 'VIP' ? 'Remove VIP Status' : 'Make VIP Customer'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => grantCustomerAdmin(customer.email || customer.id, customer.role !== 'admin')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                    customer.role === 'admin'
+                      ? 'bg-purple-100 text-purple-900 hover:bg-purple-200 border border-purple-300'
+                      : 'bg-purple-700 hover:bg-purple-800 text-white'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{customer.role === 'admin' ? 'Revoke Admin Access' : 'Grant Admin Access'}</span>
+                </button>
+
+                {confirmingDelete ? (
+                  <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 p-1.5 rounded-lg">
+                    <span className="text-xs text-rose-700 font-bold px-1">Confirm Delete?</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await deleteCustomer(customer.id || customer.email);
+                        onClose();
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-colors shadow-2xs cursor-pointer"
+                    >
+                      Yes, Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(false)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-neutral-200 text-neutral-800 hover:bg-neutral-300 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer bg-rose-600 hover:bg-rose-700 text-white"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete User Account</span>
+                  </button>
                 )}
               </div>
             </div>

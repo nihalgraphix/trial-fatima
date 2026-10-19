@@ -149,6 +149,9 @@ export interface Order {
   returnRequested?: boolean;
   returnReason?: string;
   returnStatus?: 'None' | 'Requested' | 'Approved' | 'Rejected' | 'Refunded';
+  paymentVerified?: boolean;
+  paymentVerifiedAt?: string;
+  paymentVerifiedBy?: string;
 }
 
 export interface Expense {
@@ -283,6 +286,8 @@ export interface Notification {
   time: string;
   type: 'order' | 'stock' | 'customer' | 'review';
   read: boolean;
+  userId?: string;
+  orderId?: string;
 }
 
 export interface StoreSettings {
@@ -327,6 +332,7 @@ export interface StoreSettings {
   promoBadge: string;
   promoButtonText: string;
   promoBgImage?: string;
+  promoBgTone?: string;
   promoBgOverlay?: 'light' | 'dark' | 'gradient' | 'none';
   promoBgOpacity?: number;
   showNewArrivals: boolean;
@@ -379,6 +385,61 @@ export interface StoreSettings {
   logoUrl?: string;
   logoHeight?: number;
   faviconUrl?: string;
+
+  // Text & Copy Customization for Entire Store
+  brandTagline?: string;
+  searchPlaceholder?: string;
+  footerAboutText?: string;
+  footerCopyrightText?: string;
+  storeAddress?: string;
+  storeWorkingHours?: string;
+  benefit1Title?: string;
+  benefit1Desc?: string;
+  benefit2Title?: string;
+  benefit2Desc?: string;
+  benefit3Title?: string;
+  benefit3Desc?: string;
+  benefit4Title?: string;
+  benefit4Desc?: string;
+  categorySectionTitle?: string;
+  categorySectionSubtitle?: string;
+  newArrivalsSectionTitle?: string;
+  newArrivalsSectionSubtitle?: string;
+  whyChooseTitle?: string;
+  whyChooseSubtitle?: string;
+  reviewsSectionTitle?: string;
+  reviewsSectionSubtitle?: string;
+  liveSupportTitle?: string;
+  liveSupportGreeting?: string;
+
+  // Admin customer overrides & removals
+  customVipEmails?: string[];
+  customAdminEmails?: string[];
+  removedCustomerEmails?: string[];
+  removedCustomerIds?: string[];
+  removedCategoryIds?: string[];
+  removeFirstCategoryButton?: boolean;
+
+  // Automated Inventory Email Alerts Settings
+  enableStockEmailAlerts?: boolean;
+  adminStockAlertEmail?: string;
+  isDemoDataSeeded?: boolean;
+}
+
+export interface EmailAlertRecord {
+  id: string;
+  type: 'low_stock_email' | 'out_of_stock_email' | 'order_confirmation' | 'order_status_update';
+  recipientEmail: string;
+  productId?: string;
+  productName?: string;
+  sku?: string;
+  currentStock?: number;
+  threshold?: number;
+  orderId?: string;
+  orderStatus?: string;
+  subject: string;
+  status: 'sent' | 'pending' | 'failed';
+  sentAt: string;
 }
 
 export interface GeoCoordinates {
