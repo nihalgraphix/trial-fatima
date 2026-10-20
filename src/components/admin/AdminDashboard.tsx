@@ -4682,7 +4682,7 @@ export const AdminDashboard: React.FC = () => {
           )}
 
           {currentTab === 'settings' && (
-            <div className="space-y-6 max-w-3xl">
+            <div className="space-y-6 max-w-6xl w-full">
               <div>
                 <h1 className="text-2xl font-extrabold text-[#171717] tracking-tight">
                   Store Settings & Configuration
@@ -6015,9 +6015,6 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Interactive Store Location & GPS Hub Configurator */}
-                <StoreLocationConfigCard />
 
                 {/* Automated Online Payment System & Gateway Configuration */}
                 <div className="bg-white border border-[#E8E8E3] rounded-2xl p-6 space-y-5 shadow-2xs text-xs">

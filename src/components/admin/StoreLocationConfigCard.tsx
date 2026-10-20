@@ -1,306 +1,332 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapPin,
   Navigation,
-  Search,
   LocateFixed,
-  Check,
-  Loader2,
-  Compass,
+  Search,
+  CheckCircle2,
   Building2,
-  Plus,
-  Minus,
+  Phone,
+  Mail,
   ExternalLink,
+  Loader2,
   Sparkles,
+  Compass,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Minimize2,
+  Move,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
-import { StoreSettings } from '../../types';
-import { useGoogleMapsStatus, MapErrorBoundary } from '../common/GoogleMapsWrapper';
+
+const STORE_ORIGIN = {
+  lat: 8.4806,
+  lng: 76.9261,
+  address:
+    'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O, Thiruvananthapuram, Kerala 695008',
+};
+
+function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(2));
+}
+
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
+// Helper to convert lat/lng to fractional Slippy Map tile coordinates
+function latLngToTileXY(lat: number, lng: number, zoom: number) {
+  const n = Math.pow(2, zoom);
+  const x = ((lng + 180) / 360) * n;
+  const latRad = (lat * Math.PI) / 180;
+  const y =
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+  return { x, y };
+}
+
+// Helper to convert fractional Slippy Map tile coordinates back to lat/lng
+function tileXYToLatLng(x: number, y: number, zoom: number) {
+  const n = Math.pow(2, zoom);
+  const lng = (x / n) * 360 - 180;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
+  const lat = (latRad * 180) / Math.PI;
+  return {
+    lat: Number(Math.max(-85, Math.min(85, lat)).toFixed(6)),
+    lng: Number(Math.max(-180, Math.min(180, lng)).toFixed(6)),
+  };
+}
 
 interface StoreLocationConfigCardProps {
-  settingsForm?: StoreSettings;
-  onUpdateSettingsForm?: (updates: Partial<StoreSettings>) => void;
+  onSaved?: () => void;
   compact?: boolean;
 }
 
-const HUB_PRESETS = [
-  {
-    label: 'Trivandrum (MG Road)',
-    hubName: 'Fathima Stores Main Hub (MG Road, Trivandrum)',
-    address: 'Commercial Complex, MG Road, Trivandrum, Kerala 695001',
-    city: 'Trivandrum',
-    state: 'Kerala',
-    pinCode: '695001',
-    lat: 8.5241,
-    lng: 76.9366,
-  },
-  {
-    label: 'Kochi (Edappally)',
-    hubName: 'Fathima Stores Kochi Hub (Edappally)',
-    address: 'NH 66 Bypass Junction, Edappally, Kochi, Kerala 682024',
-    city: 'Kochi',
-    state: 'Kerala',
-    pinCode: '682024',
-    lat: 10.0261,
-    lng: 76.3125,
-  },
-  {
-    label: 'Kozhikode (SM Street)',
-    hubName: 'Fathima Stores Malabar Hub (SM Street, Kozhikode)',
-    address: 'Sweet Meat Street, Palayam, Kozhikode, Kerala 673001',
-    city: 'Kozhikode',
-    state: 'Kerala',
-    pinCode: '673001',
-    lat: 11.2588,
-    lng: 75.7804,
-  },
-  {
-    label: 'Bengaluru (Indiranagar)',
-    hubName: 'Fathima Stores Bengaluru Hub (100 Feet Rd)',
-    address: '100 Feet Road, HAL 2nd Stage, Indiranagar, Bengaluru, Karnataka 560038',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pinCode: '560038',
-    lat: 12.9784,
-    lng: 77.6408,
-  },
-  {
-    label: 'Chennai (Anna Nagar)',
-    hubName: 'Fathima Stores Chennai Hub (Anna Nagar)',
-    address: '2nd Avenue, Anna Nagar, Chennai, Tamil Nadu 600040',
-    city: 'Chennai',
-    state: 'Tamil Nadu',
-    pinCode: '600040',
-    lat: 13.085,
-    lng: 80.2101,
-  },
-];
-
-// Interactive OpenStreetMap Clickable Picker Fallback
-const InteractiveOsmStorePinMap: React.FC<{
-  lat: number;
-  lng: number;
-  hubName: string;
-  onPickCoords: (lat: number, lng: number) => void;
-}> = ({ lat, lng, hubName, onPickCoords }) => {
-  const [zoom, setZoom] = useState(15);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const lat2tile = (l: number, z: number) =>
-    ((1 - Math.log(Math.tan((l * Math.PI) / 180) + 1 / Math.cos((l * Math.PI) / 180)) / Math.PI) /
-      2) *
-    Math.pow(2, z);
-  const lon2tile = (lon: number, z: number) => ((lon + 180) / 360) * Math.pow(2, z);
-  const tile2lon = (x: number, z: number) => (x / Math.pow(2, z)) * 360 - 180;
-  const tile2lat = (y: number, z: number) => {
-    const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, z);
-    return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-  };
-
-  const centerTileX = lon2tile(lng, zoom);
-  const centerTileY = lat2tile(lat, zoom);
-  const baseTileX = Math.floor(centerTileX);
-  const baseTileY = Math.floor(centerTileY);
-  const offsetX = (centerTileX - baseTileX) * 256;
-  const offsetY = (centerTileY - baseTileY) * 256;
-
-  const tiles: { x: number; y: number; dx: number; dy: number }[] = [];
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -3; dx <= 3; dx++) {
-      tiles.push({ x: baseTileX + dx, y: baseTileY + dy, dx, dy });
-    }
-  }
-
-  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left - rect.width / 2;
-    const clickY = e.clientY - rect.top - rect.height / 2;
-
-    const newTileX = centerTileX + clickX / 256;
-    const newTileY = centerTileY + clickY / 256;
-
-    const pickedLat = Number(tile2lat(newTileY, zoom).toFixed(6));
-    const pickedLng = Number(tile2lon(newTileX, zoom).toFixed(6));
-    onPickCoords(pickedLat, pickedLng);
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      onClick={handleMapClick}
-      className="w-full h-full relative overflow-hidden cursor-crosshair select-none bg-[#E5E9E0]"
-      title="Click anywhere on the map to move the Store Hub location"
-    >
-      <div
-        className="absolute"
-        style={{
-          left: '50%',
-          top: '50%',
-          transform: `translate(${-offsetX}px, ${-offsetY}px)`,
-        }}
-      >
-        {tiles.map((t) => {
-          const maxTile = Math.pow(2, zoom);
-          const wrappedX = ((t.x % maxTile) + maxTile) % maxTile;
-          return (
-            <img
-              key={`${zoom}-${t.x}-${t.y}`}
-              src={`https://tile.openstreetmap.org/${zoom}/${wrappedX}/${t.y}.png`}
-              alt=""
-              draggable={false}
-              className="absolute w-[256px] h-[256px] max-w-none pointer-events-none"
-              style={{
-                left: `${t.dx * 256}px`,
-                top: `${t.dy * 256}px`,
-              }}
-            />
-          );
-        })}
-      </div>
-
-      {/* Store Hub Center Pin */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full z-20 pointer-events-none flex flex-col items-center">
-        <div className="bg-[#171717] text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-lg mb-1 whitespace-nowrap border border-[#71883F] flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-[#A9C46C] animate-pulse" />
-          <span>{hubName || 'Store Dispatch Hub'}</span>
-        </div>
-        <div className="w-9 h-9 rounded-full bg-[#71883F] border-2 border-white text-white flex items-center justify-center shadow-xl">
-          <Building2 className="w-4 h-4" />
-        </div>
-      </div>
-
-      {/* Zoom Controls */}
-      <div
-        className="absolute right-3 top-3 z-20 flex flex-col bg-white/95 border border-[#E8E8E3] rounded-xl shadow-md overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.min(18, z + 1))}
-          className="p-2 hover:bg-[#F7F8F3] text-[#171717] border-b border-[#E8E8E3] cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.max(9, z - 1))}
-          className="p-2 hover:bg-[#F7F8F3] text-[#171717] cursor-pointer"
-        >
-          <Minus className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      <div className="absolute bottom-2.5 left-2.5 z-20 bg-white/95 backdrop-blur-xs border border-[#E8E8E3] px-2.5 py-1 rounded-lg text-[10px] font-semibold text-[#171717] shadow-xs pointer-events-none">
-        Click anywhere on map to reposition Store Hub pin ({lat.toFixed(4)}, {lng.toFixed(4)})
-      </div>
-    </div>
-  );
-};
-
 export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = ({
-  settingsForm,
-  onUpdateSettingsForm,
-  compact = false,
+  onSaved,
 }) => {
   const { storeSettings, updateStoreSettings, showToast } = useStore();
-  const { mapsHealthy } = useGoogleMapsStatus();
 
-  const source = settingsForm || storeSettings;
+  const [storeAddress, setStoreAddress] = useState(
+    storeSettings.storeAddress || STORE_ORIGIN.address
+  );
+  const [storeLandmark, setStoreLandmark] = useState(
+    storeSettings.storeLandmark || 'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O'
+  );
+  const [storePincode, setStorePincode] = useState(
+    storeSettings.storePincode || '695008'
+  );
+  const [contactPhone, setContactPhone] = useState(
+    storeSettings.contactPhone || '+91 98450 12345 / 0471 2345678'
+  );
+  const [whatsappNumber, setWhatsappNumber] = useState(
+    storeSettings.whatsappNumber || '919845012345'
+  );
+  const [contactEmail, setContactEmail] = useState(
+    storeSettings.contactEmail || 'support@fathimastores.in'
+  );
+  const [lat, setLat] = useState<number>(
+    Number(storeSettings.storeLat) || STORE_ORIGIN.lat
+  );
+  const [lng, setLng] = useState<number>(
+    Number(storeSettings.storeLng) || STORE_ORIGIN.lng
+  );
+  const [maxRadiusKm, setMaxRadiusKm] = useState<number>(
+    Number(storeSettings.maxDeliveryRadiusKm) || 25
+  );
 
-  const [hubName, setHubName] = useState(
-    source.storeHubName || 'Fathima Stores Main Hub (MG Road, Trivandrum)'
+  // Viewport center for the interactive scrollable slippy map (can pan independently or lock to pin)
+  const [viewLat, setViewLat] = useState<number>(
+    Number(storeSettings.storeLat) || STORE_ORIGIN.lat
   );
-  const [address, setAddress] = useState(
-    source.address || 'Commercial Complex, MG Road, Trivandrum, Kerala 695001'
+  const [viewLng, setViewLng] = useState<number>(
+    Number(storeSettings.storeLng) || STORE_ORIGIN.lng
   );
-  const [city, setCity] = useState(source.storeCity || 'Trivandrum');
-  const [stateName, setStateName] = useState(source.storeState || 'Kerala');
-  const [pinCode, setPinCode] = useState(source.storePinCode || '695001');
-  const [lat, setLat] = useState<number>(source.storeLat || 8.5241);
-  const [lng, setLng] = useState<number>(source.storeLng || 76.9366);
-  const [radiusKm, setRadiusKm] = useState<number>(source.deliveryRadiusKm || 25);
+  const [zoom, setZoom] = useState<number>(16);
+  const [isExpandedMap, setIsExpandedMap] = useState<boolean>(false);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isLocatingGps, setIsLocatingGps] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [useFallbackMap, setUseFallbackMap] = useState(false);
 
-  // Sync local state when external storeSettings change
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const slippyContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+
+  // Drag state for interactive OpenStreetMap Slippy Canvas
+  const dragStateRef = useRef<{
+    isDragging: boolean;
+    hasMoved: boolean;
+    startX: number;
+    startY: number;
+    startViewLat: number;
+    startViewLng: number;
+  }>({
+    isDragging: false,
+    hasMoved: false,
+    startX: 0,
+    startY: 0,
+    startViewLat: viewLat,
+    startViewLng: viewLng,
+  });
+  const [isDraggingMap, setIsDraggingMap] = useState(false);
+  const [containerSize, setContainerSize] = useState({ width: 960, height: 520 });
+
+  // Sync when storeSettings load from Firestore
   useEffect(() => {
-    const s = settingsForm || storeSettings;
-    if (s.storeHubName) setHubName(s.storeHubName);
-    if (s.address) setAddress(s.address);
-    if (s.storeCity) setCity(s.storeCity);
-    if (s.storeState) setStateName(s.storeState);
-    if (s.storePinCode) setPinCode(s.storePinCode);
-    if (typeof s.storeLat === 'number') setLat(s.storeLat);
-    if (typeof s.storeLng === 'number') setLng(s.storeLng);
-    if (typeof s.deliveryRadiusKm === 'number') setRadiusKm(s.deliveryRadiusKm);
+    if (storeSettings.storeAddress) setStoreAddress(storeSettings.storeAddress);
+    if (storeSettings.storeLandmark) setStoreLandmark(storeSettings.storeLandmark);
+    if (storeSettings.storePincode) setStorePincode(storeSettings.storePincode);
+    if (storeSettings.contactPhone) setContactPhone(storeSettings.contactPhone);
+    if (storeSettings.whatsappNumber) setWhatsappNumber(storeSettings.whatsappNumber);
+    if (storeSettings.contactEmail) setContactEmail(storeSettings.contactEmail);
+    if (storeSettings.storeLat && !isNaN(Number(storeSettings.storeLat))) {
+      const nextLat = Number(storeSettings.storeLat);
+      setLat(nextLat);
+      setViewLat(nextLat);
+    }
+    if (storeSettings.storeLng && !isNaN(Number(storeSettings.storeLng))) {
+      const nextLng = Number(storeSettings.storeLng);
+      setLng(nextLng);
+      setViewLng(nextLng);
+    }
+    if (storeSettings.maxDeliveryRadiusKm) {
+      setMaxRadiusKm(Number(storeSettings.maxDeliveryRadiusKm));
+    }
   }, [
+    storeSettings.storeAddress,
+    storeSettings.storeLandmark,
+    storeSettings.storePincode,
+    storeSettings.contactPhone,
+    storeSettings.whatsappNumber,
+    storeSettings.contactEmail,
     storeSettings.storeLat,
     storeSettings.storeLng,
-    storeSettings.address,
-    storeSettings.storeHubName,
+    storeSettings.maxDeliveryRadiusKm,
   ]);
 
-  const syncToParentAndLocal = (updates: Partial<StoreSettings>) => {
-    if (onUpdateSettingsForm) {
-      onUpdateSettingsForm(updates);
-    }
-  };
+  // Measure slippy map container size for crisp full-width tile coverage
+  useEffect(() => {
+    const updateSize = () => {
+      if (slippyContainerRef.current) {
+        const rect = slippyContainerRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setContainerSize({ width: rect.width, height: rect.height });
+        }
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, [isExpandedMap, useFallbackMap]);
 
-  // Reverse geocode coordinates to address
-  const reverseGeocodeCoords = async (pickedLat: number, pickedLng: number) => {
-    setLat(pickedLat);
-    setLng(pickedLng);
-    syncToParentAndLocal({ storeLat: pickedLat, storeLng: pickedLng });
-
+  // Reverse geocode coordinates via OpenStreetMap Nominatim
+  const reverseGeocodeCoordinates = useCallback(async (targetLat: number, targetLng: number) => {
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pickedLat}&lon=${pickedLng}&zoom=18&addressdetails=1`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&zoom=18&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en' } }
       );
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.display_name) {
-          const addrObj = data.address || {};
-          const resolvedCity =
-            addrObj.city ||
-            addrObj.town ||
-            addrObj.municipality ||
-            addrObj.county ||
-            city;
-          const resolvedState = addrObj.state || stateName;
-          const resolvedPin = addrObj.postcode || pinCode;
-          const roadOrSuburb =
-            addrObj.road || addrObj.suburb || addrObj.neighbourhood || resolvedCity;
-          const nextHubName = `${storeSettings.storeName || 'Fathima Stores'} Hub (${roadOrSuburb}, ${resolvedCity})`;
-
-          setAddress(data.display_name);
-          setCity(resolvedCity);
-          setStateName(resolvedState);
-          setPinCode(resolvedPin);
-          setHubName(nextHubName);
-
-          syncToParentAndLocal({
-            address: data.display_name,
-            storeAddress: data.display_name,
-            storeHubName: nextHubName,
-            storeCity: resolvedCity,
-            storeState: resolvedState,
-            storePinCode: resolvedPin,
-            storeLat: pickedLat,
-            storeLng: pickedLng,
-          });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.display_name) {
+        setStoreAddress(data.display_name);
+        const addr = data.address || {};
+        if (addr.postcode) setStorePincode(String(addr.postcode));
+        const landmarkParts = [
+          addr.road || addr.pedestrian || addr.suburb,
+          addr.neighbourhood || addr.city_district || addr.village || addr.town,
+        ].filter(Boolean);
+        if (landmarkParts.length > 0) {
+          setStoreLandmark(landmarkParts.join(', '));
         }
       }
     } catch {
-      // Keep manual fields if reverse geocode fails
+      // Keep manual address fields if reverse geocoding is offline
     }
-  };
+  }, []);
 
+  // Initialize Google Maps if API key is configured, otherwise use wide interactive slippy map
+  useEffect(() => {
+    const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
+    if (!apiKey) {
+      setUseFallbackMap(true);
+      return;
+    }
+
+    let isMounted = true;
+    const initMap = () => {
+      if (!isMounted || !mapContainerRef.current || !window.google?.maps) {
+        setUseFallbackMap(true);
+        return;
+      }
+      try {
+        const center = { lat, lng };
+        const map = new window.google.maps.Map(mapContainerRef.current, {
+          center,
+          zoom: 16,
+          mapTypeControl: true,
+          streetViewControl: false,
+          fullscreenControl: true,
+          zoomControl: true,
+          scrollwheel: true,
+          gestureHandling: 'greedy',
+        });
+
+        const marker = new window.google.maps.Marker({
+          position: center,
+          map,
+          draggable: true,
+          title: 'Fathima Stores Dispatch Hub (Drag to reposition)',
+        });
+
+        marker.addListener('dragend', () => {
+          const pos = marker.getPosition();
+          if (pos) {
+            const newLat = Number(pos.lat().toFixed(6));
+            const newLng = Number(pos.lng().toFixed(6));
+            setLat(newLat);
+            setLng(newLng);
+            setViewLat(newLat);
+            setViewLng(newLng);
+            reverseGeocodeCoordinates(newLat, newLng);
+          }
+        });
+
+        map.addListener('click', (e: any) => {
+          if (e.latLng) {
+            const newLat = Number(e.latLng.lat().toFixed(6));
+            const newLng = Number(e.latLng.lng().toFixed(6));
+            marker.setPosition({ lat: newLat, lng: newLng });
+            setLat(newLat);
+            setLng(newLng);
+            setViewLat(newLat);
+            setViewLng(newLng);
+            reverseGeocodeCoordinates(newLat, newLng);
+          }
+        });
+
+        mapInstanceRef.current = map;
+        markerRef.current = marker;
+        setMapReady(true);
+      } catch {
+        setUseFallbackMap(true);
+      }
+    };
+
+    if (window.google?.maps) {
+      initMap();
+    } else {
+      const existingScript = document.getElementById('google-maps-sdk-script');
+      if (!existingScript) {
+        const script = document.createElement('script');
+        script.id = 'google-maps-sdk-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.onload = initMap;
+        script.onerror = () => setUseFallbackMap(true);
+        document.head.appendChild(script);
+      } else {
+        existingScript.addEventListener('load', initMap);
+      }
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Update Google Map marker if lat/lng changes externally
+  useEffect(() => {
+    if (mapReady && mapInstanceRef.current && markerRef.current && window.google?.maps) {
+      const pos = { lat, lng };
+      markerRef.current.setPosition(pos);
+      mapInstanceRef.current.panTo(pos);
+    }
+  }, [lat, lng, mapReady]);
+
+  // Search address or place via OpenStreetMap Nominatim
   const handleSearchLocation = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -310,52 +336,40 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           searchQuery.trim()
-        )}&addressdetails=1&limit=5`
+        )}&limit=1&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en' } }
       );
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(Array.isArray(data) ? data : []);
+      const results = await res.json();
+      if (Array.isArray(results) && results.length > 0) {
+        const hit = results[0];
+        const nextLat = Number(parseFloat(hit.lat).toFixed(6));
+        const nextLng = Number(parseFloat(hit.lon).toFixed(6));
+        setLat(nextLat);
+        setLng(nextLng);
+        setViewLat(nextLat);
+        setViewLng(nextLng);
+        if (hit.display_name) setStoreAddress(hit.display_name);
+        if (hit.address?.postcode) setStorePincode(String(hit.address.postcode));
+        const addr = hit.address || {};
+        const landmarkParts = [
+          addr.road || addr.suburb,
+          addr.neighbourhood || addr.city_district || addr.city || addr.town,
+        ].filter(Boolean);
+        if (landmarkParts.length > 0) {
+          setStoreLandmark(landmarkParts.join(', '));
+        }
+        showToast('Store location pinned on map! Click Save Store Location to publish.', 'info');
+      } else {
+        showToast('Location not found. Try searching with city or pincode.', 'error');
       }
     } catch {
-      showToast('Could not search address. Try picking directly on the map.', 'error');
+      showToast('Unable to search address right now.', 'error');
     } finally {
       setIsSearching(false);
     }
   };
 
-  const handleSelectSearchResult = (item: any) => {
-    const pickedLat = Number(parseFloat(item.lat).toFixed(6));
-    const pickedLng = Number(parseFloat(item.lon).toFixed(6));
-    const addr = item.address || {};
-    const resolvedCity =
-      addr.city || addr.town || addr.village || addr.county || city;
-    const resolvedState = addr.state || stateName;
-    const resolvedPin = addr.postcode || pinCode;
-    const nextHub = `${storeSettings.storeName || 'Fathima Stores'} Hub (${resolvedCity})`;
-
-    setLat(pickedLat);
-    setLng(pickedLng);
-    setAddress(item.display_name);
-    setCity(resolvedCity);
-    setStateName(resolvedState);
-    setPinCode(resolvedPin);
-    setHubName(nextHub);
-    setSearchResults([]);
-    setSearchQuery('');
-
-    syncToParentAndLocal({
-      address: item.display_name,
-      storeAddress: item.display_name,
-      storeHubName: nextHub,
-      storeCity: resolvedCity,
-      storeState: resolvedState,
-      storePinCode: resolvedPin,
-      storeLat: pickedLat,
-      storeLng: pickedLng,
-    });
-    showToast(`Selected store location in ${resolvedCity}`, 'info');
-  };
-
+  // Detect live GPS coordinates from browser
   const handleUseCurrentGps = () => {
     if (!navigator.geolocation) {
       showToast('Geolocation is not supported by your browser.', 'error');
@@ -364,395 +378,724 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
     setIsLocatingGps(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const gpsLat = Number(pos.coords.latitude.toFixed(6));
-        const gpsLng = Number(pos.coords.longitude.toFixed(6));
-        await reverseGeocodeCoords(gpsLat, gpsLng);
+        const nextLat = Number(pos.coords.latitude.toFixed(6));
+        const nextLng = Number(pos.coords.longitude.toFixed(6));
+        setLat(nextLat);
+        setLng(nextLng);
+        setViewLat(nextLat);
+        setViewLng(nextLng);
+        await reverseGeocodeCoordinates(nextLat, nextLng);
         setIsLocatingGps(false);
-        showToast('Store location updated to your current GPS coordinates!', 'success');
+        showToast('Current GPS coordinates captured! Review and save below.', 'success');
       },
-      () => {
+      (err) => {
         setIsLocatingGps(false);
-        showToast('Unable to access GPS. Please allow location permission or click on the map.', 'error');
+        showToast(`Could not read GPS: ${err.message}`, 'error');
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
-  };
-
-  const handleApplyPreset = async (preset: (typeof HUB_PRESETS)[0]) => {
-    setHubName(preset.hubName);
-    setAddress(preset.address);
-    setCity(preset.city);
-    setStateName(preset.state);
-    setPinCode(preset.pinCode);
-    setLat(preset.lat);
-    setLng(preset.lng);
-
-    const payload: Partial<StoreSettings> = {
-      storeHubName: preset.hubName,
-      address: preset.address,
-      storeAddress: preset.address,
-      storeCity: preset.city,
-      storeState: preset.state,
-      storePinCode: preset.pinCode,
-      storeLat: preset.lat,
-      storeLng: preset.lng,
-    };
-    syncToParentAndLocal(payload);
-    await updateStoreSettings(payload);
-    showToast(`Store location switched to ${preset.label}!`, 'success');
   };
 
   const handleSaveStoreLocation = async () => {
+    if (!storeAddress.trim()) {
+      showToast('Please enter a valid Store Address.', 'error');
+      return;
+    }
     setIsSaving(true);
-    const payload: Partial<StoreSettings> = {
-      storeHubName: hubName,
-      address,
-      storeAddress: address,
-      storeCity: city,
-      storeState: stateName,
-      storePinCode: pinCode,
-      storeLat: Number(lat),
-      storeLng: Number(lng),
-      deliveryRadiusKm: Number(radiusKm),
-    };
-    syncToParentAndLocal(payload);
-    await updateStoreSettings(payload);
-    setIsSaving(false);
-    showToast(
-      `Store Hub location saved (${city} • ${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})! All delivery maps & ETAs updated.`,
-      'success'
-    );
+    try {
+      await updateStoreSettings({
+        storeAddress: storeAddress.trim(),
+        storeLandmark: storeLandmark.trim(),
+        storePincode: storePincode.trim(),
+        contactPhone: contactPhone.trim(),
+        whatsappNumber: whatsappNumber.trim(),
+        contactEmail: contactEmail.trim(),
+        storeLat: Number(lat),
+        storeLng: Number(lng),
+        maxDeliveryRadiusKm: Number(maxRadiusKm) || 25,
+      });
+      showToast('Store location & GPS hub updated across storefront and delivery routes!', 'success');
+      if (onSaved) onSaved();
+    } catch {
+      showToast('Failed to update store location.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  // Interactive Slippy Map Drag, Scroll-Wheel Zoom, and Click-to-Pin Handlers
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragStateRef.current = {
+      isDragging: true,
+      hasMoved: false,
+      startX: e.clientX,
+      startY: e.clientY,
+      startViewLat: viewLat,
+      startViewLng: viewLng,
+    };
+    setIsDraggingMap(true);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStateRef.current.isDragging) return;
+    const dx = e.clientX - dragStateRef.current.startX;
+    const dy = e.clientY - dragStateRef.current.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      dragStateRef.current.hasMoved = true;
+    }
+    const startTile = latLngToTileXY(
+      dragStateRef.current.startViewLat,
+      dragStateRef.current.startViewLng,
+      zoom
+    );
+    const nextTileX = startTile.x - dx / 256;
+    const nextTileY = startTile.y - dy / 256;
+    const nextCenter = tileXYToLatLng(nextTileX, nextTileY, zoom);
+    setViewLat(nextCenter.lat);
+    setViewLng(nextCenter.lng);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStateRef.current.isDragging) return;
+    const wasMoved = dragStateRef.current.hasMoved;
+    dragStateRef.current.isDragging = false;
+    setIsDraggingMap(false);
+
+    // If user clicked without dragging, pin the store location at the clicked point on the wide map!
+    if (!wasMoved && slippyContainerRef.current) {
+      const rect = slippyContainerRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      const dxFromCenter = clickX - rect.width / 2;
+      const dyFromCenter = clickY - rect.height / 2;
+
+      const centerTile = latLngToTileXY(viewLat, viewLng, zoom);
+      const clickedTileX = centerTile.x + dxFromCenter / 256;
+      const clickedTileY = centerTile.y + dyFromCenter / 256;
+      const clickedLatLng = tileXYToLatLng(clickedTileX, clickedTileY, zoom);
+
+      setLat(clickedLatLng.lat);
+      setLng(clickedLatLng.lng);
+      reverseGeocodeCoordinates(clickedLatLng.lat, clickedLatLng.lng);
+    }
+  };
+
+  const handleWheelZoom = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 1 : -1;
+    setZoom((prev) => Math.max(10, Math.min(18, prev + delta)));
+  };
+
+  const panMapByPixels = (dxPixels: number, dyPixels: number) => {
+    const centerTile = latLngToTileXY(viewLat, viewLng, zoom);
+    const nextCenter = tileXYToLatLng(
+      centerTile.x + dxPixels / 256,
+      centerTile.y + dyPixels / 256,
+      zoom
+    );
+    setViewLat(nextCenter.lat);
+    setViewLng(nextCenter.lng);
+  };
+
+  // Compute visible OpenStreetMap 256x256 tiles covering the wide container
+  const renderSlippyTiles = () => {
+    const { width, height } = containerSize;
+    const centerTile = latLngToTileXY(viewLat, viewLng, zoom);
+    const centerTileX = Math.floor(centerTile.x);
+    const centerTileY = Math.floor(centerTile.y);
+    const offsetX = (centerTile.x - centerTileX) * 256;
+    const offsetY = (centerTile.y - centerTileY) * 256;
+
+    const colsEachSide = Math.ceil(width / 512) + 2;
+    const rowsEachSide = Math.ceil(height / 512) + 2;
+    const maxTileIndex = Math.pow(2, zoom);
+
+    const tiles: React.ReactNode[] = [];
+    for (let dx = -colsEachSide; dx <= colsEachSide; dx++) {
+      for (let dy = -rowsEachSide; dy <= rowsEachSide; dy++) {
+        const tx = ((centerTileX + dx) % maxTileIndex + maxTileIndex) % maxTileIndex;
+        const ty = centerTileY + dy;
+        if (ty < 0 || ty >= maxTileIndex) continue;
+
+        const left = width / 2 - offsetX + dx * 256;
+        const top = height / 2 - offsetY + dy * 256;
+
+        tiles.push(
+          <img
+            key={`${zoom}-${tx}-${ty}`}
+            src={`https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`}
+            alt=""
+            draggable={false}
+            className="absolute w-[256px] h-[256px] max-w-none select-none pointer-events-none"
+            style={{
+              left: `${Math.round(left)}px`,
+              top: `${Math.round(top)}px`,
+            }}
+          />
+        );
+      }
+    }
+
+    // Calculate pixel position of the pinned Store Location (lat, lng) relative to current viewport center (viewLat, viewLng)
+    const pinTile = latLngToTileXY(lat, lng, zoom);
+    const pinScreenX = width / 2 + (pinTile.x - centerTile.x) * 256;
+    const pinScreenY = height / 2 + (pinTile.y - centerTile.y) * 256;
+
+    return { tiles, pinScreenX, pinScreenY };
+  };
+
+  const distFromDefault = calculateDistanceKm(
+    STORE_ORIGIN.lat,
+    STORE_ORIGIN.lng,
+    lat,
+    lng
+  );
+
+  const { tiles, pinScreenX, pinScreenY } = renderSlippyTiles();
+
   return (
-    <div className="bg-white border border-[#E8E8E3] rounded-2xl p-5 sm:p-6 space-y-5 shadow-2xs text-xs text-left">
+    <div className="bg-white border border-[#E8E8E3] rounded-2xl p-6 space-y-6 shadow-2xs text-xs">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E8E8E3] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E8E8E3]">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center shrink-0">
-              <MapPin className="w-4 h-4" />
-            </div>
+            <span className="w-8 h-8 rounded-xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center shrink-0">
+              <Building2 className="w-4 h-4" />
+            </span>
             <div>
-              <h4 className="font-bold text-sm text-[#171717] uppercase tracking-wider flex items-center gap-2">
-                <span>Store Location & Dispatch Hub Configurator</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                  Live GPS Origin
-                </span>
+              <h4 className="font-extrabold text-sm text-[#171717] uppercase tracking-wider flex items-center gap-2">
+                Store Location & GPS Dispatch Hub Configuration
               </h4>
               <p className="text-[11px] text-[#6B6B6B] mt-0.5">
-                Change the physical store address and GPS coordinates used across Route Optimization, Customer Order ETAs, Driver Navigation, and Invoices.
+                Drag and scroll around the wide map below or click anywhere to pin your store location. Updates Storefront, Checkout distance fees, and Driver pickup routes immediately.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="px-2.5 py-1 bg-[#EFF4E6] text-[#5F7334] border border-[#71883F]/30 rounded-full text-[10px] font-bold flex items-center gap-1">
+            <Sparkles className="w-3 h-3" /> Live Dispatch Origin
+          </span>
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2.5 py-1 bg-white hover:bg-[#F7F8F3] text-[#171717] border border-[#E8E8E3] rounded-full text-[10px] font-bold flex items-center gap-1 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3 text-[#71883F]" /> Open in Maps
+          </a>
+        </div>
+      </div>
+
+      {/* Top Search & GPS Bar */}
+      <div className="flex flex-col md:flex-row gap-2.5">
+        <div className="flex flex-1 gap-2">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-[#6B6B6B] absolute left-3.5 top-2.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSearchLocation();
+                }
+              }}
+              placeholder="Search any area, street, landmark, or pincode to jump on the map..."
+              className="w-full pl-9 pr-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSearchLocation()}
+            disabled={isSearching}
+            className="px-4 py-2.5 bg-[#171717] hover:bg-[#333] text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            {isSearching ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Search className="w-3.5 h-3.5" />
+            )}
+            Search Map
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleUseCurrentGps}
             disabled={isLocatingGps}
-            className="px-3 py-2 bg-[#F7F8F3] hover:bg-[#EFF4E6] text-[#171717] border border-[#E8E8E3] hover:border-[#71883F] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3.5 py-2.5 bg-[#EFF4E6] hover:bg-[#E2ECD0] text-[#5F7334] border border-[#71883F]/30 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
           >
             {isLocatingGps ? (
-              <Loader2 className="w-3.5 h-3.5 text-[#71883F] animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <LocateFixed className="w-3.5 h-3.5 text-[#71883F]" />
+              <LocateFixed className="w-3.5 h-3.5" />
             )}
-            <span>Use My Current GPS</span>
+            Use Current GPS
           </button>
 
           <button
             type="button"
-            onClick={handleSaveStoreLocation}
-            disabled={isSaving}
-            className="px-4 py-2 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            onClick={() => {
+              setLat(STORE_ORIGIN.lat);
+              setLng(STORE_ORIGIN.lng);
+              setViewLat(STORE_ORIGIN.lat);
+              setViewLng(STORE_ORIGIN.lng);
+              setStoreAddress(STORE_ORIGIN.address);
+              setStoreLandmark('T.C 45/862(2), Subash Nagar, Vallakkadavu P.O');
+              setStorePincode('695008');
+            }}
+            className="px-3 py-2.5 bg-white hover:bg-[#F7F8F3] text-[#6B6B6B] border border-[#E8E8E3] rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            {isSaving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <Compass className="w-3.5 h-3.5 text-[#71883F]" />
+            Reset to Default Hub
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsExpandedMap((prev) => !prev)}
+            className="px-3 py-2.5 bg-white hover:bg-[#F7F8F3] text-[#171717] border border-[#E8E8E3] rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            {isExpandedMap ? (
+              <>
+                <Minimize2 className="w-3.5 h-3.5 text-[#71883F]" /> Compact Height
+              </>
             ) : (
-              <Check className="w-3.5 h-3.5" />
+              <>
+                <Maximize2 className="w-3.5 h-3.5 text-[#71883F]" /> Expand Map Taller
+              </>
             )}
-            <span>Save Store Location Live</span>
           </button>
         </div>
       </div>
 
-      {/* Quick Branch / City Hub Presets */}
-      <div className="space-y-1.5">
-        <span className="text-[11px] font-bold text-[#6B6B6B] flex items-center gap-1">
-          <Sparkles className="w-3 h-3 text-[#71883F]" /> Quick Switch Store Branch / Regional Hub:
-        </span>
-        <div className="flex flex-wrap gap-2">
-          {HUB_PRESETS.map((preset) => {
-            const isSelected =
-              Math.abs(lat - preset.lat) < 0.005 && Math.abs(lng - preset.lng) < 0.005;
-            return (
-              <button
-                key={preset.label}
-                type="button"
-                onClick={() => handleApplyPreset(preset)}
-                className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-[#71883F] text-white border-[#71883F] shadow-2xs'
-                    : 'bg-[#F7F8F3] text-[#171717] border-[#E8E8E3] hover:border-[#71883F]'
-                }`}
+      {/* FULL-WIDTH WIDE INTERACTIVE SCROLLABLE & DRAGGABLE MAP CANVAS */}
+      <div className="space-y-3 w-full">
+        <div
+          className={`relative w-full ${
+            isExpandedMap ? 'h-[660px] sm:h-[740px]' : 'h-[480px] sm:h-[560px]'
+          } rounded-2xl overflow-hidden border-2 border-[#E8E8E3] bg-[#E5E3DF] shadow-inner transition-all`}
+        >
+          {!useFallbackMap ? (
+            <div ref={mapContainerRef} className="w-full h-full" />
+          ) : (
+            <div
+              ref={slippyContainerRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              onWheel={handleWheelZoom}
+              className={`relative w-full h-full overflow-hidden select-none touch-none ${
+                isDraggingMap ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
+            >
+              {/* OpenStreetMap Slippy Tiles */}
+              {tiles}
+
+              {/* Pinned Store Location Marker on the Map */}
+              <div
+                className="absolute z-10 pointer-events-none transition-transform duration-75"
+                style={{
+                  left: `${pinScreenX}px`,
+                  top: `${pinScreenY}px`,
+                  transform: 'translate(-50%, -100%)',
+                }}
               >
-                <MapPin className="w-3 h-3" />
-                <span>{preset.label}</span>
+                <div className="flex flex-col items-center">
+                  <div className="px-3 py-1 bg-[#171717] text-white text-[11px] font-extrabold rounded-full shadow-lg whitespace-nowrap mb-1 border border-white/20 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Fathima Stores Hub ({lat.toFixed(4)}, {lng.toFixed(4)})
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-[#71883F] border-3 border-white shadow-xl flex items-center justify-center text-white">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div className="w-3 h-1.5 bg-black/35 rounded-full blur-[1px] mt-0.5" />
+                </div>
+              </div>
+
+              {/* Subtle Center Crosshair when panning away from pin */}
+              {(Math.abs(viewLat - lat) > 0.0002 || Math.abs(viewLng - lng) > 0.0002) && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                  <div className="w-8 h-8 rounded-full border-2 border-dashed border-[#171717]/60 flex items-center justify-center bg-white/40 backdrop-blur-[1px]">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#171717]" />
+                  </div>
+                </div>
+              )}
+
+              {/* Top-Left Instruction & Action Bar */}
+              <div className="absolute top-3 left-3 z-20 flex flex-wrap items-center gap-2 pointer-events-auto">
+                <div className="bg-white/95 backdrop-blur-md border border-[#E8E8E3] rounded-xl px-3 py-2 shadow-md flex items-center gap-2">
+                  <Move className="w-4 h-4 text-[#71883F]" />
+                  <span className="text-[11px] font-bold text-[#171717]">
+                    Drag to scroll around · Scroll wheel to zoom · Click anywhere to move Store Pin
+                  </span>
+                </div>
+
+                {(Math.abs(viewLat - lat) > 0.0002 || Math.abs(viewLng - lng) > 0.0002) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLat(viewLat);
+                        setLng(viewLng);
+                        reverseGeocodeCoordinates(viewLat, viewLng);
+                      }}
+                      className="px-3 py-2 bg-[#71883F] hover:bg-[#5F7334] text-white font-extrabold rounded-xl shadow-md text-[11px] flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <MapPin className="w-3.5 h-3.5" /> Pin Store at Map Center
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewLat(lat);
+                        setViewLng(lng);
+                      }}
+                      className="px-3 py-2 bg-white hover:bg-[#F7F8F3] text-[#171717] border border-[#E8E8E3] font-bold rounded-xl shadow-md text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      Re-center on Pin
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Right-Side Zoom & Directional Pan Controls */}
+              <div className="absolute right-3 top-3 z-20 flex flex-col gap-2 pointer-events-auto">
+                {/* Zoom Controls */}
+                <div className="bg-white/95 backdrop-blur-md border border-[#E8E8E3] rounded-xl shadow-md overflow-hidden flex flex-col">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setZoom((z) => Math.min(18, z + 1));
+                    }}
+                    title="Zoom In"
+                    className="p-2.5 hover:bg-[#F7F8F3] text-[#171717] border-b border-[#E8E8E3] flex items-center justify-center cursor-pointer"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <div className="px-2 py-1 text-[10px] font-mono font-bold text-center text-[#6B6B6B] bg-[#FAFBF7] border-b border-[#E8E8E3]">
+                    {zoom}x
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setZoom((z) => Math.max(10, z - 1));
+                    }}
+                    title="Zoom Out"
+                    className="p-2.5 hover:bg-[#F7F8F3] text-[#171717] flex items-center justify-center cursor-pointer"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Directional Step Pan Pad */}
+                <div className="bg-white/95 backdrop-blur-md border border-[#E8E8E3] rounded-xl p-1.5 shadow-md grid grid-cols-3 gap-1 w-[88px]">
+                  <div />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      panMapByPixels(0, -180);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-[#EFF4E6] text-[#171717] font-bold text-[10px] flex items-center justify-center cursor-pointer"
+                    title="Scroll North"
+                  >
+                    ▲
+                  </button>
+                  <div />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      panMapByPixels(-180, 0);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-[#EFF4E6] text-[#171717] font-bold text-[10px] flex items-center justify-center cursor-pointer"
+                    title="Scroll West"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewLat(lat);
+                      setViewLng(lng);
+                    }}
+                    className="p-1.5 rounded-lg bg-[#EFF4E6] text-[#71883F] font-extrabold text-[9px] flex items-center justify-center cursor-pointer"
+                    title="Center on Pin"
+                  >
+                    ●
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      panMapByPixels(180, 0);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-[#EFF4E6] text-[#171717] font-bold text-[10px] flex items-center justify-center cursor-pointer"
+                    title="Scroll East"
+                  >
+                    ▶
+                  </button>
+                  <div />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      panMapByPixels(0, 180);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-[#EFF4E6] text-[#171717] font-bold text-[10px] flex items-center justify-center cursor-pointer"
+                    title="Scroll South"
+                  >
+                    ▼
+                  </button>
+                  <div />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom Floating Live Coordinate Status Bar */}
+          <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-md border border-[#E8E8E3] rounded-xl p-3 shadow-lg flex flex-wrap items-center justify-between gap-2 z-20 pointer-events-auto">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-[#71883F] text-white flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-extrabold text-[#171717] block truncate max-w-[320px] sm:max-w-[540px]">
+                  {storeAddress}
+                </span>
+                <span className="text-[10px] font-mono text-[#6B6B6B]">
+                  Pinned Hub: {lat.toFixed(6)}° N, {lng.toFixed(6)}° E · Max Delivery Zone: {maxRadiusKm} km
+                </span>
+              </div>
+            </div>
+
+            {distFromDefault > 0.05 && (
+              <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                {distFromDefault} km from original Vallakkadavu hub
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Area Presets Row */}
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl p-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-wider mr-1">
+              Quick Jump Hubs:
+            </span>
+            {[
+              {
+                label: 'Vallakkadavu (Main Hub)',
+                lat: 8.4806,
+                lng: 76.9261,
+                address: 'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O, Thiruvananthapuram, Kerala 695008',
+                landmark: 'Subash Nagar, Vallakkadavu P.O',
+                pincode: '695008',
+              },
+              {
+                label: 'East Fort / Pazhavangadi',
+                lat: 8.4832,
+                lng: 76.9482,
+                address: 'East Fort, Pazhavangadi, Thiruvananthapuram, Kerala 695023',
+                landmark: 'Near Padmanabhaswamy Temple, East Fort',
+                pincode: '695023',
+              },
+              {
+                label: 'Kazhakkoottam / Technopark',
+                lat: 8.5581,
+                lng: 76.8816,
+                address: 'NH 66 Bypass, Kazhakkoottam, Thiruvananthapuram, Kerala 695582',
+                landmark: 'Opposite Technopark Phase 1 Gate',
+                pincode: '695582',
+              },
+              {
+                label: 'Pattom Junction',
+                lat: 8.5208,
+                lng: 76.9423,
+                address: 'Pattom Palace P.O, Thiruvananthapuram, Kerala 695004',
+                landmark: 'Pattom Main Road Junction',
+                pincode: '695004',
+              },
+            ].map((hub) => (
+              <button
+                key={hub.label}
+                type="button"
+                onClick={() => {
+                  setLat(hub.lat);
+                  setLng(hub.lng);
+                  setViewLat(hub.lat);
+                  setViewLng(hub.lng);
+                  setStoreAddress(hub.address);
+                  setStoreLandmark(hub.landmark);
+                  setStorePincode(hub.pincode);
+                }}
+                className="px-2.5 py-1 bg-white hover:bg-[#EFF4E6] hover:border-[#71883F] text-[#171717] border border-[#E8E8E3] rounded-lg text-[10px] font-semibold transition-colors cursor-pointer"
+              >
+                {hub.label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Search Address & Interactive Map Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left 6 Cols: Interactive Map */}
-        <div className="lg:col-span-6 space-y-2.5">
-          {/* Search Input */}
-          <div className="relative">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSearchLocation();
-                    }
-                  }}
-                  placeholder="Search any street, landmark, or city for Store Hub..."
-                  className="w-full pl-8 pr-3 py-2 bg-[#F7F8F3] border border-[#E8E8E3] rounded-xl text-xs outline-none focus:border-[#71883F]"
-                />
-                <Search className="w-3.5 h-3.5 text-[#6B6B6B] absolute left-2.5 top-2.5" />
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSearchLocation()}
-                disabled={isSearching}
-                className="px-3.5 py-2 bg-[#171717] hover:bg-neutral-800 text-white rounded-xl text-xs font-bold shrink-0 cursor-pointer"
-              >
-                {isSearching ? 'Searching...' : 'Find on Map'}
-              </button>
-            </div>
-
-            {searchResults.length > 0 && (
-              <div className="absolute left-0 right-0 top-11 z-30 bg-white border border-[#E8E8E3] rounded-xl shadow-xl divide-y divide-[#E8E8E3] max-h-48 overflow-y-auto">
-                {searchResults.map((item, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSelectSearchResult(item)}
-                    className="w-full text-left px-3 py-2.5 hover:bg-[#F7F8F3] flex items-start gap-2 text-xs"
-                  >
-                    <MapPin className="w-3.5 h-3.5 text-[#71883F] shrink-0 mt-0.5" />
-                    <span className="text-[#171717] line-clamp-2">{item.display_name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Map Viewport */}
-          <div className={`w-full ${compact ? 'h-56' : 'h-64'} rounded-2xl overflow-hidden border border-[#E8E8E3] relative bg-[#E5E9E0]`}>
-            {mapsHealthy ? (
-              <MapErrorBoundary
-                fallback={
-                  <InteractiveOsmStorePinMap
-                    lat={lat}
-                    lng={lng}
-                    hubName={hubName}
-                    onPickCoords={reverseGeocodeCoords}
-                  />
-                }
-              >
-                <Map
-                  id="admin-store-hub-config-map"
-                  center={{ lat, lng }}
-                  zoom={15}
-                  mapId="STORE_HUB_CONFIG_MAP"
-                  gestureHandling="greedy"
-                  disableDefaultUI={false}
-                  onClick={(ev: any) => {
-                    const clickedLat = ev?.detail?.latLng?.lat;
-                    const clickedLng = ev?.detail?.latLng?.lng;
-                    if (typeof clickedLat === 'number' && typeof clickedLng === 'number') {
-                      reverseGeocodeCoords(
-                        Number(clickedLat.toFixed(6)),
-                        Number(clickedLng.toFixed(6))
-                      );
-                    }
-                  }}
-                  className="w-full h-full"
-                >
-                  <AdvancedMarker position={{ lat, lng }}>
-                    <div className="flex flex-col items-center">
-                      <div className="bg-[#171717] text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-lg mb-1 whitespace-nowrap border border-[#71883F]">
-                        {hubName || 'Store Hub'}
-                      </div>
-                      <div className="w-9 h-9 rounded-full bg-[#71883F] border-2 border-white text-white flex items-center justify-center shadow-xl">
-                        <Building2 className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </AdvancedMarker>
-                </Map>
-              </MapErrorBoundary>
-            ) : (
-              <InteractiveOsmStorePinMap
-                lat={lat}
-                lng={lng}
-                hubName={hubName}
-                onPickCoords={reverseGeocodeCoords}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Right 6 Cols: Editable Store Location Details */}
-        <div className="lg:col-span-6 space-y-3">
+      {/* Store Address, Coordinates & Contact Details Grid below the wide map */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2 border-t border-[#E8E8E3]">
+        <div className="lg:col-span-6 space-y-4">
           <div>
-            <label className="font-semibold text-[#171717] block mb-1">
-              Store Dispatch Hub Name
-            </label>
-            <input
-              type="text"
-              value={hubName}
-              onChange={(e) => {
-                setHubName(e.target.value);
-                syncToParentAndLocal({ storeHubName: e.target.value });
-              }}
-              placeholder="e.g. Fathima Stores Main Hub (MG Road, Trivandrum)"
-              className="w-full px-3 py-2 border border-[#E8E8E3] rounded-xl text-[#171717] font-semibold outline-none focus:border-[#71883F]"
-            />
-          </div>
-
-          <div>
-            <label className="font-semibold text-[#171717] block mb-1">
-              Full Physical Store Address (Shown on Invoices, Footer & Contact Page)
+            <label className="block font-bold text-[#171717] mb-1">
+              Full Store Street Address *
             </label>
             <textarea
               rows={2}
-              value={address}
-              onChange={(e) => {
-                setAddress(e.target.value);
-                syncToParentAndLocal({
-                  address: e.target.value,
-                  storeAddress: e.target.value,
-                });
-              }}
-              placeholder="Full building, street, landmark, city, state, PIN..."
-              className="w-full px-3 py-2 border border-[#E8E8E3] rounded-xl text-[#171717] outline-none focus:border-[#71883F]"
+              value={storeAddress}
+              onChange={(e) => setStoreAddress(e.target.value)}
+              placeholder="Building No, Street, Area, City, State, PIN"
+              className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="font-semibold text-[#171717] block mb-1">City</label>
+              <label className="block font-bold text-[#171717] mb-1">
+                Store Landmark / Locality
+              </label>
               <input
                 type="text"
-                value={city}
-                onChange={(e) => {
-                  setCity(e.target.value);
-                  syncToParentAndLocal({ storeCity: e.target.value });
-                }}
-                className="w-full px-2.5 py-1.5 border border-[#E8E8E3] rounded-lg text-[#171717] outline-none focus:border-[#71883F]"
+                value={storeLandmark}
+                onChange={(e) => setStoreLandmark(e.target.value)}
+                placeholder="e.g., Subash Nagar, Vallakkadavu"
+                className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
               />
             </div>
             <div>
-              <label className="font-semibold text-[#171717] block mb-1">State</label>
+              <label className="block font-bold text-[#171717] mb-1">
+                Store Pincode
+              </label>
               <input
                 type="text"
-                value={stateName}
-                onChange={(e) => {
-                  setStateName(e.target.value);
-                  syncToParentAndLocal({ storeState: e.target.value });
-                }}
-                className="w-full px-2.5 py-1.5 border border-[#E8E8E3] rounded-lg text-[#171717] outline-none focus:border-[#71883F]"
-              />
-            </div>
-            <div>
-              <label className="font-semibold text-[#171717] block mb-1">PIN Code</label>
-              <input
-                type="text"
-                value={pinCode}
-                onChange={(e) => {
-                  setPinCode(e.target.value);
-                  syncToParentAndLocal({ storePinCode: e.target.value });
-                }}
-                className="w-full px-2.5 py-1.5 border border-[#E8E8E3] rounded-lg text-[#171717] font-mono outline-none focus:border-[#71883F]"
+                value={storePincode}
+                onChange={(e) => setStorePincode(e.target.value)}
+                placeholder="695008"
+                className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
               />
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-3 gap-2.5 pt-1">
+        <div className="lg:col-span-6 space-y-4">
+          <div className="grid grid-cols-3 gap-3 bg-[#F7F8F3] p-3.5 rounded-xl border border-[#E8E8E3]">
             <div>
-              <label className="font-semibold text-[#171717] block mb-1">Store Latitude</label>
-              <input
-                type="number"
-                step="0.0001"
-                value={lat}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value) || 0;
-                  setLat(v);
-                  syncToParentAndLocal({ storeLat: v });
-                }}
-                className="w-full px-2.5 py-1.5 bg-[#F7F8F3] border border-[#E8E8E3] rounded-lg text-[#171717] font-mono outline-none focus:border-[#71883F]"
-              />
-            </div>
-            <div>
-              <label className="font-semibold text-[#171717] block mb-1">Store Longitude</label>
-              <input
-                type="number"
-                step="0.0001"
-                value={lng}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value) || 0;
-                  setLng(v);
-                  syncToParentAndLocal({ storeLng: v });
-                }}
-                className="w-full px-2.5 py-1.5 bg-[#F7F8F3] border border-[#E8E8E3] rounded-lg text-[#171717] font-mono outline-none focus:border-[#71883F]"
-              />
-            </div>
-            <div>
-              <label className="font-semibold text-[#171717] block mb-1">
-                Express Radius (km)
+              <label className="block font-bold text-[#171717] text-[11px] mb-1">
+                Latitude (GPS)
               </label>
               <input
                 type="number"
-                min="1"
-                max="500"
-                value={radiusKm}
+                step="0.000001"
+                value={lat}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10) || 25;
-                  setRadiusKm(v);
-                  syncToParentAndLocal({ deliveryRadiusKm: v });
+                  const val = parseFloat(e.target.value) || 0;
+                  setLat(val);
+                  setViewLat(val);
                 }}
-                className="w-full px-2.5 py-1.5 border border-[#E8E8E3] rounded-lg text-[#171717] font-bold outline-none focus:border-[#71883F]"
+                className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg font-mono text-[11px] text-[#171717] outline-none focus:border-[#71883F]"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-[#171717] text-[11px] mb-1">
+                Longitude (GPS)
+              </label>
+              <input
+                type="number"
+                step="0.000001"
+                value={lng}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  setLng(val);
+                  setViewLng(val);
+                }}
+                className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg font-mono text-[11px] text-[#171717] outline-none focus:border-[#71883F]"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-[#171717] text-[11px] mb-1">
+                Max Radius (km)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={maxRadiusKm}
+                onChange={(e) => setMaxRadiusKm(Number(e.target.value) || 25)}
+                className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg font-bold text-[11px] text-[#171717] outline-none focus:border-[#71883F]"
               />
             </div>
           </div>
 
-          <div className="pt-1 flex items-center justify-between bg-[#F7F8F3] p-2.5 rounded-xl border border-[#E8E8E3]">
-            <div className="text-[11px] text-[#6B6B6B]">
-              Active Coordinates:{' '}
-              <span className="font-mono font-bold text-[#171717]">
-                {Number(lat).toFixed(4)}° N, {Number(lng).toFixed(4)}° E
-              </span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block font-bold text-[#171717] mb-1 flex items-center gap-1">
+                <Phone className="w-3 h-3 text-[#71883F]" /> Store Phone
+              </label>
+              <input
+                type="text"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
+              />
             </div>
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] font-bold text-[#71883F] hover:underline flex items-center gap-1"
-            >
-              <span>View Store on Google Maps</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <div>
+              <label className="block font-bold text-[#171717] mb-1 flex items-center gap-1">
+                <Navigation className="w-3 h-3 text-[#71883F]" /> WhatsApp No.
+              </label>
+              <input
+                type="text"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="919845012345"
+                className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-[#171717] mb-1 flex items-center gap-1">
+                <Mail className="w-3 h-3 text-[#71883F]" /> Support Email
+              </label>
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
+              />
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end pt-2">
+        <button
+          type="button"
+          onClick={handleSaveStoreLocation}
+          disabled={isSaving}
+          className="w-full sm:w-auto px-6 py-3 bg-[#71883F] hover:bg-[#5F7334] text-white font-extrabold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+        >
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4" />
+          )}
+          <span>Save & Publish Store Location</span>
+        </button>
       </div>
     </div>
   );

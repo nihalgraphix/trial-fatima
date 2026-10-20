@@ -3,25 +3,15 @@ import { useStore } from '../../context/StoreContext';
 import { Order, OrderStatus } from '../../types';
 import {
   Truck,
-  MapPin,
   Phone,
   CheckCircle2,
-  Clock,
   Navigation,
-  Package,
   ShieldAlert,
-  User as UserIcon,
   ArrowLeft,
-  IndianRupee,
   Compass,
-  Sparkles,
-  Check,
-  AlertCircle,
-  ExternalLink,
   MessageCircle,
   Store,
   Settings,
-  RefreshCw,
   Box,
   BadgeCheck,
 } from 'lucide-react';
@@ -38,16 +28,16 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     currentDeliveryPerson,
     allOrders,
     orders,
+    deliveryAssignments,
     storeSettings,
     updateOrderStatus,
     updateDeliveryLocation,
     updateDeliveryPersonnel,
-    assignOrderToDelivery,
     setActivePage,
     showToast,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'active' | 'available' | 'completed' | 'settings'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'settings'>('active');
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [sharingGpsOrderId, setSharingGpsOrderId] = useState<string | null>(null);
   const [deliveryNotesMap, setDeliveryNotesMap] = useState<Record<string, string>>({});
@@ -86,7 +76,7 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     );
   }, [allOrders, orders]);
 
-  // Helper to check if an order is assigned to the current driver
+  // Helper to check if an order is explicitly assigned to the current driver
   const isOrderAssignedToMe = (order: Order) => {
     if (!currentUser) return false;
     const myId = currentDeliveryPerson?.id || `DRV-${currentUser.id.slice(0, 6).toUpperCase()}`;
@@ -108,6 +98,17 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     if (myEmail && order.assignedDeliveryId?.toLowerCase() === myEmail) {
       return true;
     }
+
+    // Also check deliveryAssignments collection
+    const hasAssignment = (deliveryAssignments || []).some(
+      (a) =>
+        a.orderId === order.id &&
+        (a.deliveryPersonId === myId ||
+          a.deliveryPersonId === currentUser.id ||
+          (myName && (a.deliveryPersonName || '').toLowerCase().trim() === myName))
+    );
+    if (hasAssignment) return true;
+
     return false;
   };
 
@@ -118,23 +119,19 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
         isOrderAssignedToMe(o) &&
         !['Delivered', 'Cancelled', 'Returned'].includes(o.orderStatus)
     );
-  }, [combinedOrders, currentDeliveryPerson, currentUser]);
+  }, [combinedOrders, currentDeliveryPerson, currentUser, deliveryAssignments]);
 
-  // Unassigned Orders ready for dispatch (Confirmed / Processing / Packed / Shipped without a driver)
-  const unassignedReadyOrders = useMemo(() => {
-    return combinedOrders.filter(
-      (o) =>
-        !o.assignedDeliveryId &&
-        ['Pending', 'Confirmed', 'Processing', 'Packed', 'Shipped'].includes(o.orderStatus)
-    );
-  }, [combinedOrders]);
+  // My Out for Delivery count
+  const outForDeliveryCount = useMemo(() => {
+    return myActiveOrders.filter((o) => o.orderStatus === 'Out for Delivery').length;
+  }, [myActiveOrders]);
 
   // My Completed Deliveries
   const myCompletedOrders = useMemo(() => {
     return combinedOrders.filter(
       (o) => isOrderAssignedToMe(o) && o.orderStatus === 'Delivered'
     );
-  }, [combinedOrders, currentDeliveryPerson, currentUser]);
+  }, [combinedOrders, currentDeliveryPerson, currentUser, deliveryAssignments]);
 
   // 1. Not Signed In Guard
   if (!currentUser) {
@@ -206,17 +203,6 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     updateDeliveryPersonnel(currentDeliveryPerson.id, { status: newStatus });
   };
 
-  const handleClaimOrder = async (order: Order) => {
-    if (!currentDeliveryPerson) return;
-    setUpdatingOrderId(order.id);
-    try {
-      await assignOrderToDelivery(order.id, currentDeliveryPerson.id);
-      setActiveTab('active');
-    } finally {
-      setUpdatingOrderId(null);
-    }
-  };
-
   const handleStepOrderStatus = async (order: Order, nextStatus: OrderStatus) => {
     setUpdatingOrderId(order.id);
     try {
@@ -272,7 +258,6 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
           setSharingGpsOrderId(null);
         },
         async () => {
-          // Fallback to store/city coordinates if browser blocks geolocation in iframe
           const lat = Number(((storeSettings.storeLat || 8.5241) + (Math.random() - 0.5) * 0.01).toFixed(6));
           const lng = Number(((storeSettings.storeLng || 76.9366) + (Math.random() - 0.5) * 0.01).toFixed(6));
           await updateDeliveryLocation(order.id, {
@@ -416,15 +401,15 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
               <span className="text-2xl font-extrabold tabular-nums mt-0.5 block text-white">
                 {myActiveOrders.length}
               </span>
-              <span className="text-[10px] text-emerald-300 font-semibold">In progress</span>
+              <span className="text-[10px] text-emerald-300 font-semibold">Assigned to you</span>
             </div>
 
             <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5">
-              <span className="text-[11px] text-white/70 block">Ready at Store</span>
-              <span className="text-2xl font-extrabold tabular-nums mt-0.5 block text-amber-300">
-                {unassignedReadyOrders.length}
+              <span className="text-[11px] text-white/70 block">Out for Delivery</span>
+              <span className="text-2xl font-extrabold tabular-nums mt-0.5 block text-sky-300">
+                {outForDeliveryCount}
               </span>
-              <span className="text-[10px] text-white/60">Available to claim</span>
+              <span className="text-[10px] text-white/60">En route to customer</span>
             </div>
 
             <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5">
@@ -459,17 +444,17 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                   Store Pickup Hub
                 </span>
                 <span className="text-xs font-bold text-[#171717]">
-                  {storeSettings.storeName || 'Fathima Stores'}
+                  {storeSettings.storeHubName || storeSettings.storeName || 'Fathima Stores'}
                 </span>
               </div>
               <p className="text-xs text-[#6B6B6B] mt-1">
-                {storeSettings.storeAddress || 'Fathima Complex, College Road'}
+                {storeSettings.address || storeSettings.storeAddress || 'Fathima Complex, College Road'}
                 {storeSettings.storeCity ? `, ${storeSettings.storeCity}` : ''}
                 {storeSettings.storeState ? `, ${storeSettings.storeState}` : ''}
                 {storeSettings.storePinCode ? ` - ${storeSettings.storePinCode}` : ''}
               </p>
               <p className="text-[11px] text-[#6B6B6B] mt-0.5">
-                Dispatch Desk: <span className="font-semibold text-[#171717]">{storeSettings.contactPhone || '+91 98450 12345'}</span> · Radius: {storeSettings.deliveryRadiusKm || 15} km
+                Dispatch Desk: <span className="font-semibold text-[#171717]">{storeSettings.contactPhone || '+91 98450 12345'}</span> · Radius: {storeSettings.deliveryRadiusKm || 25} km
               </p>
             </div>
           </div>
@@ -514,25 +499,6 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
           </button>
 
           <button
-            onClick={() => setActiveTab('available')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'available'
-                ? 'bg-[#71883F] text-white shadow-xs'
-                : 'bg-white border border-[#E8E8E3] text-[#171717] hover:bg-[#F7F8F3]'
-            }`}
-          >
-            <Package className="w-4 h-4" />
-            Ready for Pickup
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                activeTab === 'available' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
-              }`}
-            >
-              {unassignedReadyOrders.length}
-            </span>
-          </button>
-
-          <button
             onClick={() => setActiveTab('completed')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === 'completed'
@@ -567,16 +533,8 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                 </div>
                 <h3 className="text-base font-extrabold text-[#171717]">No Active Deliveries Assigned Right Now</h3>
                 <p className="text-xs text-[#6B6B6B] max-w-md mx-auto">
-                  When the store administrator assigns an order to you—or when you claim a ready order from the pickup queue—it will appear here with turn-by-turn customer navigation.
+                  When the Store Administrator assigns an order to you from the Admin Dashboard, it will appear here automatically with live customer navigation and delivery status controls.
                 </p>
-                {unassignedReadyOrders.length > 0 && (
-                  <button
-                    onClick={() => setActiveTab('available')}
-                    className="px-4 py-2 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
-                  >
-                    View {unassignedReadyOrders.length} Ready Order{unassignedReadyOrders.length > 1 ? 's' : ''} at Store →
-                  </button>
-                )}
               </div>
             ) : (
               myActiveOrders.map((order) => {
@@ -795,62 +753,7 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
           </div>
         )}
 
-        {/* TAB 2: READY FOR PICKUP AT STORE (UNASSIGNED ORDERS) */}
-        {activeTab === 'available' && (
-          <div className="space-y-4">
-            {unassignedReadyOrders.length === 0 ? (
-              <div className="bg-white border border-[#E8E8E3] rounded-3xl p-10 text-center space-y-2">
-                <Package className="w-8 h-8 text-[#71883F] mx-auto" />
-                <h3 className="text-base font-extrabold text-[#171717]">No Unassigned Orders Waiting</h3>
-                <p className="text-xs text-[#6B6B6B]">
-                  All current store orders have been assigned to drivers or fulfilled.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {unassignedReadyOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="bg-white border border-[#E8E8E3] rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-2xs"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-1 rounded-lg bg-[#EFF4E6] text-[#71883F] font-mono text-xs font-bold">
-                          #{order.id}
-                        </span>
-                        <span className="text-xs font-extrabold text-[#171717]">
-                          ₹{order.total.toLocaleString('en-IN')} ({order.paymentMethod})
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-[#171717]">
-                        {order.shippingAddress?.fullName} — {order.shippingAddress?.city}
-                      </h4>
-                      <p className="text-xs text-[#6B6B6B]">
-                        {order.shippingAddress?.house}, {order.shippingAddress?.street},{' '}
-                        {order.shippingAddress?.area} ({order.shippingAddress?.pinCode})
-                      </p>
-                      <p className="text-[11px] text-[#6B6B6B]">
-                        {order.items?.length || 0} items · Status: <span className="font-semibold text-[#171717]">{order.orderStatus}</span>
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={updatingOrderId === order.id}
-                      onClick={() => handleClaimOrder(order)}
-                      className="w-full py-2.5 px-4 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
-                    >
-                      <Truck className="w-4 h-4" />
-                      {updatingOrderId === order.id ? 'Assigning to You...' : 'Accept & Claim Delivery'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: COMPLETED DELIVERIES HISTORY */}
+        {/* TAB 2: COMPLETED DELIVERIES HISTORY */}
         {activeTab === 'completed' && (
           <div className="bg-white border border-[#E8E8E3] rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -910,7 +813,7 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
           </div>
         )}
 
-        {/* TAB 4: DRIVER VEHICLE & PROFILE SETTINGS */}
+        {/* TAB 3: DRIVER VEHICLE & PROFILE SETTINGS */}
         {activeTab === 'settings' && (
           <div className="bg-white border border-[#E8E8E3] rounded-3xl p-6 max-w-xl space-y-5">
             <div>

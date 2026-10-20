@@ -637,7 +637,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const saved = localStorage.getItem('fs_saved_orders');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          const defaultDemoIds = new Set(['ORD-84920', 'ORD-83104', 'ORD-79211']);
+          return parsed.filter((o: any) => o && o.id && !defaultDemoIds.has(o.id));
+        }
       }
     } catch (e) {}
     return [];
@@ -1228,18 +1231,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return getOrderTime(b) - getOrderTime(a);
           });
 
-          setOrders((prev) => {
-            const map = new Map<string, Order>();
-            firestoreOrders.forEach((o) => map.set(o.id, o));
-            prev.forEach((o) => {
-              if (!map.has(o.id)) map.set(o.id, o);
-            });
-            const merged = Array.from(map.values());
-            try {
-              localStorage.setItem('fs_saved_orders', JSON.stringify(merged));
-            } catch {}
-            return merged;
-          });
+          const defaultDemoIds = new Set(['ORD-84920', 'ORD-83104', 'ORD-79211']);
+          const cleanOrders = firestoreOrders.filter((o) => !defaultDemoIds.has(o.id));
+          setOrders(cleanOrders);
+          try {
+            localStorage.setItem('fs_saved_orders', JSON.stringify(cleanOrders));
+          } catch {}
         },
         (err) => {
           console.warn('Orders sync notice:', err);

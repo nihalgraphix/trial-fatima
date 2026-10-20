@@ -24,12 +24,14 @@ export const ContactPage: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [showLocationEditor, setShowLocationEditor] = useState(false);
 
-  const storeLat = storeSettings?.storeLat ?? 8.5241;
-  const storeLng = storeSettings?.storeLng ?? 76.9366;
+  const storeLat = Number(storeSettings?.storeLat) || 8.4806;
+  const storeLng = Number(storeSettings?.storeLng) || 76.9261;
   const storeHubName =
     storeSettings?.storeHubName || `${storeSettings?.storeName || 'Fathima Stores'} Hub`;
   const storeAddress =
-    storeSettings?.address || 'MG Road, Opposite Secretariat, Trivandrum, Kerala - 695001';
+    storeSettings?.storeAddress ||
+    storeSettings?.address ||
+    'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O, Thiruvananthapuram, Kerala 695008';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,18 +72,20 @@ export const ContactPage: React.FC = () => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowLocationEditor((prev) => !prev)}
-            className="px-4 py-2.5 bg-white hover:bg-[#EFF4E6] text-[#171717] border border-[#E8E8E3] hover:border-[#71883F] rounded-xl text-xs font-bold flex items-center gap-2 shadow-2xs transition-colors cursor-pointer shrink-0"
-          >
-            <Settings className="w-3.5 h-3.5 text-[#71883F]" />
-            <span>{showLocationEditor ? 'Close Store Location Editor' : 'Change Store Location'}</span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowLocationEditor((prev) => !prev)}
+              className="px-4 py-2.5 bg-white hover:bg-[#EFF4E6] text-[#171717] border border-[#E8E8E3] hover:border-[#71883F] rounded-xl text-xs font-bold flex items-center gap-2 shadow-2xs transition-colors cursor-pointer shrink-0"
+            >
+              <Settings className="w-3.5 h-3.5 text-[#71883F]" />
+              <span>{showLocationEditor ? 'Close Store Location Editor' : 'Change Store Location'}</span>
+            </button>
+          )}
         </div>
 
-        {/* Optional Inline Store Location Editor */}
-        {showLocationEditor && (
+        {/* Optional Inline Store Location Editor (Admin Only) */}
+        {isAdmin && showLocationEditor && (
           <div className="relative">
             <StoreLocationConfigCard onSaved={() => setShowLocationEditor(false)} />
           </div>

@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
 import { AdminRouteOptimizer } from './AdminRouteOptimizer';
-import { StoreLocationConfigCard } from './StoreLocationConfigCard';
 
 export const AdminDeliveryManagement: React.FC = () => {
   const {
@@ -155,18 +154,6 @@ export const AdminDeliveryManagement: React.FC = () => {
             >
               <Truck className="w-3.5 h-3.5" />
               <span>Authorize Drivers ({deliveryPersonnel.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('store_location_hub')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                viewMode === 'store_location_hub'
-                  ? 'bg-[#71883F] text-white shadow-2xs'
-                  : 'text-[#6B6B6B] hover:text-[#171717]'
-              }`}
-            >
-              <Building2 className="w-3.5 h-3.5" />
-              <span>Change Store Location</span>
             </button>
           </div>
 
@@ -348,8 +335,6 @@ export const AdminDeliveryManagement: React.FC = () => {
             </div>
           </div>
         </div>
-      ) : viewMode === 'store_location_hub' ? (
-        <StoreLocationConfigCard />
       ) : viewMode === 'multi_stop_optimizer' ? (
         <AdminRouteOptimizer />
       ) : (
