@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   Check,
   RefreshCw,
+  Download,
+  Printer,
 } from 'lucide-react';
 import { Order } from '../../types';
 
@@ -190,6 +192,139 @@ export const AdminAnalyticsView: React.FC = () => {
     }
   };
 
+  const handleExportCSV = () => {
+    const headers = [
+      'Order ID',
+      'Date',
+      'Customer Name',
+      'Phone',
+      'City',
+      'Delivery Method',
+      'Payment Method',
+      'Payment Status',
+      'Verified Income',
+      'Order Status',
+      'Total (INR)',
+    ];
+    const rows = filteredOrders.map((o) => [
+      `"${o.id}"`,
+      `"${o.date}"`,
+      `"${o.customerName}"`,
+      `"${o.phone}"`,
+      `"${o.shippingAddress?.city || ''}"`,
+      `"${o.deliveryMethod || 'Standard Delivery'}"`,
+      `"${o.paymentMethod}"`,
+      `"${o.paymentStatus}"`,
+      `"${o.paymentVerified || o.paymentStatus === 'Paid' ? 'YES' : 'NO'}"`,
+      `"${o.orderStatus}"`,
+      o.total,
+    ]);
+    const summaryRows = [
+      [],
+      ['"Summary Metric"', '"Value"'],
+      ['"Total Filtered Orders"', filteredOrders.length],
+      ['"Verified Revenue (INR)"', totalVerifiedIncome],
+      ['"Pending Verification (INR)"', totalPendingIncome],
+      ['"Gross Bookings (INR)"', totalGrossBooking],
+    ];
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e) => e.join(',')), ...summaryRows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `fathima_stores_sales_revenue_${timeRange}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Sales & Revenue CSV report downloaded!', 'success');
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      showToast('Generating PDF Sales & Revenue Report...', 'info');
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+
+      const reportContainer = document.createElement('div');
+      reportContainer.style.padding = '28px';
+      reportContainer.style.fontFamily = 'Plus Jakarta Sans, Arial, sans-serif';
+      reportContainer.style.color = '#171717';
+      reportContainer.style.background = '#FFFFFF';
+      reportContainer.innerHTML = `
+        <div style="border-bottom: 2px solid #71883F; padding-bottom: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <h1 style="margin: 0; font-size: 20px; color: #171717;">FATHIMA STORES — SALES & REVENUE REPORT</h1>
+            <p style="margin: 4px 0 0; font-size: 11px; color: #6B6B6B;">Period: ${timeRange.toUpperCase()} • Generated: ${new Date().toLocaleString('en-IN')}</p>
+          </div>
+          <div style="text-align: right;">
+            <span style="font-size: 11px; font-weight: bold; color: #71883F;">OFFICIAL AUDIT RECORD</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+          <div style="flex: 1; padding: 12px; border: 1px solid #E8E8E3; border-radius: 8px; background: #F7F8F3;">
+            <div style="font-size: 10px; color: #6B6B6B; text-transform: uppercase;">Verified Income</div>
+            <div style="font-size: 18px; font-weight: 800; color: #059669; margin-top: 4px;">₹${totalVerifiedIncome.toLocaleString('en-IN')}</div>
+          </div>
+          <div style="flex: 1; padding: 12px; border: 1px solid #E8E8E3; border-radius: 8px; background: #F7F8F3;">
+            <div style="font-size: 10px; color: #6B6B6B; text-transform: uppercase;">Pending Verification</div>
+            <div style="font-size: 18px; font-weight: 800; color: #D97706; margin-top: 4px;">₹${totalPendingIncome.toLocaleString('en-IN')}</div>
+          </div>
+          <div style="flex: 1; padding: 12px; border: 1px solid #E8E8E3; border-radius: 8px; background: #F7F8F3;">
+            <div style="font-size: 10px; color: #6B6B6B; text-transform: uppercase;">Gross Bookings (${filteredOrders.length} Orders)</div>
+            <div style="font-size: 18px; font-weight: 800; color: #171717; margin-top: 4px;">₹${totalGrossBooking.toLocaleString('en-IN')}</div>
+          </div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr style="background: #EFF4E6; color: #171717; text-align: left;">
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Order ID</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Date</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Customer</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Delivery Option</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Payment</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Status</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3; text-align: right;">Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredOrders
+              .map(
+                (o) => `
+              <tr>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3; font-weight: bold;">${o.id}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.date}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.customerName}<br/><span style="color:#6B6B6B;font-size:9px;">${o.shippingAddress?.city || ''}</span></td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.deliveryMethod || 'Standard'}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.paymentMethod} (${o.paymentVerified || o.paymentStatus === 'Paid' ? 'Verified' : 'Pending'})</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.orderStatus}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3; text-align: right; font-weight: bold;">₹${o.total.toLocaleString('en-IN')}</td>
+              </tr>
+            `
+              )
+              .join('')}
+          </tbody>
+        </table>
+      `;
+
+      await html2pdf()
+        .set({
+          margin: 10,
+          filename: `fathima_stores_sales_revenue_${timeRange}_${new Date().toISOString().split('T')[0]}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        })
+        .from(reportContainer)
+        .save();
+
+      showToast('PDF Sales & Revenue Report downloaded!', 'success');
+    } catch (err) {
+      console.error('PDF export error:', err);
+      window.print();
+    }
+  };
+
   return (
     <div className="space-y-8 text-left">
       {/* Top Header & Range Filter */}
@@ -208,8 +343,25 @@ export const AdminAnalyticsView: React.FC = () => {
           </p>
         </div>
 
-        {/* Time Filter Pills */}
-        <div className="flex items-center gap-1 bg-white border border-[#E8E8E3] p-1 rounded-xl shadow-2xs self-start sm:self-auto text-xs">
+        {/* Export & Time Filter Controls */}
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={handleExportCSV}
+            className="px-3.5 py-2 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded-xl text-xs font-bold text-[#171717] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+            title="Download CSV spreadsheet of sales & revenue"
+          >
+            <Download className="w-3.5 h-3.5 text-[#71883F]" /> Export CSV
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="px-3.5 py-2 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded-xl text-xs font-bold text-[#171717] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+            title="Print / Export PDF report"
+          >
+            <Printer className="w-3.5 h-3.5 text-[#71883F]" /> Export PDF
+          </button>
+
+          {/* Time Filter Pills */}
+          <div className="flex items-center gap-1 bg-white border border-[#E8E8E3] p-1 rounded-xl shadow-2xs text-xs">
           {[
             { id: 'today', label: 'Today' },
             { id: '7days', label: 'Last 7 Days' },
@@ -229,6 +381,7 @@ export const AdminAnalyticsView: React.FC = () => {
               {tab.label}
             </button>
           ))}
+          </div>
         </div>
       </div>
 

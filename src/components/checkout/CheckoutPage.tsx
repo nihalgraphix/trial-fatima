@@ -56,6 +56,8 @@ export const CheckoutPage: React.FC = () => {
     }
   }, [currentUser]);
 
+  const [pinnedLat, setPinnedLat] = useState<number>(defaultAddress?.lat || 8.5241);
+  const [pinnedLng, setPinnedLng] = useState<number>(defaultAddress?.lng || 76.9366);
   const [deliveryMethod, setDeliveryMethod] = useState<string>('Standard Delivery (2-4 Days)');
   const [paymentMethod, setPaymentMethod] = useState<'Online' | 'COD'>('Online');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -108,6 +110,8 @@ export const CheckoutPage: React.FC = () => {
       state,
       pinCode,
       isDefault: true,
+      lat: pinnedLat,
+      lng: pinnedLng,
     };
 
     try {
@@ -223,8 +227,10 @@ export const CheckoutPage: React.FC = () => {
                     district,
                     state,
                     pinCode,
+                    lat: pinnedLat,
+                    lng: pinnedLng,
                   }}
-                  onAddressSelect={(addr) => {
+                  onAddressSelect={(addr, coords) => {
                     if (addr.house) setHouse(addr.house);
                     if (addr.street) setStreet(addr.street);
                     if (addr.area) setArea(addr.area);
@@ -234,6 +240,10 @@ export const CheckoutPage: React.FC = () => {
                     if (addr.pinCode) setPinCode(addr.pinCode);
                     if (addr.fullName && !fullName) setFullName(addr.fullName);
                     if (addr.phone && !phone) setPhone(addr.phone);
+                    if (coords?.lat && coords?.lng) {
+                      setPinnedLat(coords.lat);
+                      setPinnedLng(coords.lng);
+                    }
                   }}
                 />
 
@@ -341,24 +351,61 @@ export const CheckoutPage: React.FC = () => {
                 </h3>
 
                 <div className="space-y-3">
-                  <label className="flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-colors border-[#71883F] bg-[#EFF4E6]/40">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        name="deliveryMethod"
-                        checked={deliveryMethod.includes('Standard')}
-                        onChange={() => setDeliveryMethod('Standard Delivery (2-4 Days)')}
-                        className="accent-[#71883F]"
-                      />
-                      <div>
-                        <p className="text-xs font-bold text-[#171717]">Standard Delivery</p>
-                        <p className="text-[11px] text-[#6B6B6B]">Estimated 2 to 4 business days</p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-semibold text-[#71883F]">
-                      {cartDeliveryCharge === 0 ? 'FREE' : `₹${cartDeliveryCharge}`}
-                    </span>
-                  </label>
+                  {[
+                    {
+                      id: 'Standard Delivery (2-4 Days)',
+                      title: 'Standard Doorstep Delivery',
+                      desc: 'Estimated 2 to 4 business days via regional courier',
+                      badge: cartDeliveryCharge === 0 ? 'FREE' : `₹${cartDeliveryCharge}`,
+                    },
+                    {
+                      id: 'Same-Day Express Delivery (By 6 PM)',
+                      title: 'Same-Day Local Express Delivery',
+                      desc: 'Fast local dispatch from store hub directly to your pinned location',
+                      badge: cartDeliveryCharge === 0 ? 'FREE' : `₹${cartDeliveryCharge}`,
+                    },
+                    {
+                      id: 'Priority Next-Day Air/Surface Courier',
+                      title: 'Priority Next-Day Courier',
+                      desc: 'Guaranteed priority dispatch with live GPS agent tracking',
+                      badge: cartDeliveryCharge === 0 ? 'FREE' : `₹${cartDeliveryCharge}`,
+                    },
+                    {
+                      id: 'Store Pickup (MG Road Hub)',
+                      title: 'Self Pickup at Store Hub',
+                      desc: 'Ready in 2 hours at Fathima Stores MG Road Counter',
+                      badge: 'FREE',
+                    },
+                  ].map((option) => {
+                    const isSelected = deliveryMethod === option.id;
+                    return (
+                      <label
+                        key={option.id}
+                        className={`flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-colors ${
+                          isSelected
+                            ? 'border-[#71883F] bg-[#EFF4E6]/40'
+                            : 'border-[#E8E8E3] hover:border-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="deliveryMethod"
+                            checked={isSelected}
+                            onChange={() => setDeliveryMethod(option.id)}
+                            className="accent-[#71883F]"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-[#171717]">{option.title}</p>
+                            <p className="text-[11px] text-[#6B6B6B]">{option.desc}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-semibold text-[#71883F] shrink-0">
+                          {option.badge}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

@@ -3,36 +3,27 @@ import { APIProvider } from '@vis.gl/react-google-maps';
 
 export const GoogleMapsWrapper: React.FC<PropsWithChildren> = ({ children }) => {
   const [quotaExceeded, setQuotaExceeded] = useState(false);
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyClPbU9W0uTkLSyHxIE9A9KQdWL-h5QsjM';
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
   useEffect(() => {
     const handleQuotaExceeded = () => setQuotaExceeded(true);
     window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
-    
-    // Tier 1: Trap console errors for quota issues
-    const origError = console.error;
-    console.error = (...args: unknown[]) => {
-      origError.apply(console, args);
-      const msg = args.map((a) => String(a)).join(' ');
-      if (msg.includes('OverQuotaMapError') || msg.includes('QuotaExceededError')) {
-        window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-      }
-    };
 
     return () => {
       window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
-      console.error = origError;
     };
   }, []);
 
   if (!apiKey) {
-    console.warn("VITE_GOOGLE_MAPS_API_KEY is not defined. Google Maps features will be disabled.");
+    console.warn('VITE_GOOGLE_MAPS_API_KEY is not defined. Google Maps features will be disabled.');
     return <>{children}</>;
   }
 
   return (
-    <APIProvider 
-      apiKey={apiKey} 
+    <APIProvider
+      apiKey={apiKey}
+      region="IN"
+      language="en"
       onLoad={() => console.log('Google Maps API loaded')}
       onError={(err) => console.error('Google Maps API load error:', err)}
     >

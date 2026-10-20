@@ -152,6 +152,7 @@ export interface Order {
   paymentVerified?: boolean;
   paymentVerifiedAt?: string;
   paymentVerifiedBy?: string;
+  isArchived?: boolean;
 }
 
 export interface Expense {

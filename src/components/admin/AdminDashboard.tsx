@@ -45,6 +45,7 @@ import {
   Crown,
   ShieldCheck,
   Star,
+  MapPin,
 } from 'lucide-react';
 import { InvoiceModal } from '../checkout/InvoiceModal';
 import { ProductImage } from '../common/ProductImage';
@@ -135,6 +136,11 @@ export const AdminDashboard: React.FC = () => {
     importStoreData,
     emailAlertLogs,
     checkAndTriggerLowStockAlert,
+
+    bulkUpdateStock,
+    bulkUpdateOrderStatus,
+    bulkArchiveOrders,
+    bulkDeleteOrders,
   } = useStore();
 
   const [currentTab, setCurrentTab] = useState<AdminTab>('overview');
@@ -163,6 +169,13 @@ export const AdminDashboard: React.FC = () => {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkStockModal, setShowBulkStockModal] = useState(false);
+  const [bulkStockInput, setBulkStockInput] = useState<string>('10');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [showBulkOrderActionModal, setShowBulkOrderActionModal] = useState<{
+    type: 'status' | 'archive' | 'delete';
+    isOpen: boolean;
+  }>({ type: 'status', isOpen: false });
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [showClearAllCategoriesModal, setShowClearAllCategoriesModal] = useState(false);
   const [bannerToDelete, setBannerToDelete] = useState<Banner | null>(null);
@@ -1332,8 +1345,8 @@ export const AdminDashboard: React.FC = () => {
     showToast('Added 4 sample stationery items to catalog!', 'success');
   };
 
-  // CSV Export utility
-  const handleExportCSV = (type: 'orders' | 'products' | 'customers') => {
+  // Export utility for Records & Reporting
+  const handleExportCSV = (type: 'orders' | 'products' | 'customers' | 'revenue') => {
     let csvContent = 'data:text/csv;charset=utf-8,';
     let filename = `fathima_stores_${type}_${new Date().toISOString().split('T')[0]}.csv`;
 
@@ -1347,6 +1360,16 @@ export const AdminDashboard: React.FC = () => {
       products.forEach((p) => {
         csvContent += `"${p.id}","${p.name}","${p.brand}","${p.category}","${p.sku}",${p.price},${p.mrp},${p.stock},${p.rating},${p.reviewCount}\n`;
       });
+    } else if (type === 'revenue') {
+      csvContent += 'Revenue Analytics Report - Fathima Stores\n';
+      csvContent += `Generated On: ${new Date().toLocaleString()}\n\n`;
+      csvContent += 'Order ID,Date,Customer,Total Amount,Payment Status,Verified\n';
+      orders.forEach((o) => {
+        csvContent += `"${o.id}","${o.date}","${o.customerName}",${o.total},"${o.paymentStatus}","${o.paymentVerified ? 'YES' : 'NO'}"\n`;
+      });
+      csvContent += `\nTotal Orders,${orders.length}\n`;
+      csvContent += `Total Revenue,₹${totalSales}\n`;
+      csvContent += `Verified Income,₹${verifiedOrders.reduce((sum, o) => sum + (o.paidAmount || o.total), 0)}\n`;
     } else {
       csvContent += 'Customer ID,Customer Name,Email,Phone,City,State,Account Type,Status,Total Spent,Orders Count,Last Order Date\n';
       customersList.forEach((c) => {
@@ -1364,10 +1387,95 @@ export const AdminDashboard: React.FC = () => {
     showToast(`Exported ${type} to CSV.`);
   };
 
+  const handleExportPDFReport = async () => {
+    try {
+      showToast('Generating PDF Sales & Revenue Report...', 'info');
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = (html2pdfModule as any).default || html2pdfModule;
+      const verifiedRev = verifiedOrders.reduce((sum, o) => sum + (o.paidAmount || o.total), 0);
+
+      const container = document.createElement('div');
+      container.style.padding = '28px';
+      container.style.fontFamily = 'Plus Jakarta Sans, Arial, sans-serif';
+      container.style.color = '#171717';
+      container.style.background = '#FFFFFF';
+      container.innerHTML = `
+        <div style="border-bottom: 2px solid #71883F; padding-bottom: 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <h1 style="margin: 0; font-size: 20px; color: #171717;">${storeSettings.storeName || 'FATHIMA STORES'} — SALES & REVENUE REPORT</h1>
+            <p style="margin: 4px 0 0; font-size: 11px; color: #6B6B6B;">Generated on ${new Date().toLocaleString('en-IN')}</p>
+          </div>
+          <div style="text-align: right; font-size: 11px; font-weight: bold; color: #71883F;">OFFICIAL RECORD</div>
+        </div>
+        <div style="display: flex; gap: 12px; margin-bottom: 18px;">
+          <div style="flex: 1; padding: 12px; border: 1px solid #E8E8E3; border-radius: 8px; background: #F7F8F3;">
+            <div style="font-size: 10px; color: #6B6B6B; text-transform: uppercase;">Total Orders</div>
+            <div style="font-size: 18px; font-weight: 800; color: #171717; margin-top: 4px;">${orders.length}</div>
+          </div>
+          <div style="flex: 1; padding: 12px; border: 1px solid #E8E8E3; border-radius: 8px; background: #F7F8F3;">
+            <div style="font-size: 10px; color: #6B6B6B; text-transform: uppercase;">Verified Income</div>
+            <div style="font-size: 18px; font-weight: 800; color: #059669; margin-top: 4px;">₹${verifiedRev.toLocaleString('en-IN')}</div>
+          </div>
+          <div style="flex: 1; padding: 12px; border: 1px solid #E8E8E3; border-radius: 8px; background: #F7F8F3;">
+            <div style="font-size: 10px; color: #6B6B6B; text-transform: uppercase;">Gross Bookings</div>
+            <div style="font-size: 18px; font-weight: 800; color: #71883F; margin-top: 4px;">₹${orders.reduce((s, o) => s + o.total, 0).toLocaleString('en-IN')}</div>
+          </div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr style="background: #EFF4E6; color: #171717; text-align: left;">
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Order ID</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Date</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Customer</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Delivery Option</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Payment</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3;">Status</th>
+              <th style="padding: 8px; border: 1px solid #E8E8E3; text-align: right;">Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders
+              .map(
+                (o) => `
+              <tr>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3; font-weight: bold;">${o.id}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.date}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.customerName}<br/><span style="color:#6B6B6B;font-size:9px;">${o.shippingAddress?.city || ''}, ${o.shippingAddress?.pinCode || ''}</span></td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.deliveryMethod || 'Standard'}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.paymentMethod} (${o.paymentVerified || o.paymentStatus === 'Paid' ? 'Verified' : 'Pending'})</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3;">${o.orderStatus}</td>
+                <td style="padding: 7px 8px; border: 1px solid #E8E8E3; text-align: right; font-weight: bold;">₹${o.total.toLocaleString('en-IN')}</td>
+              </tr>
+            `
+              )
+              .join('')}
+          </tbody>
+        </table>
+      `;
+
+      await html2pdf()
+        .set({
+          margin: 10,
+          filename: `fathima_stores_sales_revenue_${new Date().toISOString().split('T')[0]}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        })
+        .from(container)
+        .save();
+
+      showToast('PDF Sales & Revenue Report downloaded!', 'success');
+    } catch (err) {
+      console.error('PDF export error:', err);
+      window.print();
+    }
+  };
+
   const unreadMessagesCount = useMemo(() => (customerMessages || []).filter((m) => m.status === "unread").length, [customerMessages]);
 
   const navMenuItems = [
     { id: 'overview' as const, label: 'Store Overview', icon: LayoutDashboard },
+    { id: 'orders' as const, label: 'Manage Orders', icon: ShoppingBag, count: orders.filter((o) => !o.isArchived).length, alert: pendingOrdersCount > 0 },
     { id: 'analytics' as const, label: 'Financial Analytics', icon: BarChart3, alert: pendingPaymentOrders.length > 0 },
     { id: 'hero-slides' as const, label: 'Hero Slides Manager', icon: FileImage, count: (heroSlides.length > 0 ? heroSlides : DEFAULT_HERO_SLIDES).length },
     { id: 'inventory' as const, label: 'Inventory & Stock Alerts', icon: Warehouse, count: lowStockCount, alert: lowStockCount > 0 },
@@ -2282,9 +2390,16 @@ export const AdminDashboard: React.FC = () => {
 
                   <button
                     onClick={() => handleExportCSV('orders')}
-                    className="px-3.5 py-2 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded-lg text-xs font-semibold text-[#171717] flex items-center gap-1.5 shadow-2xs"
+                    className="px-3.5 py-2 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded-lg text-xs font-semibold text-[#171717] flex items-center gap-1.5 shadow-2xs cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5 text-[#71883F]" /> Export CSV
+                  </button>
+
+                  <button
+                    onClick={handleExportPDFReport}
+                    className="px-3.5 py-2 bg-white border border-[#E8E8E3] hover:border-[#71883F] rounded-lg text-xs font-semibold text-[#171717] flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-[#71883F]" /> Export PDF
                   </button>
                 </div>
               </div>
@@ -2292,7 +2407,7 @@ export const AdminDashboard: React.FC = () => {
               {/* Status Filter Tabs */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
                 {[
-                  { id: 'all', label: 'All Orders' },
+                  { id: 'all', label: 'All Active Orders' },
                   { id: 'Pending', label: 'Pending' },
                   { id: 'Confirmed', label: 'Confirmed' },
                   { id: 'Processing', label: 'Processing' },
@@ -2300,12 +2415,15 @@ export const AdminDashboard: React.FC = () => {
                   { id: 'Out for Delivery', label: 'Out for Delivery' },
                   { id: 'Delivered', label: 'Delivered' },
                   { id: 'Cancelled', label: 'Cancelled' },
+                  { id: 'Archived', label: 'Archived' },
                 ].map((tab) => {
                   const isSel = orderStatusFilter === tab.id;
                   const count =
-                    tab.id === 'all'
-                      ? orders.length
-                      : orders.filter((o) => o.orderStatus === tab.id).length;
+                    tab.id === 'Archived'
+                      ? orders.filter((o) => o.isArchived).length
+                      : tab.id === 'all'
+                      ? orders.filter((o) => !o.isArchived).length
+                      : orders.filter((o) => !o.isArchived && o.orderStatus === tab.id).length;
                   return (
                     <button
                       key={tab.id}
@@ -2332,7 +2450,12 @@ export const AdminDashboard: React.FC = () => {
               {/* Orders Table */}
               <div className="bg-white border border-[#E8E8E3] rounded-2xl overflow-hidden shadow-2xs">
                 {orders.filter((o) => {
-                  if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter) return false;
+                  if (orderStatusFilter === 'Archived') {
+                    if (!o.isArchived) return false;
+                  } else {
+                    if (o.isArchived) return false;
+                    if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter) return false;
+                  }
                   if (!adminSearch) return true;
                   const q = adminSearch.toLowerCase();
                   return (
@@ -2378,13 +2501,86 @@ export const AdminDashboard: React.FC = () => {
                       </button>
 
                     </div>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-[#F7F8F3] border-b border-[#E8E8E3] text-[#6B6B6B]">
-                        <tr>
-                          <th className="py-3 px-4 font-semibold">Order</th>
+                    </div>
+                  ) : (
+                  <div className="space-y-4">
+                    {/* Bulk Actions Bar for Orders */}
+                    {selectedOrderIds.length > 0 && (
+                      <div className="bg-[#171717] text-white px-4 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-lg animate-in fade-in slide-in-from-top-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                            <ShoppingBag className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold">{selectedOrderIds.length} Order{selectedOrderIds.length > 1 ? 's' : ''} Selected</p>
+                            <p className="text-[10px] text-neutral-400">Apply batch updates to these records</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSelectedOrderIds([])}
+                            className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 hover:text-white transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          
+                          <div className="h-8 w-px bg-white/10 mx-1" />
+
+                          <button
+                            onClick={() => setShowBulkOrderActionModal({ type: 'status', isOpen: true })}
+                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Change Status
+                          </button>
+
+                          <button
+                            onClick={() => setShowBulkOrderActionModal({ type: 'archive', isOpen: true })}
+                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                          >
+                            <Package className="w-3 h-3" /> Archive
+                          </button>
+
+                          <button
+                            onClick={() => setShowBulkOrderActionModal({ type: 'delete', isOpen: true })}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                          >
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="overflow-x-auto bg-white border border-[#E8E8E3] rounded-2xl shadow-2xs">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-[#F7F8F3] border-b border-[#E8E8E3] text-[#6B6B6B]">
+                          <tr>
+                            <th className="py-3 px-3 w-10 text-center">
+                              <input
+                                type="checkbox"
+                                checked={orders.length > 0 && selectedOrderIds.length === orders.filter(o => {
+                                  if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter) return false;
+                                  if (!adminSearch) return true;
+                                  const q = adminSearch.toLowerCase();
+                                  return o.id.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q);
+                                }).length}
+                                onChange={(e) => {
+                                  const visibleOrders = orders.filter(o => {
+                                    if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter) return false;
+                                    if (!adminSearch) return true;
+                                    const q = adminSearch.toLowerCase();
+                                    return o.id.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q);
+                                  });
+                                  if (e.target.checked) {
+                                    setSelectedOrderIds(Array.from(new Set([...selectedOrderIds, ...visibleOrders.map(o => o.id)])));
+                                  } else {
+                                    const visibleIds = new Set(visibleOrders.map(o => o.id));
+                                    setSelectedOrderIds(selectedOrderIds.filter(id => !visibleIds.has(id)));
+                                  }
+                                }}
+                                className="accent-[#71883F] w-4 h-4 rounded cursor-pointer"
+                              />
+                            </th>
+                            <th className="py-3 px-4 font-semibold">Order</th>
                           <th className="py-3 px-4 font-semibold">Customer Details</th>
                           <th className="py-3 px-4 font-semibold">Items</th>
                           <th className="py-3 px-4 font-semibold">Total</th>
@@ -2396,8 +2592,13 @@ export const AdminDashboard: React.FC = () => {
                       <tbody className="divide-y divide-[#E8E8E3]">
                         {orders
                           .filter((o) => {
-                            if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter)
-                              return false;
+                            if (orderStatusFilter === 'Archived') {
+                              if (!o.isArchived) return false;
+                            } else {
+                              if (o.isArchived) return false;
+                              if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter)
+                                return false;
+                            }
                             if (!adminSearch) return true;
                             const q = adminSearch.toLowerCase();
                             return (
@@ -2408,7 +2609,21 @@ export const AdminDashboard: React.FC = () => {
                             );
                           })
                           .map((order, idx) => (
-                            <tr key={`${order.id}-${idx}`} className="hover:bg-[#F7F8F3]/50">
+                            <tr key={`${order.id}-${idx}`} className={`hover:bg-[#F7F8F3]/50 ${selectedOrderIds.includes(order.id) ? 'bg-amber-50/40' : ''}`}>
+                              <td className="py-3 px-3 w-10 text-center border-r border-[#E8E8E3]/50">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrderIds.includes(order.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedOrderIds([...selectedOrderIds, order.id]);
+                                    } else {
+                                      setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id));
+                                    }
+                                  }}
+                                  className="accent-[#71883F] w-4 h-4 rounded cursor-pointer"
+                                />
+                              </td>
                               <td className="py-3 px-4 font-bold text-[#171717]">
                                 <button
                                   onClick={() => setViewingOrder(order)}
@@ -2419,6 +2634,11 @@ export const AdminDashboard: React.FC = () => {
                                 <span className="block text-[10px] text-[#6B6B6B] font-normal">
                                   {order.date}
                                 </span>
+                                {order.deliveryMethod && (
+                                  <span className="inline-block mt-1 text-[9px] font-bold bg-[#EFF4E6] text-[#71883F] px-1.5 py-0.5 rounded">
+                                    {order.deliveryMethod.split('(')[0].trim()}
+                                  </span>
+                                )}
                               </td>
                               <td className="py-3 px-4">
                                 <span className="font-semibold text-[#171717] block">
@@ -2428,8 +2648,37 @@ export const AdminDashboard: React.FC = () => {
                                   {order.phone}
                                 </span>
                                 <span className="text-[10px] text-[#6B6B6B] truncate max-w-xs block">
-                                  {order.shippingAddress?.city}, {order.shippingAddress?.pinCode}
+                                  {order.shippingAddress?.area ? `${order.shippingAddress.area}, ` : ''}{order.shippingAddress?.city}, {order.shippingAddress?.pinCode}
                                 </span>
+                                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setViewingOrder(order)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-[#71883F] hover:underline cursor-pointer"
+                                    title="Locate customer pin & route on Google Maps"
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    {order.shippingAddress?.lat && order.shippingAddress?.lng
+                                      ? `Locate Pin (${order.shippingAddress.lat.toFixed(3)}, ${order.shippingAddress.lng.toFixed(3)})`
+                                      : 'View Map'}
+                                  </button>
+                                  <a
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${
+                                      order.shippingAddress?.lat && order.shippingAddress?.lng
+                                        ? `${order.shippingAddress.lat},${order.shippingAddress.lng}`
+                                        : encodeURIComponent(
+                                            `${order.shippingAddress?.house || ''}, ${order.shippingAddress?.street || ''}, ${order.shippingAddress?.city || 'Trivandrum'} ${order.shippingAddress?.pinCode || ''}`
+                                          )
+                                    }&travelmode=driving`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold bg-[#EFF4E6] text-[#71883F] hover:bg-[#71883F] hover:text-white px-2 py-0.5 rounded transition-colors"
+                                    title="Open Turn-by-Turn Driving Route in Google Maps"
+                                  >
+                                    <Truck className="w-2.5 h-2.5" />
+                                    <span>Drive</span>
+                                  </a>
+                                </div>
                               </td>
                               <td className="py-3 px-4">
                                 <span className="font-semibold text-[#171717]">
@@ -2526,7 +2775,8 @@ export const AdminDashboard: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
-                )}
+                </div>
+              )}
               </div>
             </div>
           )}
@@ -2628,6 +2878,18 @@ export const AdminDashboard: React.FC = () => {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Delete Selected ({selectedProductIds.length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBulkStockInput('10');
+                        setShowBulkStockModal(true);
+                      }}
+                      className="px-4 py-1.5 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <Warehouse className="w-3.5 h-3.5" />
+                      Update Inventory ({selectedProductIds.length})
                     </button>
                   </div>
                 </div>
@@ -4193,6 +4455,28 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Enhanced Report Export Options */}
+              <div className="bg-gradient-to-r from-[#71883F] to-[#5F7334] rounded-2xl p-6 text-white shadow-md flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div className="space-y-1 text-center sm:text-left">
+                  <h3 className="text-lg font-black tracking-tight">Generate Financial Statements</h3>
+                  <p className="text-xs text-white/80">Export comprehensive sales and revenue audits for tax compliance.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleExportCSV('revenue')}
+                    className="px-5 py-2.5 bg-white text-[#71883F] rounded-xl text-xs font-black flex items-center gap-2 shadow-sm hover:scale-105 transition-all"
+                  >
+                    <Download className="w-4 h-4" /> Export CSV Report
+                  </button>
+                  <button
+                    onClick={handleExportPDFReport}
+                    className="px-5 py-2.5 bg-[#171717] text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm hover:bg-black transition-all cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" /> Export PDF Report
+                  </button>
+                </div>
+              </div>
+
               {/* Category Breakdown */}
               <div className="bg-white border border-[#E8E8E3] rounded-2xl p-6 shadow-2xs space-y-4">
                 <h4 className="font-bold text-sm text-[#171717]">Catalog Distribution by Category</h4>
@@ -4256,8 +4540,8 @@ export const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* 10. SETTINGS TAB */}
-          {currentTab === 'deliveries' && (
+          {/* 10. DELIVERY & LIVE MAP TAB */}
+          {(currentTab === 'deliveries' || currentTab === 'delivery') && (
             <AdminDeliveryManagement />
           )}
 
@@ -6775,8 +7059,13 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   {/* Customer and shipping details */}
-                  <div className="space-y-1 p-3 bg-white border border-[#E8E8E3] rounded-xl">
-                    <span className="font-bold text-[#171717] block mb-1">Customer & Delivery:</span>
+                  <div className="space-y-2 p-3.5 bg-white border border-[#E8E8E3] rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#171717]">Customer & Delivery Option:</span>
+                      <span className="text-[10px] font-bold bg-[#EFF4E6] text-[#71883F] px-2 py-0.5 rounded-md">
+                        {viewingOrder.deliveryMethod || 'Standard Delivery'}
+                      </span>
+                    </div>
                     <p className="font-semibold text-[#171717]">{viewingOrder.customerName}</p>
                     <p className="text-[#6B6B6B]">Phone: {viewingOrder.phone} · Email: {viewingOrder.email}</p>
                     <p className="text-[#6B6B6B]">
@@ -6784,6 +7073,31 @@ export const AdminDashboard: React.FC = () => {
                       {viewingOrder.shippingAddress?.area}, {viewingOrder.shippingAddress?.city},{' '}
                       {viewingOrder.shippingAddress?.state} - {viewingOrder.shippingAddress?.pinCode}
                     </p>
+                    {viewingOrder.shippingAddress?.lat && viewingOrder.shippingAddress?.lng && (
+                      <div className="pt-1.5 border-t border-[#E8E8E3] flex items-center justify-between flex-wrap gap-2 text-[11px]">
+                        <span className="font-mono text-[#71883F] font-bold">
+                          Pinned GPS: {viewingOrder.shippingAddress.lat.toFixed(5)}, {viewingOrder.shippingAddress.lng.toFixed(5)}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${viewingOrder.shippingAddress.lat},${viewingOrder.shippingAddress.lng}&travelmode=driving`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold text-[#71883F] hover:underline"
+                          >
+                            Drive in Google Maps →
+                          </a>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${viewingOrder.shippingAddress.lat},${viewingOrder.shippingAddress.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold text-[#171717] hover:text-[#71883F] underline"
+                          >
+                            Open Pin
+                          </a>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Ordered Items */}
@@ -7688,6 +8002,74 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* 2.5. BULK PRODUCTS INVENTORY UPDATE MODAL */}
+      {showBulkStockModal && selectedProductIds.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E8E8E3] space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#EFF4E6] text-[#71883F] flex items-center justify-center shrink-0">
+                <Warehouse className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-[#171717]">Bulk Update Inventory</h3>
+                <p className="text-xs text-[#6B6B6B]">
+                  Adjust stock quantity for {selectedProductIds.length} selected product{selectedProductIds.length > 1 ? 's' : ''}.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <label className="font-bold text-[#171717] block">
+                Stock Adjustment (Positive to add, Negative to deduct):
+              </label>
+              <input
+                type="number"
+                value={bulkStockInput}
+                onChange={(e) => setBulkStockInput(e.target.value)}
+                placeholder="e.g. 15 or -5"
+                className="w-full px-3 py-2.5 border border-[#E8E8E3] rounded-xl font-bold text-sm text-[#171717] outline-none focus:border-[#71883F]"
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {['+5', '+10', '+25', '+50', '-5', '-10'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setBulkStockInput(preset.replace('+', ''))}
+                    className="px-2.5 py-1 bg-[#F7F8F3] hover:bg-[#EFF4E6] border border-[#E8E8E3] rounded-lg text-[11px] font-bold text-[#171717] cursor-pointer"
+                  >
+                    {preset} units
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowBulkStockModal(false)}
+                className="px-4 py-2 border border-[#E8E8E3] hover:bg-neutral-50 rounded-xl text-xs font-semibold text-[#171717] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const adjustment = Number(bulkStockInput);
+                  if (!isNaN(adjustment) && adjustment !== 0) {
+                    await bulkUpdateStock(selectedProductIds, adjustment);
+                    setSelectedProductIds([]);
+                    setShowBulkStockModal(false);
+                  }
+                }}
+                className="px-4 py-2 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              >
+                <Warehouse className="w-3.5 h-3.5" /> Apply Inventory Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 3. CATEGORY DELETE CONFIRMATION MODAL */}
       {categoryToDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
@@ -7903,6 +8285,117 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* BULK ORDER ACTION MODALS */}
+      {showBulkOrderActionModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-[#E8E8E3]">
+            <div className="p-6 border-b border-[#E8E8E3] bg-[#F7F8F3]/50">
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                  showBulkOrderActionModal.type === 'delete' ? 'bg-rose-100 text-rose-600' : 'bg-[#EFF4E6] text-[#71883F]'
+                }`}>
+                  {showBulkOrderActionModal.type === 'status' && <RotateCcw className="w-6 h-6" />}
+                  {showBulkOrderActionModal.type === 'archive' && <Package className="w-6 h-6" />}
+                  {showBulkOrderActionModal.type === 'delete' && <Trash2 className="w-6 h-6" />}
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-[#171717] tracking-tight">
+                    {showBulkOrderActionModal.type === 'status' && 'Batch Status Update'}
+                    {showBulkOrderActionModal.type === 'archive' && 'Archive Orders'}
+                    {showBulkOrderActionModal.type === 'delete' && 'Delete Selected Orders'}
+                  </h3>
+                  <p className="text-xs text-[#6B6B6B]">Modifying {selectedOrderIds.length} order records</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {showBulkOrderActionModal.type === 'status' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-[#171717] font-semibold">Select New Order Status:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Confirmed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'].map((status) => (
+                      <button
+                        key={status}
+                        onClick={async () => {
+                          await bulkUpdateOrderStatus(selectedOrderIds, status as OrderStatus);
+                          setSelectedOrderIds([]);
+                          setShowBulkOrderActionModal({ ...showBulkOrderActionModal, isOpen: false });
+                        }}
+                        className="px-3 py-2 border border-[#E8E8E3] hover:border-[#71883F] hover:bg-[#F7F8F3] rounded-xl text-[10px] font-bold uppercase tracking-wider text-[#171717] transition-all text-left"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {showBulkOrderActionModal.type === 'archive' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-neutral-600 leading-relaxed">
+                    Archived orders will be hidden from the primary dashboard view but remain in the permanent database for accounting and records.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        await bulkArchiveOrders(selectedOrderIds, true);
+                        setSelectedOrderIds([]);
+                        setShowBulkOrderActionModal({ ...showBulkOrderActionModal, isOpen: false });
+                      }}
+                      className="flex-1 py-3 bg-[#171717] text-white rounded-xl text-xs font-bold shadow-sm"
+                    >
+                      Archive Records
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await bulkArchiveOrders(selectedOrderIds, false);
+                        setSelectedOrderIds([]);
+                        setShowBulkOrderActionModal({ ...showBulkOrderActionModal, isOpen: false });
+                      }}
+                      className="flex-1 py-3 border border-[#E8E8E3] text-[#171717] rounded-xl text-xs font-bold"
+                    >
+                      Unarchive
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {showBulkOrderActionModal.type === 'delete' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                    <p className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Irreversible Action
+                    </p>
+                    <p className="text-[11px] text-rose-700 mt-1">
+                      Deleting orders will permanently remove them from the store records. This cannot be undone.
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await bulkDeleteOrders(selectedOrderIds);
+                      setSelectedOrderIds([]);
+                      setShowBulkOrderActionModal({ ...showBulkOrderActionModal, isOpen: false });
+                    }}
+                    className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm"
+                  >
+                    Delete Permanently
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-[#F7F8F3] flex justify-center">
+              <button
+                onClick={() => setShowBulkOrderActionModal({ ...showBulkOrderActionModal, isOpen: false })}
+                className="text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] hover:text-[#171717]"
+              >
+                Close Without Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

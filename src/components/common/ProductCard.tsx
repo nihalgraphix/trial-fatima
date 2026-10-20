@@ -1,7 +1,7 @@
 import React from 'react';
 import { Product } from '../../types';
 import { useStore } from '../../context/StoreContext';
-import { Heart, ShoppingBag, Star, Tag, Eye } from 'lucide-react';
+import { Heart, ShoppingBag, Star, Tag, Eye, Sliders } from 'lucide-react';
 import { ProductImage } from './ProductImage';
 
 interface ProductCardProps {
@@ -16,9 +16,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     navigateToProduct,
     setQuickViewProduct,
     storeSettings,
+    compareProductIds,
+    toggleCompareProduct,
   } = useStore();
 
   const isFavorited = isInWishlist(product.id);
+  const isComparing = compareProductIds.includes(product.id);
   const isLowStock =
     storeSettings?.showLowStockAlert !== false &&
     product.stock > 0 &&
@@ -67,6 +70,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               <Eye className="w-3.5 h-3.5" />
             </button>
           )}
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleCompareProduct(product.id);
+            }}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-2xs backdrop-blur-xs ${
+              isComparing
+                ? 'bg-[#71883F] text-white'
+                : 'bg-white/90 hover:bg-white text-neutral-500 hover:text-[#71883F]'
+            }`}
+            title={isComparing ? 'Remove from comparison' : 'Add to compare'}
+            aria-label="Toggle Comparison"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {/* Clean Badges */}

@@ -214,6 +214,7 @@ interface StoreContextType {
   deleteMultipleProducts: (ids: string[]) => Promise<void>;
   duplicateProduct: (id: string) => Promise<void>;
   quickUpdateStock: (id: string, newStock: number) => Promise<void>;
+  bulkUpdateStock: (ids: string[], adjustment: number) => Promise<void>;
   removeAllProductBadges: () => Promise<void>;
 
   // Categories
@@ -265,7 +266,10 @@ interface StoreContextType {
   createDirectOrder: (orderData: Partial<Order>) => Promise<Order>;
 
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
+  bulkUpdateOrderStatus: (orderIds: string[], status: OrderStatus) => Promise<void>;
+  bulkArchiveOrders: (orderIds: string[], archive: boolean) => Promise<void>;
   deleteOrder: (orderId: string) => Promise<void>;
+  bulkDeleteOrders: (orderIds: string[]) => Promise<void>;
   recordOrderPayment: (
     orderId: string,
     amount: number,
@@ -403,6 +407,11 @@ interface StoreContextType {
   // Automated Inventory Email Alerts
   emailAlertLogs: EmailAlertRecord[];
   checkAndTriggerLowStockAlert: (product: Product, currentStock: number) => Promise<void>;
+
+  // Product Comparison
+  compareProductIds: string[];
+  toggleCompareProduct: (productId: string) => void;
+  clearCompareProducts: () => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -580,6 +589,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     domain: string;
     projectId: string;
   } | null>(null);
+
+  const [compareProductIds, setCompareProductIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('fs_compare_products');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('fs_compare_products', JSON.stringify(compareProductIds));
+  }, [compareProductIds]);
 
   // Sync active user to localStorage whenever currentUser changes
   useEffect(() => {
@@ -1747,6 +1769,88 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     showToast(`Order #${orderId} status set to "${status}"`);
   };
 
+  const bulkUpdateOrderStatus = async (orderIds: string[], status: OrderStatus) => {
+    if (!orderIds || orderIds.length === 0) return;
+
+    const timelineStep: DeliveryTimelineStep = {
+      status,
+      timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      note: `Bulk status update to ${status}`,
+    };
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        orderIds.includes(o.id)
+          ? {
+              ...o,
+              orderStatus: status,
+              deliveryTimeline: [timelineStep, ...(o.deliveryTimeline || [])],
+            }
+          : o
+      )
+    );
+
+    try {
+      const batch = writeBatch(db);
+      orderIds.forEach((id) => {
+        const order = orders.find(o => o.id === id);
+        batch.update(doc(db, 'orders', id), sanitizeFirestoreData({
+          orderStatus: status,
+          deliveryTimeline: [timelineStep, ...(order?.deliveryTimeline || [])],
+          updatedAt: serverTimestamp(),
+        }));
+      });
+      await batch.commit();
+    } catch (err) {
+      console.warn("Bulk order status update Firestore error:", err);
+    }
+
+    showToast(`Updated ${orderIds.length} orders to "${status}"`, 'success');
+  };
+
+  const bulkArchiveOrders = async (orderIds: string[], archive: boolean) => {
+    if (!orderIds || orderIds.length === 0) return;
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        orderIds.includes(o.id) ? { ...o, isArchived: archive } : o
+      )
+    );
+
+    try {
+      const batch = writeBatch(db);
+      orderIds.forEach((id) => {
+        batch.update(doc(db, 'orders', id), { 
+          isArchived: archive,
+          updatedAt: serverTimestamp() 
+        });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.warn("Bulk order archive Firestore error:", err);
+    }
+
+    showToast(`${archive ? 'Archived' : 'Unarchived'} ${orderIds.length} orders.`, 'success');
+  };
+
+  const bulkDeleteOrders = async (orderIds: string[]) => {
+    if (!orderIds || orderIds.length === 0) return;
+
+    setOrders((prev) => prev.filter((o) => !orderIds.includes(o.id)));
+
+    try {
+      const batch = writeBatch(db);
+      orderIds.forEach((id) => {
+        batch.delete(doc(db, 'orders', id));
+      });
+      await batch.commit();
+    } catch (err) {
+      console.warn("Bulk order delete Firestore error:", err);
+    }
+
+    showToast(`Deleted ${orderIds.length} orders.`, 'info');
+  };
+
 
   const recordOrderPayment = async (
     orderId: string,
@@ -2225,6 +2329,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     showToast(`Stock updated to ${safeStock}`);
+  };
+
+  const bulkUpdateStock = async (ids: string[], adjustment: number) => {
+    if (!ids || ids.length === 0) return;
+    
+    // Update local state
+    setProducts((prev) => 
+      prev.map(p => ids.includes(p.id) ? { ...p, stock: Math.max(0, p.stock + adjustment) } : p)
+    );
+
+    try {
+      const batch = writeBatch(db);
+      ids.forEach((id) => {
+        const p = products.find((prod) => prod.id === id);
+        if (p) {
+          const newStock = Math.max(0, p.stock + adjustment);
+          batch.update(doc(db, 'products', id), { 
+            stock: newStock,
+            updatedAt: serverTimestamp() 
+          });
+        }
+      });
+      await batch.commit();
+    } catch (err) {
+      console.warn("Bulk stock update Firestore error:", err);
+    }
+    showToast(`Updated stock for ${ids.length} products.`, 'success');
   };
 
   const removeAllProductBadges = async () => {
@@ -3011,6 +3142,22 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
     showToast('Store reset to factory defaults. Reloading data...', 'success');
   };
 
+  const toggleCompareProduct = (productId: string) => {
+    setCompareProductIds((prev) => {
+      if (prev.includes(productId)) {
+        return prev.filter((id) => id !== productId);
+      }
+      if (prev.length >= 4) {
+        showToast('You can compare up to 4 products at a time.', 'info');
+        return prev;
+      }
+      return [...prev, productId];
+    });
+  };
+
+  const clearCompareProducts = () => {
+    setCompareProductIds([]);
+  };
 
   // Export full store snapshot as JSON
   const exportStoreData = (): string => {
@@ -3216,6 +3363,15 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         // Automated Inventory Email Alerts
         emailAlertLogs,
         checkAndTriggerLowStockAlert,
+
+        compareProductIds,
+        toggleCompareProduct,
+        clearCompareProducts,
+
+        bulkUpdateStock,
+        bulkUpdateOrderStatus,
+        bulkArchiveOrders,
+        bulkDeleteOrders,
       }}
     >
       {children}

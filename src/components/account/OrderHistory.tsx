@@ -10,6 +10,8 @@ export const OrderHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
 
+  if (!currentUser) return null;
+
   const handleCopyInvoiceLink = (orderId: string) => {
     const link = `${window.location.origin}/invoice/${orderId}`;
     navigator.clipboard.writeText(link);
@@ -35,13 +37,12 @@ export const OrderHistory: React.FC = () => {
   };
 
   const filteredOrders = orders.filter(order => {
+    const isUserOrder = order.userId === currentUser.id || order.email === currentUser.email;
     const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          order.items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesFilter = filterStatus === 'All' || order.orderStatus === filterStatus;
-    return matchesSearch && matchesFilter;
+    return isUserOrder && matchesSearch && matchesFilter;
   });
-
-  if (!currentUser) return null;
 
   return (
     <div className="space-y-6">

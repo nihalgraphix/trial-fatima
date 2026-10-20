@@ -34,6 +34,7 @@ export const Header: React.FC = () => {
     notifications,
     categories,
     storeSettings,
+    setIsSupportChatOpen,
   } = useStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -524,11 +525,13 @@ export const Header: React.FC = () => {
             </aside>
           </div>
         )}
-        <CustomerNotificationsModal
+      </header>
+
+      <CustomerNotificationsModal
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
+        onOpenLiveChat={() => setIsSupportChatOpen(true)}
       />
-      </header>
     </>
   );
 };

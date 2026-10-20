@@ -36,6 +36,7 @@ import { LiveChatWidget } from './components/common/LiveChatWidget';
 import { ProfilePage } from './components/account/ProfilePage';
 import { ForceSignInModal } from './components/common/ForceSignInModal';
 import { UnauthorizedDomainModal } from './components/common/UnauthorizedDomainModal';
+import { CompareProductsBar } from './components/shop/CompareProductsBar';
 
 const MainContent: React.FC = () => {
   const {
@@ -206,6 +207,7 @@ const MainContent: React.FC = () => {
       <CartDrawer />
       <SearchModal />
       <QuickViewModal />
+      <CompareProductsBar />
       <WhatsAppButton />
       <LiveChatWidget />
       <ToastContainer />

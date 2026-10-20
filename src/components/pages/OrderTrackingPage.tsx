@@ -269,34 +269,32 @@ export const OrderTrackingPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* LIVE GOOGLE MAPS DELIVERY BOY TRACKER */}
-              {(activeOrder.orderStatus === 'Out for Delivery' || activeOrder.orderStatus === 'Shipped' || activeAssignment) && (
-                <div className="mt-6 pt-2 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                      <h3 className="text-xs font-bold text-[#202320] uppercase tracking-wider">
-                        Live Delivery Partner Map Tracking
-                      </h3>
-                    </div>
-                    {assignedWorker && (
-                      <span className="text-xs font-bold text-[#145A38] bg-[#EFF4E6] px-3 py-1 rounded-full border border-[#145A38]/20 flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5" />
-                        Agent: {assignedWorker.name} ({assignedWorker.vehicleType} • {assignedWorker.vehicleNumber})
-                      </span>
-                    )}
+              {/* LIVE GOOGLE MAPS DELIVERY & ROUTE TRACKER */}
+              <div className="mt-6 pt-2 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                    <h3 className="text-xs font-bold text-[#202320] uppercase tracking-wider">
+                      Google Maps Delivery Route & Pinned Location
+                    </h3>
                   </div>
-
-                  {/* Real Google Map Route Tracking */}
-                  <div className="relative mt-2">
-                    <DeliveryTrackingMap 
-                      order={activeOrder}
-                      storeAddress="Commercial Complex, MG Road, Trivandrum, Kerala 695001"
-                      deliveryPerson={assignedWorker}
-                    />
-                  </div>
+                  {assignedWorker && (
+                    <span className="text-xs font-bold text-[#145A38] bg-[#EFF4E6] px-3 py-1 rounded-full border border-[#145A38]/20 flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5" />
+                      Agent: {assignedWorker.name} ({assignedWorker.vehicleType} • {assignedWorker.vehicleNumber})
+                    </span>
+                  )}
                 </div>
-              )}
+
+                {/* Real Google Map Route Tracking */}
+                <div className="relative mt-2">
+                  <DeliveryTrackingMap
+                    order={activeOrder}
+                    storeAddress="Commercial Complex, MG Road, Trivandrum, Kerala 695001"
+                    deliveryPerson={assignedWorker}
+                  />
+                </div>
+              </div>
 
               {/* Progress Steps Timeline */}
               <div className="pt-8">
