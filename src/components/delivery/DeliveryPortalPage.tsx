@@ -1,440 +1,986 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { DeliveryAssignment, DeliveryPersonnel } from '../../types';
+import { Order, OrderStatus } from '../../types';
 import {
   Truck,
   MapPin,
   Phone,
-  Navigation,
   CheckCircle2,
-  AlertTriangle,
   Clock,
-  ShieldCheck,
-  Camera,
-  FileCheck,
+  Navigation,
+  Package,
+  ShieldAlert,
+  User as UserIcon,
+  ArrowLeft,
+  IndianRupee,
+  Compass,
+  Sparkles,
+  Check,
+  AlertCircle,
+  ExternalLink,
+  MessageCircle,
+  Store,
+  Settings,
   RefreshCw,
-  LogOut,
-  Radio,
-  User,
+  Box,
+  BadgeCheck,
 } from 'lucide-react';
 
-export const DeliveryPortalPage: React.FC = () => {
+interface DeliveryPortalPageProps {
+  embedded?: boolean;
+}
+
+export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded = false }) => {
   const {
-    deliveryAssignments,
-    deliveryPersonnel,
+    currentUser,
+    isAdmin,
+    isDriver,
+    currentDeliveryPerson,
+    allOrders,
     orders,
-    updateDeliveryAssignmentStatus,
-    updateDeliveryPersonLocation,
+    storeSettings,
+    updateOrderStatus,
+    updateDeliveryLocation,
+    updateDeliveryPersonnel,
+    assignOrderToDelivery,
     setActivePage,
     showToast,
   } = useStore();
 
-  const [activeWorkerId, setActiveWorkerId] = useState<string>(
-    localStorage.getItem('fs_v5_active_delivery_worker') || deliveryPersonnel[0]?.id || 'dp-1'
+  const [activeTab, setActiveTab] = useState<'active' | 'available' | 'completed' | 'settings'>('active');
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [sharingGpsOrderId, setSharingGpsOrderId] = useState<string | null>(null);
+  const [deliveryNotesMap, setDeliveryNotesMap] = useState<Record<string, string>>({});
+
+  // Driver settings form state
+  const [vehicleType, setVehicleType] = useState<'Bike' | 'Scooter' | 'Van' | 'Cycle'>(
+    currentDeliveryPerson?.vehicleType || 'Bike'
+  );
+  const [vehicleNumber, setVehicleNumber] = useState(currentDeliveryPerson?.vehicleNumber || '');
+  const [driverPhone, setDriverPhone] = useState(
+    currentDeliveryPerson?.phone || currentUser?.phone || ''
+  );
+  const [currentLocationText, setCurrentLocationText] = useState(
+    currentDeliveryPerson?.currentLocation || storeSettings?.storeCity || 'Trivandrum'
   );
 
-  const activeWorker: DeliveryPersonnel =
-    deliveryPersonnel.find((d) => d.id === activeWorkerId) || deliveryPersonnel[0];
-
-  const [isLocationSharing, setIsLocationSharing] = useState<boolean>(true);
-  const [selectedAssignment, setSelectedAssignment] = useState<DeliveryAssignment | null>(null);
-  const [otpInput, setOtpInput] = useState<string>('');
-  const [signatureName, setSignatureName] = useState<string>('');
-  const [failureReason, setFailureReason] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'assigned' | 'completed'>('assigned');
-
-  // Filter assignments for current logged-in worker
-  const myAssignments = deliveryAssignments.filter(
-    (a) => a.deliveryPersonId === activeWorker.id
-  );
-
-  const pendingJobs = myAssignments.filter((a) => a.status !== 'Delivered' && a.status !== 'Failed');
-  const completedJobs = myAssignments.filter((a) => a.status === 'Delivered' || a.status === 'Failed');
-
-  useEffect(() => {
-    if (pendingJobs.length > 0 && !selectedAssignment) {
-      setSelectedAssignment(pendingJobs[0]);
+  // Sync local form when currentDeliveryPerson updates
+  React.useEffect(() => {
+    if (currentDeliveryPerson) {
+      setVehicleType(currentDeliveryPerson.vehicleType || 'Bike');
+      setVehicleNumber(currentDeliveryPerson.vehicleNumber || '');
+      setDriverPhone(currentDeliveryPerson.phone || currentUser?.phone || '');
+      if (currentDeliveryPerson.currentLocation) {
+        setCurrentLocationText(currentDeliveryPerson.currentLocation);
+      }
     }
-  }, [deliveryAssignments]);
+  }, [currentDeliveryPerson, currentUser?.phone]);
 
-  // Simulation: Update location periodically when sharing is active
-  useEffect(() => {
-    if (!isLocationSharing || !activeWorker) return;
+  // Combine allOrders and orders safely
+  const combinedOrders = useMemo(() => {
+    const map = new Map<string, Order>();
+    (orders || []).forEach((o) => map.set(o.id, o));
+    (allOrders || []).forEach((o) => map.set(o.id, o));
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime()
+    );
+  }, [allOrders, orders]);
 
-    const interval = setInterval(() => {
-      // Small random movement around Trivandrum central if no coordinates
-      const baseLat = activeWorker.currentLat || 8.5241;
-      const baseLng = activeWorker.currentLng || 76.9366;
-      
-      const newLat = baseLat + (Math.random() - 0.5) * 0.001;
-      const newLng = baseLng + (Math.random() - 0.5) * 0.001;
-      
-      updateDeliveryPersonLocation(activeWorker.id, newLat, newLng);
-    }, 10000);
+  // Helper to check if an order is assigned to the current driver
+  const isOrderAssignedToMe = (order: Order) => {
+    if (!currentUser) return false;
+    const myId = currentDeliveryPerson?.id || `DRV-${currentUser.id.slice(0, 6).toUpperCase()}`;
+    const myEmail = (currentUser.email || '').toLowerCase().trim();
+    const myPhone = (currentDeliveryPerson?.phone || currentUser.phone || '').replace(/\D/g, '').slice(-10);
+    const orderPhone = (order.assignedDeliveryPhone || '').replace(/\D/g, '').slice(-10);
+    const orderName = (order.assignedDeliveryName || '').toLowerCase().trim();
+    const myName = (currentUser.name || '').toLowerCase().trim();
 
-    return () => clearInterval(interval);
-  }, [isLocationSharing, activeWorker, updateDeliveryPersonLocation]);
+    if (order.assignedDeliveryId && (order.assignedDeliveryId === myId || order.assignedDeliveryId === currentUser.id)) {
+      return true;
+    }
+    if (myPhone && orderPhone && myPhone === orderPhone) {
+      return true;
+    }
+    if (myName && orderName && myName === orderName) {
+      return true;
+    }
+    if (myEmail && order.assignedDeliveryId?.toLowerCase() === myEmail) {
+      return true;
+    }
+    return false;
+  };
 
-  const handleStatusChange = (
-    assignmentId: string,
-    newStatus: DeliveryAssignment['status'],
-    notes?: string
-  ) => {
-    updateDeliveryAssignmentStatus(assignmentId, newStatus, {
-      otpCode: otpInput,
-      signatureName: signatureName || activeWorker.name,
-      failureReason: failureReason,
-      completedAt: newStatus === 'Delivered' ? new Date().toISOString() : undefined,
+  // My Active Assigned Orders (not yet Delivered or Cancelled/Returned)
+  const myActiveOrders = useMemo(() => {
+    return combinedOrders.filter(
+      (o) =>
+        isOrderAssignedToMe(o) &&
+        !['Delivered', 'Cancelled', 'Returned'].includes(o.orderStatus)
+    );
+  }, [combinedOrders, currentDeliveryPerson, currentUser]);
+
+  // Unassigned Orders ready for dispatch (Confirmed / Processing / Packed / Shipped without a driver)
+  const unassignedReadyOrders = useMemo(() => {
+    return combinedOrders.filter(
+      (o) =>
+        !o.assignedDeliveryId &&
+        ['Pending', 'Confirmed', 'Processing', 'Packed', 'Shipped'].includes(o.orderStatus)
+    );
+  }, [combinedOrders]);
+
+  // My Completed Deliveries
+  const myCompletedOrders = useMemo(() => {
+    return combinedOrders.filter(
+      (o) => isOrderAssignedToMe(o) && o.orderStatus === 'Delivered'
+    );
+  }, [combinedOrders, currentDeliveryPerson, currentUser]);
+
+  // 1. Not Signed In Guard
+  if (!currentUser) {
+    return (
+      <div className="min-h-[65vh] flex items-center justify-center p-6 bg-[#FAFBF7]">
+        <div className="max-w-md w-full bg-white border border-[#E8E8E3] rounded-3xl p-8 text-center shadow-sm space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto">
+            <Truck className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-extrabold text-[#171717]">Sign In Required</h2>
+          <p className="text-xs text-[#6B6B6B] leading-relaxed">
+            Please sign in to your account first. Only users authorized as Drivers by the Store Administrator can access the Driver Portal through their Account Center.
+          </p>
+          <div className="flex justify-center gap-3 pt-2">
+            <button
+              onClick={() => setActivePage('login')}
+              className="px-5 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            >
+              Sign In to Account
+            </button>
+            <button
+              onClick={() => setActivePage('home')}
+              className="px-5 py-2.5 bg-[#F7F8F3] hover:bg-[#E8E8E3] text-[#171717] text-xs font-bold rounded-xl cursor-pointer transition-all"
+            >
+              Back to Store
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Non-Driver Strict Access Guard
+  if (!isDriver && !isAdmin) {
+    return (
+      <div className="min-h-[65vh] flex items-center justify-center p-6 bg-[#FAFBF7]">
+        <div className="max-w-md w-full bg-white border border-rose-200 rounded-3xl p-8 text-center shadow-sm space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
+            <ShieldAlert className="w-7 h-7" />
+          </div>
+          <span className="inline-block px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-wider">
+            Restricted Access
+          </span>
+          <h2 className="text-xl font-extrabold text-[#171717]">Authorized Drivers Only</h2>
+          <p className="text-xs text-[#6B6B6B] leading-relaxed">
+            Your account (<span className="font-bold text-[#171717]">{currentUser.email}</span>) does not have Driver Portal permissions. Only users granted Driver status by the Store Administrator can access the Driver Portal.
+          </p>
+          <div className="flex justify-center gap-3 pt-2">
+            <button
+              onClick={() => setActivePage('account')}
+              className="px-5 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            >
+              Return to Account Center
+            </button>
+            <button
+              onClick={() => setActivePage('home')}
+              className="px-5 py-2.5 bg-[#F7F8F3] hover:bg-[#E8E8E3] text-[#171717] text-xs font-bold rounded-xl cursor-pointer transition-all"
+            >
+              Back to Storefront
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const handleToggleDriverAvailability = (newStatus: 'Available' | 'On Delivery' | 'Offline') => {
+    if (!currentDeliveryPerson) return;
+    updateDeliveryPersonnel(currentDeliveryPerson.id, { status: newStatus });
+  };
+
+  const handleClaimOrder = async (order: Order) => {
+    if (!currentDeliveryPerson) return;
+    setUpdatingOrderId(order.id);
+    try {
+      await assignOrderToDelivery(order.id, currentDeliveryPerson.id);
+      setActiveTab('active');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const handleStepOrderStatus = async (order: Order, nextStatus: OrderStatus) => {
+    setUpdatingOrderId(order.id);
+    try {
+      const note = deliveryNotesMap[order.id]?.trim();
+      await updateOrderStatus(
+        order.id,
+        nextStatus,
+        note ||
+          (nextStatus === 'Packed'
+            ? `Order picked up at ${storeSettings.storeName || 'store'} by driver ${currentUser.name}`
+            : nextStatus === 'Out for Delivery'
+            ? `Driver ${currentUser.name} is on the way to deliver your order`
+            : nextStatus === 'Delivered'
+            ? `Delivered successfully by ${currentUser.name}${
+                order.paymentMethod === 'COD' ? ' (COD Payment Collected)' : ''
+              }`
+            : `Order updated to ${nextStatus}`)
+      );
+
+      if (nextStatus === 'Out for Delivery') {
+        await updateDeliveryLocation(order.id, {
+          lat: storeSettings.storeLat || 8.5241,
+          lng: storeSettings.storeLng || 76.9366,
+          address: `Dispatched from ${storeSettings.storeName || 'Fathima Stores'}, ${
+            storeSettings.storeAddress || 'Trivandrum'
+          }`,
+        });
+      }
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const handleShareLiveGps = (order: Order) => {
+    setSharingGpsOrderId(order.id);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = Number(pos.coords.latitude.toFixed(6));
+          const lng = Number(pos.coords.longitude.toFixed(6));
+          await updateDeliveryLocation(order.id, {
+            lat,
+            lng,
+            address: `Live GPS from Driver ${currentUser.name} (${currentLocationText})`,
+          });
+          if (currentDeliveryPerson) {
+            updateDeliveryPersonnel(currentDeliveryPerson.id, {
+              lat,
+              lng,
+              currentLocation: `GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+            });
+          }
+          setSharingGpsOrderId(null);
+        },
+        async () => {
+          // Fallback to store/city coordinates if browser blocks geolocation in iframe
+          const lat = Number(((storeSettings.storeLat || 8.5241) + (Math.random() - 0.5) * 0.01).toFixed(6));
+          const lng = Number(((storeSettings.storeLng || 76.9366) + (Math.random() - 0.5) * 0.01).toFixed(6));
+          await updateDeliveryLocation(order.id, {
+            lat,
+            lng,
+            address: `Driver ${currentUser.name} en route near ${order.shippingAddress?.area || order.shippingAddress?.city || 'customer location'}`,
+          });
+          setSharingGpsOrderId(null);
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
+      );
+    } else {
+      showToast('Geolocation is not supported by your browser.', 'error');
+      setSharingGpsOrderId(null);
+    }
+  };
+
+  const handleSaveDriverSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentDeliveryPerson) return;
+    updateDeliveryPersonnel(currentDeliveryPerson.id, {
+      vehicleType,
+      vehicleNumber: vehicleNumber.trim() || 'KL-01-DRV',
+      phone: driverPhone.trim() || currentUser.phone,
+      currentLocation: currentLocationText.trim() || storeSettings.storeCity || 'Trivandrum',
     });
-    showToast(`Order status updated to ${newStatus.replace(/_/g, ' ')}`, 'success');
-    setOtpInput('');
-    setSignatureName('');
-    setFailureReason('');
   };
 
-  const handleOpenGoogleMapsNav = (destinationAddress: string) => {
-    const encoded = encodeURIComponent(destinationAddress);
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
+  const getStoreGoogleMapsUrl = () => {
+    if (storeSettings.googleMapsLink && storeSettings.googleMapsLink.startsWith('http')) {
+      return storeSettings.googleMapsLink;
+    }
+    const lat = storeSettings.storeLat || 8.5241;
+    const lng = storeSettings.storeLng || 76.9366;
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   };
+
+  const getCustomerDirectionsUrl = (order: Order) => {
+    const storeLat = storeSettings.storeLat || 8.5241;
+    const storeLng = storeSettings.storeLng || 76.9366;
+    const addr = order.shippingAddress;
+    if (addr?.lat && addr?.lng) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${storeLat},${storeLng}&destination=${addr.lat},${addr.lng}&travelmode=driving`;
+    }
+    const destinationQuery = encodeURIComponent(
+      [addr?.house, addr?.street, addr?.area, addr?.city, addr?.state, addr?.pinCode]
+        .filter(Boolean)
+        .join(', ')
+    );
+    return `https://www.google.com/maps/dir/?api=1&origin=${storeLat},${storeLng}&destination=${destinationQuery}&travelmode=driving`;
+  };
+
+  const totalEarnings = useMemo(() => {
+    return myCompletedOrders.reduce((sum, o) => sum + Math.max(40, Math.round((o.total || 0) * 0.08)), 0);
+  }, [myCompletedOrders]);
+
+  const codCollectedTotal = useMemo(() => {
+    return myCompletedOrders
+      .filter((o) => o.paymentMethod === 'COD')
+      .reduce((sum, o) => sum + (o.total || 0), 0);
+  }, [myCompletedOrders]);
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#202320] py-6 sm:py-10 text-left">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        
-        {/* Top App Bar Header */}
-        <div className="bg-white border border-[#E9E5DE] rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#145A38] text-white flex items-center justify-center font-bold text-lg shadow-2xs">
-              <Truck className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-black tracking-tight text-[#202320]">{activeWorker.name}</h1>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#145A38]/10 text-[#145A38]">
-                  {activeWorker.vehicleType} • {activeWorker.vehicleNumber}
-                </span>
+    <div className={embedded ? 'space-y-6' : 'min-h-screen bg-[#FAFBF7] py-8'}>
+      <div className={embedded ? '' : 'max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'}>
+        {/* Top Driver Identity & Live Shift Banner */}
+        <div className="bg-gradient-to-br from-[#1B2412] via-[#243018] to-[#2F3E1E] text-white rounded-3xl p-6 sm:p-8 shadow-md">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#71883F] flex items-center justify-center text-white font-extrabold text-xl shadow-inner shrink-0 border border-white/15">
+                {currentUser.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt={currentUser.name}
+                    className="w-full h-full object-cover rounded-2xl"
+                  />
+                ) : (
+                  <Truck className="w-7 h-7" />
+                )}
               </div>
-              <p className="text-xs text-[#77766F]">
-                Fathima Express Delivery Console • Rating ★ {activeWorker.rating} ({activeWorker.totalDeliveries} Completed)
-              </p>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[10px] font-extrabold uppercase tracking-wider">
+                    <BadgeCheck className="w-3.5 h-3.5" /> Official Store Driver
+                  </span>
+                  <span className="text-[11px] text-white/70 font-mono">
+                    ID: {currentDeliveryPerson?.id || `DRV-${currentUser.id.slice(0, 6).toUpperCase()}`}
+                  </span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight mt-1">
+                  {currentUser.name} — Driver Dispatch Console
+                </h1>
+                <p className="text-xs text-white/75 mt-0.5">
+                  {currentDeliveryPerson?.vehicleType || 'Bike'} ({currentDeliveryPerson?.vehicleNumber || 'KL-01-DRV'}) · Hub:{' '}
+                  {storeSettings.storeName || 'Fathima Stores'} ({storeSettings.storeCity || 'Trivandrum'})
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Live GPS Broadcast Toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsLocationSharing(!isLocationSharing);
-                showToast(`Live GPS sharing ${!isLocationSharing ? 'Activated' : 'Paused'}`, 'info');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all cursor-pointer ${
-                isLocationSharing
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-2 ring-emerald-500/20'
-                  : 'bg-neutral-100 text-neutral-600 border-neutral-300'
-              }`}
-            >
-              <Radio className={`w-4 h-4 ${isLocationSharing ? 'animate-pulse text-emerald-600' : ''}`} />
-              <span>{isLocationSharing ? 'GPS Broadcasting Live' : 'GPS Offline'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActivePage('delivery-login')}
-              className="p-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors cursor-pointer"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-3 border-b border-[#E9E5DE] pb-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('assigned')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'assigned'
-                ? 'bg-[#145A38] text-white shadow-xs'
-                : 'bg-white text-[#77766F] hover:text-[#202320] border border-[#E9E5DE]'
-            }`}
-          >
-            Active Deliveries ({pendingJobs.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('completed')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'completed'
-                ? 'bg-[#145A38] text-white shadow-xs'
-                : 'bg-white text-[#77766F] hover:text-[#202320] border border-[#E9E5DE]'
-            }`}
-          >
-            Completed History ({completedJobs.length})
-          </button>
-        </div>
-
-        {/* Main Content Area */}
-        {activeTab === 'assigned' ? (
-          pendingJobs.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Left Jobs List */}
-              <div className="lg:col-span-5 space-y-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#77766F] block mb-2">
-                  Assigned Route Jobs
-                </span>
-
-                {pendingJobs.map((job) => {
-                  const isSelected = selectedAssignment?.id === job.id;
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Shift Status Switcher */}
+              <div className="inline-flex items-center bg-black/30 p-1 rounded-xl border border-white/10">
+                {(['Available', 'On Delivery', 'Offline'] as const).map((st) => {
+                  const active = (currentDeliveryPerson?.status || 'Available') === st;
                   return (
-                    <div
-                      key={job.id}
-                      onClick={() => setSelectedAssignment(job)}
-                      className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
-                        isSelected
-                          ? 'bg-white border-[#145A38] ring-2 ring-[#145A38]/20 shadow-md'
-                          : 'bg-white/80 border-[#E9E5DE] hover:border-[#145A38]'
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => handleToggleDriverAvailability(st)}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        active
+                          ? st === 'Available'
+                            ? 'bg-emerald-500 text-white shadow-xs'
+                            : st === 'On Delivery'
+                            ? 'bg-amber-500 text-white shadow-xs'
+                            : 'bg-neutral-600 text-white'
+                          : 'text-white/70 hover:text-white'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-mono font-bold text-[#145A38] bg-[#145A38]/10 px-2.5 py-0.5 rounded-md">
-                          #{job.orderId}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                          {job.status.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-
-                      <p className="font-extrabold text-sm text-[#202320] line-clamp-1">
-                        {job.dropAddress.fullName}
-                      </p>
-                      <p className="text-xs text-[#77766F] line-clamp-2 mt-1">
-                        {job.dropAddress.house}, {job.dropAddress.street}, {job.dropAddress.city} - {job.dropAddress.pinCode}
-                      </p>
-
-                      <div className="mt-3 pt-2 border-t border-[#E9E5DE] flex items-center justify-between text-[11px] text-[#77766F]">
-                        <span>Assigned {new Date(job.assignedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <span className="font-bold text-[#145A38]">ETA ~15 mins</span>
-                      </div>
-                    </div>
+                      {st}
+                    </button>
                   );
                 })}
               </div>
 
-              {/* Right Detail Console */}
-              {selectedAssignment && (
-                <div className="lg:col-span-7 bg-white border border-[#E9E5DE] rounded-3xl p-6 shadow-sm space-y-6">
-                  
-                  {/* Job Header */}
-                  <div className="flex items-center justify-between pb-4 border-b border-[#E9E5DE]">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono font-bold text-[#145A38] bg-[#145A38]/10 px-2.5 py-1 rounded-lg">
-                          Order #{selectedAssignment.orderId}
-                        </span>
-                        <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          {selectedAssignment.status.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-black text-[#202320] mt-2">
-                        Customer: {selectedAssignment.dropAddress.fullName}
-                      </h3>
-                    </div>
-
-                    <a
-                      href={`tel:${selectedAssignment.dropAddress.phone}`}
-                      className="px-3.5 py-2 bg-[#145A38] hover:bg-[#0E4228] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors shrink-0"
-                    >
-                      <Phone className="w-4 h-4" />
-                      <span>Call Customer</span>
-                    </a>
-                  </div>
-
-                  {/* Locations Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Pickup Address */}
-                    <div className="bg-[#FAF7F2] p-4 rounded-2xl border border-[#E9E5DE] space-y-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#77766F]">
-                        Pickup Location
-                      </span>
-                      <p className="font-bold text-xs text-[#202320]">Trivandrum Central Hub</p>
-                      <p className="text-[11px] text-[#77766F]">{selectedAssignment.pickupAddress}</p>
-                    </div>
-
-                    {/* Delivery Destination */}
-                    <div className="bg-[#FAF7F2] p-4 rounded-2xl border border-[#E9E5DE] space-y-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#77766F]">
-                        Delivery Destination
-                      </span>
-                      <p className="font-bold text-xs text-[#202320]">{selectedAssignment.dropAddress.fullName}</p>
-                      <p className="text-[11px] text-[#77766F]">
-                        {selectedAssignment.dropAddress.house}, {selectedAssignment.dropAddress.street}, {selectedAssignment.dropAddress.city} - {selectedAssignment.dropAddress.pinCode}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Navigation Action */}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleOpenGoogleMapsNav(
-                        `${selectedAssignment.dropAddress.house}, ${selectedAssignment.dropAddress.street}, ${selectedAssignment.dropAddress.city} ${selectedAssignment.dropAddress.pinCode}`
-                      )
-                    }
-                    className="w-full py-3 bg-[#145A38] hover:bg-[#0E4228] text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Navigation className="w-4 h-4" />
-                    <span>Open Turn-by-Turn Route in Google Maps</span>
-                  </button>
-
-                  {/* Status Progression Workflow Controls */}
-                  <div className="space-y-4 pt-4 border-t border-[#E9E5DE]">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-[#202320] block">
-                      Update Fulfillment Status
-                    </span>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {[
-                        { id: 'Accepted', label: '1. Accept' },
-                        { id: 'Arrived_at_Pickup', label: '2. At Hub' },
-                        { id: 'Picked_Up', label: '3. Picked Up' },
-                        { id: 'Out_for_Delivery', label: '4. Out for Delivery' },
-                      ].map((st) => (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => handleStatusChange(selectedAssignment.id, st.id as any)}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                            selectedAssignment.status === st.id
-                              ? 'bg-[#145A38] text-white border-[#145A38] shadow-2xs'
-                              : 'bg-white border-[#E9E5DE] text-[#202320] hover:border-[#145A38]'
-                          }`}
-                        >
-                          {st.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Delivery Completion & OTP Box */}
-                    <div className="bg-[#EFF4E6] border border-[#145A38]/30 rounded-2xl p-4 space-y-3">
-                      <div className="flex items-center gap-2 text-[#145A38] font-bold text-xs">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Complete Delivery & Verify OTP</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[11px] font-bold text-[#202320] block mb-1">Customer OTP Code</label>
-                          <input
-                            type="text"
-                            value={otpInput}
-                            onChange={(e) => setOtpInput(e.target.value)}
-                            placeholder="Enter 4-digit OTP"
-                            className="w-full px-3 py-1.5 bg-white border border-[#E9E5DE] rounded-lg text-xs font-mono font-bold"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] font-bold text-[#202320] block mb-1">Receiver Name / Signature</label>
-                          <input
-                            type="text"
-                            value={signatureName}
-                            onChange={(e) => setSignatureName(e.target.value)}
-                            placeholder="e.g. Received by Self / Anjali"
-                            className="w-full px-3 py-1.5 bg-white border border-[#E9E5DE] rounded-lg text-xs font-bold"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleStatusChange(selectedAssignment.id, 'Delivered')}
-                        className="w-full py-2.5 bg-[#145A38] hover:bg-[#0E4228] text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <FileCheck className="w-4 h-4" />
-                        <span>Mark Order Delivered Successfully</span>
-                      </button>
-                    </div>
-
-                    {/* Failed Reattempt Box */}
-                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 space-y-2">
-                      <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
-                        <AlertTriangle className="w-4 h-4" />
-                        Record Delivery Exception / Reattempt
-                      </span>
-
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={failureReason}
-                          onChange={(e) => setFailureReason(e.target.value)}
-                          placeholder="e.g. Customer unavailable / Address closed"
-                          className="flex-1 px-3 py-1.5 bg-white border border-rose-200 rounded-lg text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(selectedAssignment.id, 'Failed')}
-                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg cursor-pointer shrink-0"
-                        >
-                          Record Failed
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
+              {!embedded && (
+                <button
+                  onClick={() => setActivePage('account')}
+                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> Account Center
+                </button>
               )}
             </div>
-          ) : (
-            <div className="bg-white border border-[#E9E5DE] rounded-3xl p-12 text-center space-y-3">
-              <CheckCircle2 className="w-12 h-12 text-[#145A38] mx-auto" />
-              <h3 className="text-lg font-bold text-[#202320]">No Active Assigned Deliveries</h3>
-              <p className="text-xs text-[#77766F] max-w-sm mx-auto">
-                You have completed all assigned routes for today! Stand by for new order dispatches from Trivandrum Store Manager.
+          </div>
+
+          {/* 4 Live Driver KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/10">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5">
+              <span className="text-[11px] text-white/70 block">Active Assignments</span>
+              <span className="text-2xl font-extrabold tabular-nums mt-0.5 block text-white">
+                {myActiveOrders.length}
+              </span>
+              <span className="text-[10px] text-emerald-300 font-semibold">In progress</span>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5">
+              <span className="text-[11px] text-white/70 block">Ready at Store</span>
+              <span className="text-2xl font-extrabold tabular-nums mt-0.5 block text-amber-300">
+                {unassignedReadyOrders.length}
+              </span>
+              <span className="text-[10px] text-white/60">Available to claim</span>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5">
+              <span className="text-[11px] text-white/70 block">Completed Trips</span>
+              <span className="text-2xl font-extrabold tabular-nums mt-0.5 block text-white">
+                {myCompletedOrders.length}
+              </span>
+              <span className="text-[10px] text-emerald-300 font-semibold">100% verified</span>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5">
+              <span className="text-[11px] text-white/70 block">Driver Earnings / COD</span>
+              <span className="text-xl font-extrabold tabular-nums mt-0.5 block text-emerald-300">
+                ₹{totalEarnings.toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-white/60">
+                COD Collected: ₹{codCollectedTotal.toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Store Pickup Hub Banner (Dynamic from Admin Store Location Settings) */}
+        <div className="bg-white border border-[#E8E8E3] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center shrink-0 mt-0.5">
+              <Store className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#71883F] bg-[#EFF4E6] px-2 py-0.5 rounded-full">
+                  Store Pickup Hub
+                </span>
+                <span className="text-xs font-bold text-[#171717]">
+                  {storeSettings.storeName || 'Fathima Stores'}
+                </span>
+              </div>
+              <p className="text-xs text-[#6B6B6B] mt-1">
+                {storeSettings.storeAddress || 'Fathima Complex, College Road'}
+                {storeSettings.storeCity ? `, ${storeSettings.storeCity}` : ''}
+                {storeSettings.storeState ? `, ${storeSettings.storeState}` : ''}
+                {storeSettings.storePinCode ? ` - ${storeSettings.storePinCode}` : ''}
+              </p>
+              <p className="text-[11px] text-[#6B6B6B] mt-0.5">
+                Dispatch Desk: <span className="font-semibold text-[#171717]">{storeSettings.contactPhone || '+91 98450 12345'}</span> · Radius: {storeSettings.deliveryRadiusKm || 15} km
               </p>
             </div>
-          )
-        ) : (
-          /* Completed History Tab */
-          <div className="bg-white border border-[#E9E5DE] rounded-3xl p-6 shadow-sm divide-y divide-[#E9E5DE]">
-            {completedJobs.length > 0 ? (
-              completedJobs.map((job) => (
-                <div key={job.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-mono font-bold text-[#145A38]">#{job.orderId}</span>
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                          job.status === 'Delivered'
-                            ? 'bg-emerald-50 text-emerald-800'
-                            : 'bg-rose-50 text-rose-800'
-                        }`}
-                      >
-                        {job.status}
-                      </span>
-                    </div>
-                    <p className="font-bold text-xs text-[#202320]">{job.dropAddress.fullName}</p>
-                    <p className="text-xs text-[#77766F]">
-                      {job.dropAddress.house}, {job.dropAddress.city}
-                    </p>
-                  </div>
+          </div>
 
-                  <div className="text-right text-xs text-[#77766F]">
-                    <p className="font-mono font-bold text-[#202320]">
-                      Completed {job.completedAt ? new Date(job.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently'}
-                    </p>
-                    {job.signatureName && <p className="text-[11px]">Signed by: {job.signatureName}</p>}
-                  </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={`tel:${storeSettings.contactPhone || '+919845012345'}`}
+              className="px-3.5 py-2 rounded-xl border border-[#E8E8E3] hover:bg-[#F7F8F3] text-xs font-bold text-[#171717] flex items-center gap-1.5 transition-colors"
+            >
+              <Phone className="w-3.5 h-3.5 text-[#71883F]" /> Call Hub
+            </a>
+            <a
+              href={getStoreGoogleMapsUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 rounded-xl bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+            >
+              <Navigation className="w-3.5 h-3.5" /> Navigate to Store
+            </a>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#E8E8E3] pb-3">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'active'
+                ? 'bg-[#71883F] text-white shadow-xs'
+                : 'bg-white border border-[#E8E8E3] text-[#171717] hover:bg-[#F7F8F3]'
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            My Active Deliveries
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'active' ? 'bg-white/20 text-white' : 'bg-[#EFF4E6] text-[#71883F]'
+              }`}
+            >
+              {myActiveOrders.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('available')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'available'
+                ? 'bg-[#71883F] text-white shadow-xs'
+                : 'bg-white border border-[#E8E8E3] text-[#171717] hover:bg-[#F7F8F3]'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            Ready for Pickup
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'available' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {unassignedReadyOrders.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('completed')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'completed'
+                ? 'bg-[#71883F] text-white shadow-xs'
+                : 'bg-white border border-[#E8E8E3] text-[#171717] hover:bg-[#F7F8F3]'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Completed History ({myCompletedOrders.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'settings'
+                ? 'bg-[#71883F] text-white shadow-xs'
+                : 'bg-white border border-[#E8E8E3] text-[#171717] hover:bg-[#F7F8F3]'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            Vehicle & Profile
+          </button>
+        </div>
+
+        {/* TAB 1: MY ACTIVE DELIVERIES */}
+        {activeTab === 'active' && (
+          <div className="space-y-4">
+            {myActiveOrders.length === 0 ? (
+              <div className="bg-white border border-[#E8E8E3] rounded-3xl p-10 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto">
+                  <Truck className="w-6 h-6" />
                 </div>
-              ))
+                <h3 className="text-base font-extrabold text-[#171717]">No Active Deliveries Assigned Right Now</h3>
+                <p className="text-xs text-[#6B6B6B] max-w-md mx-auto">
+                  When the store administrator assigns an order to you—or when you claim a ready order from the pickup queue—it will appear here with turn-by-turn customer navigation.
+                </p>
+                {unassignedReadyOrders.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab('available')}
+                    className="px-4 py-2 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
+                  >
+                    View {unassignedReadyOrders.length} Ready Order{unassignedReadyOrders.length > 1 ? 's' : ''} at Store →
+                  </button>
+                )}
+              </div>
             ) : (
-              <p className="py-8 text-center text-xs text-[#77766F]">No completed delivery logs yet.</p>
+              myActiveOrders.map((order) => {
+                const isUpdating = updatingOrderId === order.id;
+                const isSharingGps = sharingGpsOrderId === order.id;
+                const customerPhoneClean = (order.shippingAddress?.phone || '').replace(/\D/g, '');
+                const whatsappHref = customerPhoneClean
+                  ? `https://wa.me/${customerPhoneClean.startsWith('91') ? customerPhoneClean : `91${customerPhoneClean}`}?text=${encodeURIComponent(
+                      `Hello ${order.shippingAddress?.fullName || 'Customer'}, I am ${currentUser.name}, your delivery partner from ${
+                        storeSettings.storeName || 'Fathima Stores'
+                      } for Order #${order.id} (Total: ₹${order.total}).`
+                    )}`
+                  : '#';
+
+                return (
+                  <div
+                    key={order.id}
+                    className="bg-white border border-[#E8E8E3] rounded-3xl p-6 shadow-xs space-y-5"
+                  >
+                    {/* Order Top Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#E8E8E3]">
+                      <div className="flex items-center gap-3">
+                        <span className="px-3 py-1 rounded-xl bg-[#EFF4E6] text-[#71883F] font-mono text-xs font-extrabold">
+                          #{order.id}
+                        </span>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                            order.orderStatus === 'Out for Delivery'
+                              ? 'bg-sky-50 text-sky-700 border-sky-200'
+                              : order.orderStatus === 'Packed'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {order.orderStatus}
+                        </span>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                            order.paymentMethod === 'COD'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          {order.paymentMethod === 'COD'
+                            ? `Collect Cash ₹${order.total}`
+                            : `Prepaid (${order.paymentMethod})`}
+                        </span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-xs text-[#6B6B6B] block">Order Total</span>
+                        <span className="text-lg font-extrabold text-[#171717] tabular-nums">
+                          ₹{order.total.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Customer & Drop-off Details */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                      <div className="lg:col-span-7 space-y-3">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B6B] block">
+                          Customer Drop-Off Address
+                        </span>
+                        <div className="p-4 rounded-2xl bg-[#FAFBF7] border border-[#E8E8E3] space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-extrabold text-[#171717]">
+                              {order.shippingAddress?.fullName || 'Customer'}
+                            </h4>
+                            <span className="text-xs font-bold text-[#71883F]">
+                              {order.shippingAddress?.phone}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#171717] leading-relaxed">
+                            {[
+                              order.shippingAddress?.house,
+                              order.shippingAddress?.street,
+                              order.shippingAddress?.area,
+                              order.shippingAddress?.city,
+                              order.shippingAddress?.state,
+                            ]
+                              .filter(Boolean)
+                              .join(', ')}{' '}
+                            — <span className="font-bold">{order.shippingAddress?.pinCode}</span>
+                          </p>
+                          {order.deliveryLocation?.address && (
+                            <p className="text-[11px] text-emerald-700 font-semibold pt-1 flex items-center gap-1">
+                              <Compass className="w-3.5 h-3.5" /> Last GPS Checkpoint: {order.deliveryLocation.address}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Quick Action Buttons: Navigate, Call, WhatsApp, Share GPS */}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <a
+                            href={getCustomerDirectionsUrl(order)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3.5 py-2 rounded-xl bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all"
+                          >
+                            <Navigation className="w-3.5 h-3.5" /> Navigate on Google Maps
+                          </a>
+
+                          {order.shippingAddress?.phone && (
+                            <a
+                              href={`tel:${order.shippingAddress.phone}`}
+                              className="px-3.5 py-2 rounded-xl bg-white border border-[#E8E8E3] hover:bg-[#F7F8F3] text-[#171717] text-xs font-bold flex items-center gap-1.5 transition-all"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-[#71883F]" /> Call Customer
+                            </a>
+                          )}
+
+                          {customerPhoneClean && (
+                            <a
+                              href={whatsappHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center gap-1.5 transition-all"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                            </a>
+                          )}
+
+                          <button
+                            type="button"
+                            disabled={isSharingGps}
+                            onClick={() => handleShareLiveGps(order)}
+                            className="px-3.5 py-2 rounded-xl bg-sky-50 border border-sky-200 hover:bg-sky-100 text-sky-800 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            <Compass className={`w-3.5 h-3.5 ${isSharingGps ? 'animate-spin' : ''}`} />
+                            {isSharingGps ? 'Updating GPS...' : 'Broadcast Live GPS'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Order Package Items & Driver Status Progression */}
+                      <div className="lg:col-span-5 flex flex-col justify-between bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-4 space-y-4">
+                        <div>
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B6B] block mb-2">
+                            Package Items ({order.items?.length || 0})
+                          </span>
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                            {(order.items || []).map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-xs">
+                                <span className="text-[#171717] font-medium truncate max-w-[200px]">
+                                  {item.quantity}x {item.name}
+                                </span>
+                                <span className="font-bold text-[#171717] tabular-nums">
+                                  ₹{(item.discountPrice || item.price) * item.quantity}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Optional Driver Note */}
+                        <div>
+                          <input
+                            type="text"
+                            value={deliveryNotesMap[order.id] || ''}
+                            onChange={(e) =>
+                              setDeliveryNotesMap((prev) => ({ ...prev, [order.id]: e.target.value }))
+                            }
+                            placeholder="Optional delivery note (e.g. Left at reception)"
+                            className="w-full px-3 py-2 text-xs bg-white border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F]"
+                          />
+                        </div>
+
+                        {/* Workflow Action Buttons */}
+                        <div className="space-y-2 pt-1">
+                          {['Pending', 'Confirmed', 'Processing'].includes(order.orderStatus) && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleStepOrderStatus(order, 'Packed')}
+                              className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white text-xs font-extrabold rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                            >
+                              <Box className="w-4 h-4" />
+                              {isUpdating ? 'Updating...' : '1. Confirm Store Pickup & Pack'}
+                            </button>
+                          )}
+
+                          {['Pending', 'Confirmed', 'Processing', 'Packed', 'Shipped'].includes(
+                            order.orderStatus
+                          ) && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleStepOrderStatus(order, 'Out for Delivery')}
+                              className="w-full py-2.5 px-4 bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                            >
+                              <Truck className="w-4 h-4" />
+                              {isUpdating ? 'Updating...' : '2. Start Trip (Out for Delivery)'}
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            disabled={isUpdating}
+                            onClick={() => handleStepOrderStatus(order, 'Delivered')}
+                            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            {isUpdating
+                              ? 'Completing Delivery...'
+                              : order.paymentMethod === 'COD'
+                              ? `Collect ₹${order.total} Cash & Mark Delivered`
+                              : 'Confirm Handover & Mark Delivered'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         )}
 
+        {/* TAB 2: READY FOR PICKUP AT STORE (UNASSIGNED ORDERS) */}
+        {activeTab === 'available' && (
+          <div className="space-y-4">
+            {unassignedReadyOrders.length === 0 ? (
+              <div className="bg-white border border-[#E8E8E3] rounded-3xl p-10 text-center space-y-2">
+                <Package className="w-8 h-8 text-[#71883F] mx-auto" />
+                <h3 className="text-base font-extrabold text-[#171717]">No Unassigned Orders Waiting</h3>
+                <p className="text-xs text-[#6B6B6B]">
+                  All current store orders have been assigned to drivers or fulfilled.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {unassignedReadyOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="bg-white border border-[#E8E8E3] rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-2xs"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-1 rounded-lg bg-[#EFF4E6] text-[#71883F] font-mono text-xs font-bold">
+                          #{order.id}
+                        </span>
+                        <span className="text-xs font-extrabold text-[#171717]">
+                          ₹{order.total.toLocaleString('en-IN')} ({order.paymentMethod})
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-[#171717]">
+                        {order.shippingAddress?.fullName} — {order.shippingAddress?.city}
+                      </h4>
+                      <p className="text-xs text-[#6B6B6B]">
+                        {order.shippingAddress?.house}, {order.shippingAddress?.street},{' '}
+                        {order.shippingAddress?.area} ({order.shippingAddress?.pinCode})
+                      </p>
+                      <p className="text-[11px] text-[#6B6B6B]">
+                        {order.items?.length || 0} items · Status: <span className="font-semibold text-[#171717]">{order.orderStatus}</span>
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={updatingOrderId === order.id}
+                      onClick={() => handleClaimOrder(order)}
+                      className="w-full py-2.5 px-4 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      <Truck className="w-4 h-4" />
+                      {updatingOrderId === order.id ? 'Assigning to You...' : 'Accept & Claim Delivery'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: COMPLETED DELIVERIES HISTORY */}
+        {activeTab === 'completed' && (
+          <div className="bg-white border border-[#E8E8E3] rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-[#171717]">Completed Deliveries</h3>
+                <p className="text-xs text-[#6B6B6B]">
+                  Verified handovers completed by {currentUser.name}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[11px] text-[#6B6B6B] block">Estimated Trip Payouts</span>
+                <span className="text-lg font-extrabold text-[#71883F]">
+                  ₹{totalEarnings.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            {myCompletedOrders.length === 0 ? (
+              <p className="text-xs text-[#6B6B6B] py-6 text-center">
+                No completed deliveries recorded yet.
+              </p>
+            ) : (
+              <div className="divide-y divide-[#E8E8E3]">
+                {myCompletedOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-[#171717]">#{order.id}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                          Delivered
+                        </span>
+                        <span className="text-[#6B6B6B]">{order.date}</span>
+                      </div>
+                      <p className="text-[#6B6B6B] mt-0.5">
+                        {order.shippingAddress?.fullName} · {order.shippingAddress?.area || order.shippingAddress?.city} ({order.shippingAddress?.pinCode})
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <span className="text-[#6B6B6B] block text-[10px]">Order Value</span>
+                        <span className="font-bold text-[#171717]">₹{order.total}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[#6B6B6B] block text-[10px]">Trip Fee</span>
+                        <span className="font-extrabold text-emerald-700">
+                          +₹{Math.max(40, Math.round((order.total || 0) * 0.08))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: DRIVER VEHICLE & PROFILE SETTINGS */}
+        {activeTab === 'settings' && (
+          <div className="bg-white border border-[#E8E8E3] rounded-3xl p-6 max-w-xl space-y-5">
+            <div>
+              <h3 className="text-base font-extrabold text-[#171717]">Driver Vehicle & Dispatch Profile</h3>
+              <p className="text-xs text-[#6B6B6B]">
+                Keep your vehicle registration and contact phone updated for customer tracking alerts.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveDriverSettings} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="font-bold text-[#171717] block mb-1">Vehicle Type</label>
+                  <select
+                    value={vehicleType}
+                    onChange={(e) => setVehicleType(e.target.value as any)}
+                    className="w-full px-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F]"
+                  >
+                    <option value="Bike">Motorcycle / Bike</option>
+                    <option value="Scooter">Scooter / EV</option>
+                    <option value="Van">Delivery Van</option>
+                    <option value="Cycle">Bicycle</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#171717] block mb-1">Vehicle Plate Number</label>
+                  <input
+                    type="text"
+                    value={vehicleNumber}
+                    onChange={(e) => setVehicleNumber(e.target.value)}
+                    placeholder="e.g. KL-01-AB-1234"
+                    className="w-full px-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="font-bold text-[#171717] block mb-1">Driver Mobile Number</label>
+                  <input
+                    type="tel"
+                    value={driverPhone}
+                    onChange={(e) => setDriverPhone(e.target.value)}
+                    placeholder="+91 98450 12345"
+                    className="w-full px-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F]"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#171717] block mb-1">Current Zone / Standby Area</label>
+                  <input
+                    type="text"
+                    value={currentLocationText}
+                    onChange={(e) => setCurrentLocationText(e.target.value)}
+                    placeholder="e.g. College Road, Trivandrum"
+                    className="w-full px-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
+              >
+                Save Driver Profile
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

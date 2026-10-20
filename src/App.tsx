@@ -34,6 +34,7 @@ import { WhatsAppButton } from './components/common/WhatsAppButton';
 import { LiveChatWidget } from './components/common/LiveChatWidget';
 
 import { ProfilePage } from './components/account/ProfilePage';
+import { DeliveryPortalPage } from './components/delivery/DeliveryPortalPage';
 import { ForceSignInModal } from './components/common/ForceSignInModal';
 import { UnauthorizedDomainModal } from './components/common/UnauthorizedDomainModal';
 import { CompareProductsBar } from './components/shop/CompareProductsBar';
@@ -78,6 +79,8 @@ const MainContent: React.FC = () => {
         setActivePage('profile');
       } else if (hash === 'wishlist') {
         setActivePage('wishlist');
+      } else if (hash === 'delivery-portal') {
+        setActivePage('delivery-portal');
       } else if (hash === 'order-tracking' || hash === 'track-order' || hash === 'track') {
         setActivePage('order-tracking');
       }
@@ -195,6 +198,7 @@ const MainContent: React.FC = () => {
         {activePage === 'about' && <AboutPage />}
         {activePage === 'contact' && <ContactPage />}
         {activePage === 'order-tracking' && <OrderTrackingPage />}
+        {activePage === 'delivery-portal' && <DeliveryPortalPage />}
         {activePage === 'login' && <LoginPage />}
         {activePage === 'register' && <RegisterPage />}
       </main>

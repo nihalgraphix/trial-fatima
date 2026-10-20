@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Truck,
 } from 'lucide-react';
 
 export interface AdminCustomerRecord {
@@ -30,6 +31,7 @@ export interface AdminCustomerRecord {
   phone: string;
   photoURL?: string;
   role?: string;
+  isDriver?: boolean;
   city?: string;
   state?: string;
   bio?: string;
@@ -59,8 +61,15 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
   onViewInvoice,
   onCreateOrder,
 }) => {
-  const { toggleCustomerVIP, grantCustomerAdmin, deleteCustomer } = useStore();
+  const { toggleCustomerVIP, grantCustomerAdmin, grantCustomerDriver, storeSettings, deleteCustomer } = useStore();
   const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'products' | 'profile'>('orders');
+  const isCustomerDriver =
+    Boolean(customer.isDriver) ||
+    customer.role === 'delivery' ||
+    (storeSettings?.customDriverEmails || []).some(
+      (e) => e.toLowerCase().trim() === (customer.email || '').toLowerCase().trim()
+    ) ||
+    (storeSettings?.customDriverIds || []).includes(customer.id);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -179,6 +188,12 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
                     <ShieldCheck className="w-3 h-3" /> {customer.role}
                   </span>
                 )}
+
+                {isCustomerDriver && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase tracking-wider">
+                    <Truck className="w-3 h-3" /> Authorized Driver
+                  </span>
+                )}
               </div>
 
               {/* Contact info snippets */}
@@ -236,6 +251,19 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
                 >
                   <Crown className="w-3.5 h-3.5 fill-current" />
                   <span>{customer.status === 'VIP' ? 'Remove VIP Status' : 'Make VIP Customer'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => grantCustomerDriver(customer.email || customer.id, !isCustomerDriver)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                    isCustomerDriver
+                      ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200 border border-emerald-300'
+                      : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>{isCustomerDriver ? 'Revoke Driver Access' : 'Make Driver (Grant Driver Portal)'}</span>
                 </button>
 
                 <button

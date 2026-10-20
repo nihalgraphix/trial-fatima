@@ -55,16 +55,21 @@ export const Footer: React.FC = () => {
 
             <div className="space-y-2 text-xs text-[#6B6B6B] pt-1">
               <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-[#71883F]" />
-                <span>+91 98450 12345 / 0471 2345678</span>
+                <Phone className="w-4 h-4 text-[#71883F] shrink-0" />
+                <span>{storeSettings?.contactPhone || '+91 98450 12345'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-[#71883F]" />
-                <span>care@fathimastores.com</span>
+                <Mail className="w-4 h-4 text-[#71883F] shrink-0" />
+                <span>{storeSettings?.contactEmail || 'care@fathimastores.com'}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#71883F]" />
-                <span>Fathima Complex, College Road, Trivandrum, India</span>
+              <div className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-[#71883F] shrink-0 mt-0.5" />
+                <span>
+                  {storeSettings?.storeAddress || 'Fathima Complex, College Road'}
+                  {storeSettings?.storeCity ? `, ${storeSettings.storeCity}` : ''}
+                  {storeSettings?.storeState ? `, ${storeSettings.storeState}` : ''}
+                  {storeSettings?.storePinCode ? ` - ${storeSettings.storePinCode}` : ''}
+                </span>
               </div>
             </div>
           </div>

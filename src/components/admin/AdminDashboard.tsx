@@ -58,6 +58,7 @@ import { AdminDeliveryManagement } from './AdminDeliveryManagement';
 import { AdminCustomerModal, AdminCustomerRecord } from './AdminCustomerModal';
 import { AdminAnalyticsView } from './AdminAnalyticsView';
 import { AdminTextEditorView } from './AdminTextEditorView';
+import { StoreLocationConfigCard } from './StoreLocationConfigCard';
 
 type AdminTab =
   | 'overview'
@@ -127,6 +128,7 @@ export const AdminDashboard: React.FC = () => {
     clearNotifications,
     toggleCustomerVIP,
     grantCustomerAdmin,
+    grantCustomerDriver,
     deleteCustomer,
     removeSelectedCategoryButton,
     showToast,
@@ -163,7 +165,7 @@ export const AdminDashboard: React.FC = () => {
   const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<AdminCustomerRecord | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [customerFilter, setCustomerFilter] = useState<'all' | 'vip' | 'regular' | 'new' | 'registered' | 'orders'>('all');
+  const [customerFilter, setCustomerFilter] = useState<'all' | 'vip' | 'regular' | 'new' | 'registered' | 'orders' | 'drivers'>('all');
 
   // In-App Deletion Modal States (Eliminates blocked browser window.confirm)
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -406,6 +408,19 @@ export const AdminDashboard: React.FC = () => {
     enablePhonePe: storeSettings?.enablePhonePe ?? true,
     enablePaytm: storeSettings?.enablePaytm ?? true,
     enableCOD: storeSettings?.enableCOD ?? true,
+    enableOnlinePayment: storeSettings?.enableOnlinePayment ?? true,
+    enableUpiPayment: storeSettings?.enableUpiPayment ?? true,
+    enableCardPayment: storeSettings?.enableCardPayment ?? true,
+    enableNetBankingPayment: storeSettings?.enableNetBankingPayment ?? true,
+    enableCodPayment: storeSettings?.enableCodPayment ?? true,
+    autoVerifyOnlinePayment: storeSettings?.autoVerifyOnlinePayment ?? true,
+    autoConfirmPaidOrders: storeSettings?.autoConfirmPaidOrders ?? true,
+    autoGeneratePaymentReceipt: storeSettings?.autoGeneratePaymentReceipt ?? true,
+    autoRefundOnCancel: storeSettings?.autoRefundOnCancel ?? true,
+    paymentGatewayProvider: (storeSettings?.paymentGatewayProvider || 'Razorpay') as 'Razorpay' | 'Cashfree' | 'PayU' | 'Stripe India',
+    paymentGatewayMode: (storeSettings?.paymentGatewayMode || 'live_auto') as 'live_auto' | 'test_sandbox',
+    onlinePaymentDiscountPercent: storeSettings?.onlinePaymentDiscountPercent ?? 0,
+    codExtraFee: storeSettings?.codExtraFee ?? 0,
 
     showAnnouncement: storeSettings?.showAnnouncement ?? true,
     announcementText: storeSettings?.announcementText || 'Free shipping on orders above ₹500! • Fast delivery & genuine stationery',
@@ -472,7 +487,8 @@ export const AdminDashboard: React.FC = () => {
   // Keep settings form synced if storeSettings changes
   useEffect(() => {
     if (storeSettings) {
-      setSettingsForm({
+      setSettingsForm((prev) => ({
+        ...prev,
         storeName: storeSettings.storeName,
         tagline: storeSettings.tagline,
         contactEmail: storeSettings.contactEmail,
@@ -488,6 +504,19 @@ export const AdminDashboard: React.FC = () => {
         enablePhonePe: storeSettings.enablePhonePe,
         enablePaytm: storeSettings.enablePaytm,
         enableCOD: storeSettings.enableCOD,
+        enableOnlinePayment: storeSettings.enableOnlinePayment ?? true,
+        enableUpiPayment: storeSettings.enableUpiPayment ?? true,
+        enableCardPayment: storeSettings.enableCardPayment ?? true,
+        enableNetBankingPayment: storeSettings.enableNetBankingPayment ?? true,
+        enableCodPayment: storeSettings.enableCodPayment ?? true,
+        autoVerifyOnlinePayment: storeSettings.autoVerifyOnlinePayment ?? true,
+        autoConfirmPaidOrders: storeSettings.autoConfirmPaidOrders ?? true,
+        autoGeneratePaymentReceipt: storeSettings.autoGeneratePaymentReceipt ?? true,
+        autoRefundOnCancel: storeSettings.autoRefundOnCancel ?? true,
+        paymentGatewayProvider: (storeSettings.paymentGatewayProvider || 'Razorpay') as 'Razorpay' | 'Cashfree' | 'PayU' | 'Stripe India',
+        paymentGatewayMode: (storeSettings.paymentGatewayMode || 'live_auto') as 'live_auto' | 'test_sandbox',
+        onlinePaymentDiscountPercent: storeSettings.onlinePaymentDiscountPercent ?? 0,
+        codExtraFee: storeSettings.codExtraFee ?? 0,
 
         showAnnouncement: storeSettings.showAnnouncement,
         announcementText: storeSettings.announcementText,
@@ -550,7 +579,7 @@ export const AdminDashboard: React.FC = () => {
         logoType: (storeSettings.logoType || 'text') as 'text' | 'image' | 'both',
         logoUrl: storeSettings.logoUrl || '',
         logoHeight: storeSettings.logoHeight || 36,
-      });
+      }));
     }
   }, [storeSettings]);
 
@@ -670,6 +699,7 @@ export const AdminDashboard: React.FC = () => {
         phone: u.phone || defAddr?.phone || '',
         photoURL: u.photoURL,
         role: u.role || 'customer',
+        isDriver: Boolean(u.isDriver || u.role === 'delivery'),
         city: u.city || defAddr?.city || '',
         state: u.state || defAddr?.state || '',
         bio: u.bio,
@@ -736,6 +766,8 @@ export const AdminDashboard: React.FC = () => {
 
     const vipSet = new Set((storeSettings.customVipEmails || []).map((e) => e.toLowerCase()));
     const adminSet = new Set((storeSettings.customAdminEmails || []).map((e) => e.toLowerCase()));
+    const driverEmailSet = new Set((storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim()));
+    const driverIdSet = new Set(storeSettings.customDriverIds || []);
 
     map.forEach((cust, emailKey) => {
       if (adminSet.has(emailKey)) {
@@ -744,6 +776,9 @@ export const AdminDashboard: React.FC = () => {
       }
       if (vipSet.has(emailKey)) {
         cust.status = 'VIP';
+      }
+      if (driverEmailSet.has(emailKey) || driverIdSet.has(cust.id) || cust.role === 'delivery') {
+        cust.isDriver = true;
       }
     });
 
@@ -758,6 +793,8 @@ export const AdminDashboard: React.FC = () => {
     currentUser,
     storeSettings.customVipEmails,
     storeSettings.customAdminEmails,
+    storeSettings.customDriverEmails,
+    storeSettings.customDriverIds,
     storeSettings.removedCustomerEmails,
     storeSettings.removedCustomerIds,
   ]);
@@ -778,6 +815,7 @@ export const AdminDashboard: React.FC = () => {
       }
 
       if (customerFilter === 'vip') return c.status === 'VIP';
+      if (customerFilter === 'drivers') return Boolean(c.isDriver);
       if (customerFilter === 'regular') return c.status === 'Regular';
       if (customerFilter === 'new') return c.status === 'New';
       if (customerFilter === 'registered') return c.isRegistered;
@@ -1588,11 +1626,17 @@ export const AdminDashboard: React.FC = () => {
           </nav>
         </div>
 
-        {/* Sidebar Footer: Storefront Link & Signout */}
+        {/* Sidebar Footer: Storefront Link, Driver Portal & Signout */}
         <div className="p-3 border-t border-[#E8E8E3] space-y-1">
           <button
+            onClick={() => setActivePage('delivery-portal')}
+            className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-[#71883F] bg-[#EFF4E6]/60 hover:bg-[#EFF4E6] flex items-center gap-2 cursor-pointer"
+          >
+            <Truck className="w-4 h-4 text-[#71883F]" /> Open Driver Portal
+          </button>
+          <button
             onClick={() => setActivePage('home')}
-            className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-[#171717] hover:bg-[#F7F8F3] flex items-center gap-2"
+            className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-[#171717] hover:bg-[#F7F8F3] flex items-center gap-2 cursor-pointer"
           >
             <BookOpen className="w-4 h-4 text-[#71883F]" /> View Storefront
           </button>
@@ -1601,7 +1645,7 @@ export const AdminDashboard: React.FC = () => {
               switchRole('customer');
               setActivePage('home');
             }}
-            className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+            className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
           >
             <LogOut className="w-4 h-4" /> Exit Admin
           </button>
@@ -1627,12 +1671,22 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Quick Driver Portal Button */}
+            <button
+              type="button"
+              onClick={() => setActivePage('delivery-portal')}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFF4E6] hover:bg-[#71883F] text-[#71883F] hover:text-white text-xs font-bold transition-colors cursor-pointer"
+            >
+              <Truck className="w-3.5 h-3.5" />
+              <span>Driver Portal</span>
+            </button>
+
             {/* Notifications Panel */}
             <div className="relative">
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
                 className="p-2 text-[#171717] hover:bg-[#F7F8F3] rounded-lg relative cursor-pointer active:scale-95"
-                title="Notifications"
+                title="Notifications & Send Customer Alert"
               >
                 <Bell className="w-4.5 h-4.5" />
                 {notifications.some((n) => !n.read) && (
@@ -1645,10 +1699,10 @@ export const AdminDashboard: React.FC = () => {
                   {/* Backdrop */}
                   <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
 
-                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-[#E8E8E3] rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="flex items-center justify-between pb-3 border-b border-[#E8E8E3]">
+                  <div className="absolute right-0 mt-2 w-80 sm:w-[420px] bg-white border border-[#E8E8E3] rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-[#E8E8E3]">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-[#171717]">Store Notifications</span>
+                        <span className="text-xs font-bold text-[#171717]">Store Notifications & Alerts</span>
                         {notifications.filter((n) => !n.read).length > 0 && (
                           <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold">
                             {notifications.filter((n) => !n.read).length} new
@@ -1683,9 +1737,61 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="space-y-2 py-2 max-h-80 overflow-y-auto divide-y divide-[#E8E8E3]">
+                    {/* Send Direct or Broadcast Notification to Customers */}
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!notifTitle.trim() || !notifMessage.trim()) return;
+                        await sendCustomCustomerNotification({
+                          title: notifTitle.trim(),
+                          message: notifMessage.trim(),
+                          targetEmail: notifTargetEmail.trim() || undefined,
+                          isBroadcast: !notifTargetEmail.trim(),
+                        });
+                        setNotifTitle('');
+                        setNotifMessage('');
+                      }}
+                      className="p-3 rounded-xl bg-[#FAF7F2] border border-[#E8E8E3] space-y-2"
+                    >
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#71883F] block">
+                        Send Notification to Customer / All Users
+                      </span>
+                      <input
+                        type="text"
+                        value={notifTargetEmail}
+                        onChange={(e) => setNotifTargetEmail(e.target.value)}
+                        placeholder="Customer email (or leave blank to broadcast to all)"
+                        className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-[11px] outline-none focus:border-[#71883F]"
+                      />
+                      <input
+                        type="text"
+                        required
+                        value={notifTitle}
+                        onChange={(e) => setNotifTitle(e.target.value)}
+                        placeholder="Notification Title (e.g. Special Flash Offer / Order Update)"
+                        className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-[11px] font-bold outline-none focus:border-[#71883F]"
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          required
+                          value={notifMessage}
+                          onChange={(e) => setNotifMessage(e.target.value)}
+                          placeholder="Message to customer..."
+                          className="flex-1 px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-[11px] outline-none focus:border-[#71883F]"
+                        />
+                        <button
+                          type="submit"
+                          className="px-3 py-1.5 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-lg text-[11px] font-bold shrink-0 cursor-pointer"
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="space-y-2 py-1 max-h-64 overflow-y-auto divide-y divide-[#E8E8E3]">
                       {notifications.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-[#6B6B6B] space-y-1">
+                        <div className="py-6 text-center text-xs text-[#6B6B6B] space-y-1">
                           <Bell className="w-6 h-6 text-neutral-300 mx-auto" />
                           <p className="font-bold text-[#171717]">All caught up!</p>
                           <p className="text-[11px]">New order alerts and customer inquiries will appear here.</p>
@@ -1707,9 +1813,11 @@ export const AdminDashboard: React.FC = () => {
                               n.read ? 'bg-white opacity-75 hover:bg-[#FAFBF7]' : 'bg-[#EFF4E6]/60 border-l-2 border-[#71883F] pl-3 font-medium'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <p className="font-bold text-[#171717]">{n.title}</p>
-                              <span className="text-[10px] text-neutral-400 font-mono">{n.time || 'Recent'}</span>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-bold text-[#171717] truncate">{n.title}</p>
+                              <span className="text-[10px] text-neutral-400 font-mono shrink-0">
+                                {n.time ? new Date(n.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                              </span>
                             </div>
                             <p className="text-[11px] text-[#6B6B6B] leading-relaxed">{n.message}</p>
                           </div>
@@ -2386,7 +2494,13 @@ export const AdminDashboard: React.FC = () => {
                     <Plus className="w-3.5 h-3.5" /> Create Manual Order
                   </button>
 
-
+                  <button
+                    type="button"
+                    onClick={() => setCurrentTab('deliveries')}
+                    className="px-3.5 py-2 bg-[#EFF4E6] border border-[#71883F]/30 hover:bg-[#71883F] text-[#71883F] hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Truck className="w-3.5 h-3.5" /> Optimize Delivery Routes
+                  </button>
 
                   <button
                     onClick={() => handleExportCSV('orders')}
@@ -3619,6 +3733,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     {[
                       { id: 'all' as const, label: 'All Customers', count: customersList.length },
+                      { id: 'drivers' as const, label: 'Drivers', count: customersList.filter(c => c.isDriver).length },
                       { id: 'vip' as const, label: 'VIP', count: customersList.filter(c => c.status === 'VIP').length },
                       { id: 'regular' as const, label: 'Regular', count: customersList.filter(c => c.status === 'Regular').length },
                       { id: 'new' as const, label: 'New', count: customersList.filter(c => c.status === 'New').length },
@@ -3734,6 +3849,14 @@ export const AdminDashboard: React.FC = () => {
                                           <span className="font-semibold text-purple-700 uppercase text-[10px]">{cust.role}</span>
                                         </>
                                       )}
+                                      {cust.isDriver && (
+                                        <>
+                                          <span>•</span>
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold uppercase text-[9px]">
+                                            <Truck className="w-2.5 h-2.5" /> Driver
+                                          </span>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -3805,6 +3928,19 @@ export const AdminDashboard: React.FC = () => {
                                     title={cust.status === 'VIP' ? 'VIP Customer (Click to revoke)' : 'Make VIP'}
                                   >
                                     <Crown className="w-3.5 h-3.5 fill-current" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => grantCustomerDriver(cust.email || cust.id, !cust.isDriver)}
+                                    className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                                      cust.isDriver
+                                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                        : 'bg-white text-neutral-600 hover:text-emerald-700 border-[#E8E8E3] hover:border-emerald-300'
+                                    }`}
+                                    title={cust.isDriver ? 'Authorized Driver (Click to revoke Driver Portal access)' : 'Make Driver (Grant Driver Portal access)'}
+                                  >
+                                    <Truck className="w-3.5 h-3.5" />
+                                    <span className="hidden xl:inline">{cust.isDriver ? 'Driver ✓' : 'Make Driver'}</span>
                                   </button>
 
                                   <button
@@ -4611,6 +4747,9 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Store Location & GPS Dispatch Hub Configuration Card */}
+              <StoreLocationConfigCard />
 
               <form onSubmit={handleSaveSettings} className="space-y-6">
                 {/* 1. ACCENT COLORS CUSTOMIZER */}
@@ -5877,15 +6016,32 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* UPI & Payment Settings */}
-                <div className="bg-white border border-[#E8E8E3] rounded-2xl p-6 space-y-4 shadow-2xs text-xs">
-                  <h4 className="font-bold text-sm text-[#171717] uppercase tracking-wider">
-                    Indian UPI Payment Gateway Configuration
-                  </h4>
+                {/* Interactive Store Location & GPS Hub Configurator */}
+                <StoreLocationConfigCard />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Automated Online Payment System & Gateway Configuration */}
+                <div className="bg-white border border-[#E8E8E3] rounded-2xl p-6 space-y-5 shadow-2xs text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E8E8E3]">
                     <div>
-                      <label className="font-semibold text-[#171717] block mb-1">Merchant UPI ID (VPA)</label>
+                      <h4 className="font-bold text-sm text-[#171717] uppercase tracking-wider flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-[#71883F]" />
+                        Online Payment System & Automation Engine
+                      </h4>
+                      <p className="text-[11px] text-[#6B6B6B] mt-0.5">
+                        Configure NPCI UPI VPA, gateway provider, automated UTR verification, instant order confirmation, and automatic refund rules.
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold flex items-center gap-1 self-start sm:self-auto">
+                      <Sparkles className="w-3 h-3" /> Webhook Auto-Verification Active
+                    </span>
+                  </div>
+
+                  {/* Merchant VPA & Gateway Provider */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="font-semibold text-[#171717] block mb-1">
+                        Merchant UPI ID (VPA)
+                      </label>
                       <input
                         type="text"
                         required
@@ -5897,7 +6053,9 @@ export const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="font-semibold text-[#171717] block mb-1">Merchant Business Name</label>
+                      <label className="font-semibold text-[#171717] block mb-1">
+                        Merchant Business Name
+                      </label>
                       <input
                         type="text"
                         required
@@ -5909,49 +6067,258 @@ export const AdminDashboard: React.FC = () => {
                       />
                     </div>
 
-                    <div className="sm:col-span-2 pt-2 flex flex-wrap items-center gap-6">
-                      <label className="flex items-center gap-2 cursor-pointer font-semibold">
-                        <input
-                          type="checkbox"
-                          checked={settingsForm.enableGPay}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, enableGPay: e.target.checked })}
-                          className="accent-[#71883F]"
-                        />
-                        <span>Google Pay (GPay)</span>
+                    <div>
+                      <label className="font-semibold text-[#171717] block mb-1">
+                        Payment Gateway Provider
                       </label>
+                      <select
+                        value={settingsForm.paymentGatewayProvider}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            paymentGatewayProvider: e.target.value as any,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-[#E8E8E3] rounded-lg text-[#171717] font-semibold bg-white outline-none focus:border-[#71883F]"
+                      >
+                        <option value="Razorpay">Razorpay India</option>
+                        <option value="Cashfree">Cashfree Payments</option>
+                        <option value="PayU">PayU India</option>
+                        <option value="Stripe India">Stripe India</option>
+                      </select>
+                    </div>
 
-                      <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                    <div>
+                      <label className="font-semibold text-[#171717] block mb-1">
+                        Gateway Environment Mode
+                      </label>
+                      <select
+                        value={settingsForm.paymentGatewayMode}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            paymentGatewayMode: e.target.value as any,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-[#E8E8E3] rounded-lg text-[#171717] font-semibold bg-white outline-none focus:border-[#71883F]"
+                      >
+                        <option value="live_auto">Live Automated Verification</option>
+                        <option value="test_sandbox">Test Sandbox Mode</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Online Payment Incentives & COD Fee */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div className="bg-[#F7F8F3] p-3.5 rounded-xl border border-[#E8E8E3]">
+                      <label className="font-bold text-[#171717] block mb-1">
+                        Instant Online Payment Discount (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={25}
+                        value={settingsForm.onlinePaymentDiscountPercent}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            onlinePaymentDiscountPercent: Number(e.target.value),
+                          })
+                        }
+                        className="w-full px-3 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-[#171717] font-bold outline-none focus:border-[#71883F]"
+                      />
+                      <span className="text-[10px] text-[#6B6B6B] mt-1 block">
+                        Automatically deducts this % at checkout when customer pays online via UPI/Card/NetBanking.
+                      </span>
+                    </div>
+
+                    <div className="bg-[#F7F8F3] p-3.5 rounded-xl border border-[#E8E8E3]">
+                      <label className="font-bold text-[#171717] block mb-1">
+                        Cash on Delivery (COD) Handling Fee (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={200}
+                        value={settingsForm.codExtraFee}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            codExtraFee: Number(e.target.value),
+                          })
+                        }
+                        className="w-full px-3 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-[#171717] font-bold outline-none focus:border-[#71883F]"
+                      />
+                      <span className="text-[10px] text-[#6B6B6B] mt-1 block">
+                        Optional surcharge added to Cash on Delivery orders (set 0 for free COD).
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Automation Workflow Switches */}
+                  <div className="bg-[#EFF4E6]/50 border border-[#71883F]/25 rounded-2xl p-4 space-y-3">
+                    <span className="text-[11px] font-extrabold text-[#171717] uppercase tracking-wider block">
+                      Automated Payment Processing Rules
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className="flex items-start justify-between bg-white p-3 rounded-xl border border-[#E8E8E3] cursor-pointer">
+                        <div className="pr-2">
+                          <span className="font-bold text-[#171717] block">
+                            Auto-Verify Online Payments (Webhook + UTR)
+                          </span>
+                          <span className="text-[10px] text-[#6B6B6B]">
+                            Automatically generates & verifies 12-digit NPCI UTR and marks order as Paid
+                          </span>
+                        </div>
                         <input
                           type="checkbox"
-                          checked={settingsForm.enablePhonePe}
+                          checked={settingsForm.autoVerifyOnlinePayment}
                           onChange={(e) =>
-                            setSettingsForm({ ...settingsForm, enablePhonePe: e.target.checked })
+                            setSettingsForm({
+                              ...settingsForm,
+                              autoVerifyOnlinePayment: e.target.checked,
+                            })
                           }
-                          className="accent-[#71883F]"
+                          className="accent-[#71883F] mt-1 w-4 h-4"
                         />
-                        <span>PhonePe</span>
                       </label>
 
-                      <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                      <label className="flex items-start justify-between bg-white p-3 rounded-xl border border-[#E8E8E3] cursor-pointer">
+                        <div className="pr-2">
+                          <span className="font-bold text-[#171717] block">
+                            Auto-Advance Paid Orders to "Processing"
+                          </span>
+                          <span className="text-[10px] text-[#6B6B6B]">
+                            Fast-tracks verified online orders straight into warehouse packing queue
+                          </span>
+                        </div>
                         <input
                           type="checkbox"
-                          checked={settingsForm.enablePaytm}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, enablePaytm: e.target.checked })}
-                          className="accent-[#71883F]"
+                          checked={settingsForm.autoConfirmPaidOrders}
+                          onChange={(e) =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              autoConfirmPaidOrders: e.target.checked,
+                            })
+                          }
+                          className="accent-[#71883F] mt-1 w-4 h-4"
                         />
-                        <span>Paytm UPI</span>
                       </label>
 
-                      <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                      <label className="flex items-start justify-between bg-white p-3 rounded-xl border border-[#E8E8E3] cursor-pointer">
+                        <div className="pr-2">
+                          <span className="font-bold text-[#171717] block">
+                            Auto-Generate GST Tax Invoice & UTR Receipt
+                          </span>
+                          <span className="text-[10px] text-[#6B6B6B]">
+                            Issues instant digital payment certificate and customer notification upon payment
+                          </span>
+                        </div>
                         <input
                           type="checkbox"
-                          checked={settingsForm.enableCOD}
-                          onChange={(e) => setSettingsForm({ ...settingsForm, enableCOD: e.target.checked })}
-                          className="accent-[#71883F]"
+                          checked={settingsForm.autoGeneratePaymentReceipt}
+                          onChange={(e) =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              autoGeneratePaymentReceipt: e.target.checked,
+                            })
+                          }
+                          className="accent-[#71883F] mt-1 w-4 h-4"
                         />
-                        <span>Cash on Delivery (COD)</span>
+                      </label>
+
+                      <label className="flex items-start justify-between bg-white p-3 rounded-xl border border-[#E8E8E3] cursor-pointer">
+                        <div className="pr-2">
+                          <span className="font-bold text-[#171717] block">
+                            Auto-Refund Online Payment on Order Cancellation
+                          </span>
+                          <span className="text-[10px] text-[#6B6B6B]">
+                            Automatically records refund entry and notifies customer if a Paid order is cancelled
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={settingsForm.autoRefundOnCancel}
+                          onChange={(e) =>
+                            setSettingsForm({
+                              ...settingsForm,
+                              autoRefundOnCancel: e.target.checked,
+                            })
+                          }
+                          className="accent-[#71883F] mt-1 w-4 h-4"
+                        />
                       </label>
                     </div>
+                  </div>
+
+                  {/* Supported Payment Channels */}
+                  <div className="pt-2 flex flex-wrap items-center gap-5 border-t border-[#E8E8E3]">
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.enableOnlinePayment}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, enableOnlinePayment: e.target.checked })
+                        }
+                        className="accent-[#71883F]"
+                      />
+                      <span>Online Checkout Enabled</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.enableUpiPayment}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, enableUpiPayment: e.target.checked })
+                        }
+                        className="accent-[#71883F]"
+                      />
+                      <span>UPI (GPay / PhonePe / Paytm / QR)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.enableCardPayment}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, enableCardPayment: e.target.checked })
+                        }
+                        className="accent-[#71883F]"
+                      />
+                      <span>Cards (RuPay / Visa / Mastercard)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.enableNetBankingPayment}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            enableNetBankingPayment: e.target.checked,
+                          })
+                        }
+                        className="accent-[#71883F]"
+                      />
+                      <span>NetBanking</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.enableCodPayment}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            enableCodPayment: e.target.checked,
+                            enableCOD: e.target.checked,
+                          })
+                        }
+                        className="accent-[#71883F]"
+                      />
+                      <span>Cash on Delivery (COD)</span>
+                    </label>
                   </div>
                 </div>
 

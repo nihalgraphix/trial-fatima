@@ -17,9 +17,11 @@ import {
   Radio,
   Clock,
   UserCheck,
+  CreditCard,
 } from 'lucide-react';
 import { ProductImage } from '../common/ProductImage';
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
+import { IndianPaymentGatewayModal } from '../checkout/IndianPaymentGatewayModal';
 
 export const OrderTrackingPage: React.FC = () => {
   const { 
@@ -31,7 +33,9 @@ export const OrderTrackingPage: React.FC = () => {
     addToCart, 
     showToast,
     selectedOrderId,
-    setSelectedOrderId
+    setSelectedOrderId,
+    storeSettings,
+    completeOnlineOrderPayment,
   } = useStore();
 
   const [searchOrderId, setSearchOrderId] = useState('');
@@ -39,6 +43,7 @@ export const OrderTrackingPage: React.FC = () => {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [copiedTracking, setCopiedTracking] = useState(false);
+  const [showPayNowModal, setShowPayNowModal] = useState(false);
 
   // Find assignment for active order if dispatched
   const activeAssignment: DeliveryAssignment | undefined = activeOrder
@@ -245,7 +250,19 @@ export const OrderTrackingPage: React.FC = () => {
                   </h2>
                   <p className="text-xs text-[#77766F] mt-1">
                     Placed on {activeOrder.date ? new Date(activeOrder.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Recent'} • Payment: {activeOrder.paymentMethod} ({activeOrder.paymentStatus})
+                    {activeOrder.utrNumber ? ` • UTR: ${activeOrder.utrNumber}` : ''}
                   </p>
+                  {activeOrder.paymentStatus !== 'Paid' &&
+                    activeOrder.paymentStatus !== 'Refunded' &&
+                    activeOrder.orderStatus !== 'Cancelled' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPayNowModal(true)}
+                        className="mt-2.5 px-3.5 py-1.5 bg-[#145A38] hover:bg-[#0e4228] text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" /> Pay ₹{activeOrder.finalTotal || activeOrder.total} Online Now
+                      </button>
+                    )}
                 </div>
 
                 {/* Logistics Partner Info */}
@@ -290,7 +307,11 @@ export const OrderTrackingPage: React.FC = () => {
                 <div className="relative mt-2">
                   <DeliveryTrackingMap
                     order={activeOrder}
-                    storeAddress="Commercial Complex, MG Road, Trivandrum, Kerala 695001"
+                    storeAddress={storeSettings?.address || 'Commercial Complex, MG Road, Trivandrum, Kerala 695001'}
+                    storeCoords={{
+                      lat: storeSettings?.storeLat ?? 8.5241,
+                      lng: storeSettings?.storeLng ?? 76.9366,
+                    }}
                     deliveryPerson={assignedWorker}
                   />
                 </div>
@@ -492,6 +513,22 @@ export const OrderTrackingPage: React.FC = () => {
             </div>
           </div>
         ) : null}
+
+        {activeOrder && (
+          <IndianPaymentGatewayModal
+            isOpen={showPayNowModal}
+            onClose={() => setShowPayNowModal(false)}
+            amount={activeOrder.BalanceAmount ?? (activeOrder.finalTotal || activeOrder.total || 0)}
+            customerName={activeOrder.customerName}
+            customerPhone={activeOrder.phone}
+            customerEmail={activeOrder.email}
+            orderReferenceId={activeOrder.id}
+            onPaymentSuccess={async (_, paymentDetails) => {
+              await completeOnlineOrderPayment(activeOrder.id, paymentDetails);
+              setShowPayNowModal(false);
+            }}
+          />
+        )}
 
       </div>
     </div>

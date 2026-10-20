@@ -26,10 +26,14 @@ import { Order, ShippingAddress } from '../../types';
 import { compressImageTo200KB, formatFileSize } from '../../utils/imageCompressor';
 import { OrderHistory } from './OrderHistory';
 import { GoogleMapAddressSelector } from '../common/GoogleMapAddressSelector';
+import { DeliveryPortalPage } from '../delivery/DeliveryPortalPage';
 
 export const AccountPage: React.FC = () => {
   const {
     currentUser,
+    isAuthLoading,
+    isDriver,
+    currentDeliveryPerson,
     orders,
     wishlist,
     logoutUser,
@@ -41,7 +45,7 @@ export const AccountPage: React.FC = () => {
     showToast,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'addresses' | 'details' | 'password'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'addresses' | 'details' | 'password' | 'driver-portal'>('overview');
   const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<Order | null>(null);
 
   // Edit details form state
@@ -88,6 +92,15 @@ export const AccountPage: React.FC = () => {
       setAvatar(currentUser.photoURL || '');
     }
   }, [currentUser]);
+
+  if (isAuthLoading && !currentUser) {
+    return (
+      <div className="bg-white min-h-[65vh] flex flex-col items-center justify-center p-8 text-center space-y-3">
+        <div className="w-10 h-10 border-4 border-[#71883F]/20 border-t-[#71883F] rounded-full animate-spin" />
+        <p className="text-xs font-bold text-[#6B6B6B]">Restoring your account session...</p>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return (
@@ -256,17 +269,21 @@ export const AccountPage: React.FC = () => {
             </div>
 
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-[#71883F] font-semibold uppercase tracking-wider">
                   {currentUser.role === 'admin' ? 'Administrator' : 'Customer Account'}
                 </span>
-                
+                {isDriver && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold uppercase tracking-wider">
+                    <Truck className="w-3 h-3" /> Authorized Driver
+                  </span>
+                )}
               </div>
               <h1 className="text-xl sm:text-2xl font-extrabold text-[#171717] tracking-tight">
                 {currentUser.name}
               </h1>
               <p className="text-xs text-[#6B6B6B] mt-0.5">
-                {currentUser.email} · {currentUser.phone}
+                {currentUser.email} {currentUser.phone ? `· ${currentUser.phone}` : ''}
               </p>
               {currentUser.bio && (
                 <p className="text-xs text-[#171717] mt-1 italic max-w-md">"{currentUser.bio}"</p>
@@ -274,7 +291,15 @@ export const AccountPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+            {isDriver && (
+              <button
+                onClick={() => setActiveTab('driver-portal')}
+                className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              >
+                <Truck className="w-3.5 h-3.5" /> Driver Portal
+              </button>
+            )}
             {currentUser.role === 'admin' && (
               <button
                 onClick={() => setActivePage('admin')}
@@ -350,6 +375,35 @@ export const AccountPage: React.FC = () => {
             >
               <KeyRound className="w-4 h-4" /> Security & Password
             </button>
+
+            {isDriver && (
+              <div className="pt-2 mt-2 border-t border-[#E8E8E3]">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 px-3 block mb-1">
+                  Delivery Partner Access
+                </span>
+                <button
+                  onClick={() => setActiveTab('driver-portal')}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                    activeTab === 'driver-portal'
+                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Truck className="w-4 h-4" /> Driver Portal
+                  </span>
+                  <span
+                    className={`text-[9px] px-1.5 py-0.5 rounded-full font-extrabold uppercase ${
+                      activeTab === 'driver-portal'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-emerald-200 text-emerald-900'
+                    }`}
+                  >
+                    Active
+                  </span>
+                </button>
+              </div>
+            )}
           </aside>
 
           {/* Main Content Area */}
@@ -390,6 +444,40 @@ export const AccountPage: React.FC = () => {
                     <span className="text-[11px] text-[#6B6B6B] mt-1 block">Express shipping eligible</span>
                   </div>
                 </div>
+
+                {/* Authorized Driver Portal Card (Only visible if user is made Driver by Admin) */}
+                {isDriver && (
+                  <div className="bg-gradient-to-r from-[#1B2412] to-[#2F3E1E] text-white rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-[#71883F] flex items-center justify-center text-white shrink-0">
+                        <Truck className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-extrabold uppercase tracking-wider mb-1">
+                          Authorized Store Driver
+                        </span>
+                        <h3 className="text-base font-extrabold">Driver Dispatch & Delivery Portal</h3>
+                        <p className="text-xs text-white/75 mt-0.5 max-w-xl">
+                          You have been authorized by the Store Administrator to fulfill deliveries. Manage assigned orders, navigate to customer drop-offs, and update live delivery statuses.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <button
+                        onClick={() => setActiveTab('driver-portal')}
+                        className="px-4 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-extrabold rounded-xl shadow-xs cursor-pointer transition-all"
+                      >
+                        Open Driver Portal
+                      </button>
+                      <button
+                        onClick={() => setActivePage('delivery-portal')}
+                        className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl cursor-pointer transition-all"
+                      >
+                        Full Screen
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Profile Summary Card */}
                 <div className="border border-[#E8E8E3] rounded-2xl p-6 bg-white space-y-4">
@@ -592,6 +680,27 @@ export const AccountPage: React.FC = () => {
                     Update Password
                   </button>
                 </form>
+              </div>
+            )}
+
+            {/* DRIVER PORTAL TAB (ONLY FOR AUTHORIZED DRIVERS) */}
+            {activeTab === 'driver-portal' && isDriver && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-extrabold text-[#171717]">Driver Dispatch Console</h3>
+                    <p className="text-xs text-[#6B6B6B]">
+                      Manage your assigned store deliveries, update statuses, and navigate to customers
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActivePage('delivery-portal')}
+                    className="px-3.5 py-2 rounded-xl bg-[#EFF4E6] hover:bg-[#71883F] text-[#71883F] hover:text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Expand Full Screen →
+                  </button>
+                </div>
+                <DeliveryPortalPage embedded />
               </div>
             )}
 

@@ -16,19 +16,24 @@ import {
   Car,
 } from 'lucide-react';
 import { Order } from '../../types';
+import { useStore } from '../../context/StoreContext';
 
 interface Props {
   order: Order;
   storeAddress?: string;
 }
 
-const STORE_HUB_COORDS = { lat: 8.5241, lng: 76.9366 };
-
 export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
+  const { storeSettings } = useStore();
   const map = useMap('admin-order-delivery-map');
   const routesLib = useMapsLibrary('routes');
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
   const watchIdRef = useRef<number | null>(null);
+
+  const STORE_HUB_COORDS = {
+    lat: storeSettings?.storeLat ?? 8.5241,
+    lng: storeSettings?.storeLng ?? 76.9366,
+  };
 
   const [routeInfo, setRouteDetails] = useState<{
     distance: string;
@@ -45,9 +50,10 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'hybrid'>('roadmap');
   const [copiedCoords, setCopiedCoords] = useState(false);
 
-  const safeStoreAddress = storeAddress || 'MG Road, Trivandrum, Kerala 695001';
-  const customerLat = order.shippingAddress?.lat || 8.5285;
-  const customerLng = order.shippingAddress?.lng || 76.9420;
+  const safeStoreAddress =
+    storeAddress || storeSettings?.address || 'MG Road, Trivandrum, Kerala 695001';
+  const customerLat = order.shippingAddress?.lat || STORE_HUB_COORDS.lat + 0.0044;
+  const customerLng = order.shippingAddress?.lng || STORE_HUB_COORDS.lng + 0.0054;
   const hasExactPin = Boolean(order.shippingAddress?.lat && order.shippingAddress?.lng);
 
   // Manage live GPS tracking when Admin selects "Drive from My GPS"

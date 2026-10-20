@@ -26,6 +26,7 @@ import {
   DeliveryAssignment,
   CustomerMessage,
   EmailAlertRecord,
+  OnlinePaymentDetails,
 } from '../types';
 import { auth, db, googleProvider, signInWithPopup } from '../firebase';
 import { 
@@ -183,7 +184,64 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
     order: 3,
   },
 ];
-const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [];
+const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
+  {
+    id: 'dp-1',
+    name: 'Rahul Nair',
+    email: 'rahul.nair@fathimastore.in',
+    phone: '+91 98471 22011',
+    vehicleType: 'Bike',
+    vehicleNumber: 'KL-01-CA-4421',
+    status: 'available',
+    rating: 4.9,
+    totalDeliveries: 342,
+    currentLat: 8.5241,
+    currentLng: 76.9366,
+    lastUpdatedLocation: 'MG Road Hub, Trivandrum',
+  },
+  {
+    id: 'dp-2',
+    name: 'Sreejith V',
+    email: 'sreejith.v@fathimastore.in',
+    phone: '+91 94472 33109',
+    vehicleType: 'Scooter',
+    vehicleNumber: 'KL-01-CB-8910',
+    status: 'available',
+    rating: 4.8,
+    totalDeliveries: 289,
+    currentLat: 8.5285,
+    currentLng: 76.942,
+    lastUpdatedLocation: 'Pattom Junction, Trivandrum',
+  },
+  {
+    id: 'dp-3',
+    name: 'Muhammed Fayiz',
+    email: 'fayiz.m@fathimastore.in',
+    phone: '+91 98950 77812',
+    vehicleType: 'Bike',
+    vehicleNumber: 'KL-01-CD-1123',
+    status: 'available',
+    rating: 4.9,
+    totalDeliveries: 410,
+    currentLat: 8.5581,
+    currentLng: 76.8816,
+    lastUpdatedLocation: 'Kazhakkoottam / Technopark',
+  },
+  {
+    id: 'dp-4',
+    name: 'Anoop Krishnan',
+    email: 'anoop.k@fathimastore.in',
+    phone: '+91 97461 55432',
+    vehicleType: 'Van',
+    vehicleNumber: 'KL-01-CE-6701',
+    status: 'available',
+    rating: 4.7,
+    totalDeliveries: 195,
+    currentLat: 8.5262,
+    currentLng: 76.9615,
+    lastUpdatedLocation: 'Kowdiar Avenue, Trivandrum',
+  },
+];
 
 interface Toast {
 
@@ -262,8 +320,17 @@ interface StoreContextType {
     shippingAddress: ShippingAddress;
     paymentMethod: PaymentMethod;
     deliveryMethod: string;
+    paymentDetails?: OnlinePaymentDetails;
+    finalTotalOverride?: number;
+    prepaidDiscount?: number;
+    codFee?: number;
   }) => Promise<Order>;
   createDirectOrder: (orderData: Partial<Order>) => Promise<Order>;
+  completeOnlineOrderPayment: (
+    orderId: string,
+    method: PaymentMethod,
+    paymentDetails?: OnlinePaymentDetails
+  ) => Promise<void>;
 
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   bulkUpdateOrderStatus: (orderIds: string[], status: OrderStatus) => Promise<void>;
@@ -315,6 +382,8 @@ interface StoreContextType {
     rating: number;
     comment: string;
     userName: string;
+    reviewTitle?: string;
+    tags?: string[];
   }) => Promise<void>;
   updateReviewStatus: (reviewId: string, status: 'approved' | 'hidden') => Promise<void>;
   deleteReview: (reviewId: string) => Promise<void>;
@@ -341,6 +410,7 @@ interface StoreContextType {
   currentUser: User | null;
   allUsers: User[];
   isAdmin: boolean;
+  isDriver: boolean;
   isAuthLoading: boolean;
   unauthorizedDomainInfo: { domain: string; projectId: string } | null;
   setUnauthorizedDomainInfo: (info: { domain: string; projectId: string } | null) => void;
@@ -352,6 +422,16 @@ interface StoreContextType {
   updateUserProfile: (updates: Partial<User>) => Promise<void>;
   toggleCustomerVIP: (customerEmailOrId: string, isVip: boolean) => Promise<void>;
   grantCustomerAdmin: (customerEmailOrId: string, grant: boolean) => Promise<void>;
+  grantCustomerDriver: (
+    customerEmailOrId: string,
+    grant: boolean,
+    vehicleDetails?: {
+      vehicleType?: DeliveryPersonnel['vehicleType'];
+      vehicleNumber?: string;
+      name?: string;
+      phone?: string;
+    }
+  ) => Promise<void>;
   deleteCustomer: (customerEmailOrId: string) => Promise<void>;
   showForceSignInModal: boolean;
   setShowForceSignInModal: (show: boolean) => void;
@@ -365,8 +445,19 @@ interface StoreContextType {
   isSearchOpen: boolean;
   setIsSearchOpen: (open: boolean) => void;
 
-  // Notifications (Admin & System)
+  // Notifications (Admin & Customer)
   notifications: Notification[];
+  customerNotifications: Notification[];
+  sendNotification: (notif: Omit<Notification, 'id' | 'time' | 'read'>) => Promise<void>;
+  sendCustomCustomerNotification: (data: {
+    title: string;
+    message: string;
+    type?: Notification['type'];
+    targetEmail?: string;
+    targetUserId?: string;
+    orderId?: string;
+    isBroadcast?: boolean;
+  }) => Promise<void>;
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   clearNotifications: () => void;
@@ -380,9 +471,13 @@ interface StoreContextType {
   quickViewProduct: Product | null;
   setQuickViewProduct: (product: Product | null) => void;
 
-  // Delivery Personnel & Tracking
+  // Delivery Personnel, Driver Portal & Tracking
   deliveryPersonnel: DeliveryPersonnel[];
   deliveryAssignments: DeliveryAssignment[];
+  isDeliveryLoggedIn: boolean;
+  currentDeliveryPerson: DeliveryPersonnel | null;
+  deliveryLogin: (email: string, phone: string) => boolean;
+  deliveryLogout: () => void;
   updateDeliveryAssignmentStatus: (
     assignmentId: string,
     status: DeliveryAssignment['status'],
@@ -390,6 +485,8 @@ interface StoreContextType {
     photoUrl?: string
   ) => Promise<void>;
   assignDeliveryPerson: (orderId: string, deliveryPersonId: string) => Promise<void>;
+  assignOrderToDelivery: (orderId: string, deliveryPersonId: string, notes?: string) => Promise<void>;
+  completeDeliveryAssignment: (assignmentId: string, proofNotes?: string) => Promise<void>;
 
   // Customer Inbox Messages
   customerMessages: CustomerMessage[];
@@ -461,9 +558,59 @@ export const safeStorageSet = (key: string, value: any): boolean => {
 };
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Navigation State
-  const [activePage, setActivePage] = useState<ActivePage>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  // Navigation State with Hash & LocalStorage Persistence so Refreshing Never Loses Active Page
+  const [activePage, setActivePageState] = useState<ActivePage>(() => {
+    try {
+      const hash = window.location.hash.replace('#', '').trim();
+      if (hash === 'admin') return 'admin';
+      if (hash === 'admin/login' || hash === 'admin-login') return 'admin-login';
+      if (hash === 'shop') return 'shop';
+      if (hash === 'categories') return 'categories';
+      if (hash === 'cart') return 'cart';
+      if (hash === 'checkout') return 'checkout';
+      if (hash === 'account') return 'account';
+      if (hash === 'profile') return 'profile';
+      if (hash === 'wishlist') return 'wishlist';
+      if (hash === 'about') return 'about';
+      if (hash === 'contact') return 'contact';
+      if (hash === 'delivery-portal' || hash === 'delivery') return 'delivery-portal';
+      if (hash === 'order-tracking' || hash === 'track-order' || hash === 'track') return 'order-tracking';
+      if (hash === 'product-details') return 'product-details';
+      const savedPage = sessionStorage.getItem('fs_active_page') as ActivePage | null;
+      if (savedPage) return savedPage;
+    } catch {}
+    return 'home';
+  });
+
+  const setActivePage = React.useCallback((page: ActivePage) => {
+    setActivePageState(page);
+    try {
+      sessionStorage.setItem('fs_active_page', page);
+      if (page === 'home') {
+        if (window.location.hash) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      } else {
+        window.history.replaceState(null, '', `#${page}`);
+      }
+    } catch {}
+  }, []);
+
+  const [selectedProductId, setSelectedProductIdState] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem('fs_selected_product_id') || null;
+    } catch {
+      return null;
+    }
+  });
+  const setSelectedProductId = React.useCallback((id: string | null) => {
+    setSelectedProductIdState(id);
+    try {
+      if (id) sessionStorage.setItem('fs_selected_product_id', id);
+      else sessionStorage.removeItem('fs_selected_product_id');
+    } catch {}
+  }, []);
+
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -501,8 +648,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [supportThreads, setSupportThreads] = useState<SupportThread[]>([]);
   const [inventoryAdjustments, setInventoryAdjustments] = useState<InventoryAdjustment[]>([]);
-  const [deliveryPersonnel, setDeliveryPersonnel] = useState<DeliveryPersonnel[]>([]);
+  const [deliveryPersonnel, setDeliveryPersonnel] = useState<DeliveryPersonnel[]>(() => DEFAULT_DELIVERY_PERSONNEL);
   const [deliveryAssignments, setDeliveryAssignments] = useState<DeliveryAssignment[]>([]);
+  const [currentDeliveryPersonId, setCurrentDeliveryPersonId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('fs_active_driver_id') || null;
+    } catch {
+      return null;
+    }
+  });
   const [customerMessages, setCustomerMessages] = useState<CustomerMessage[]>(() => {
     try {
       const saved = localStorage.getItem('fs_saved_chat_msgs');
@@ -572,11 +726,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
-      const saved = localStorage.getItem('fs_active_user');
+      const saved = localStorage.getItem('fs_active_user') || localStorage.getItem('fs_v5_user');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && (parsed.id || parsed.email)) {
-          return parsed;
+          return {
+            ...parsed,
+            addresses: Array.isArray(parsed.addresses) ? parsed.addresses : [],
+          };
         }
       }
     } catch (e) {
@@ -584,7 +741,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     return null;
   });
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('fs_active_user') || localStorage.getItem('fs_v5_user');
+      return !saved;
+    } catch {
+      return false;
+    }
+  });
   const [unauthorizedDomainInfo, setUnauthorizedDomainInfo] = useState<{
     domain: string;
     projectId: string;
@@ -603,101 +767,186 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('fs_compare_products', JSON.stringify(compareProductIds));
   }, [compareProductIds]);
 
-  // Sync active user to localStorage whenever currentUser changes
+  // Persist active user to localStorage whenever currentUser is non-null.
+  // Never auto-delete from localStorage in a useEffect so page refreshes never wipe the session!
   useEffect(() => {
     try {
-      if (currentUser) {
-        localStorage.setItem('fs_active_user', JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem('fs_active_user');
+      if (currentUser && (currentUser.id || currentUser.email)) {
+        const serialized = JSON.stringify(currentUser);
+        localStorage.setItem('fs_active_user', serialized);
+        localStorage.setItem('fs_v5_user', serialized);
       }
     } catch (e) {
       console.warn('Failed to sync user to localStorage', e);
     }
   }, [currentUser]);
 
-  // Sync Firebase Auth with App State
+  // Sync Firebase Auth with App State without wiping local sessions on refresh
   useEffect(() => {
+    let isMounted = true;
+    // Safety timeout so isAuthLoading never blocks UI
+    const authTimeout = setTimeout(() => {
+      if (isMounted) setIsAuthLoading(false);
+    }, 1500);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!isMounted) return;
       if (firebaseUser) {
-        const isMasterAdmin = (firebaseUser.email?.toLowerCase() === 'nihal.graphix@gmail.com') ||
-                              Boolean(firebaseUser.email?.toLowerCase().includes('admin'));
+        const emailNorm = (firebaseUser.email || '').toLowerCase().trim();
+        const isMasterAdmin =
+          emailNorm === 'nihal.graphix@gmail.com' || emailNorm.includes('admin');
 
         try {
-          // Fetch additional profile data from Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
+          // Check both UID doc and email-keyed doc in Firestore
+          const uidDocRef = doc(db, 'users', firebaseUser.uid);
+          let userDoc = await getDoc(uidDocRef).catch(() => null);
+          if ((!userDoc || !userDoc.exists()) && emailNorm) {
+            const emailDocRef = doc(db, 'users', emailNorm.replace(/[@.]/g, '_'));
+            const emailDoc = await getDoc(emailDocRef).catch(() => null);
+            if (emailDoc && emailDoc.exists()) {
+              userDoc = emailDoc;
+            }
+          }
+
+          if (userDoc && userDoc.exists()) {
             const data = userDoc.data();
             const effectiveRole = isMasterAdmin ? 'admin' : (data.role || 'customer');
             const activeUser: User = {
               id: firebaseUser.uid,
               name: data.name || firebaseUser.displayName || 'User',
-              email: firebaseUser.email || '',
+              email: firebaseUser.email || data.email || '',
               photoURL: data.photoURL || firebaseUser.photoURL || '',
+              avatar: data.avatar || data.photoURL || firebaseUser.photoURL || '',
               role: effectiveRole,
-              phone: data.phone || '',
+              isDriver: Boolean(data.isDriver || data.role === 'delivery'),
+              phone: data.phone || firebaseUser.phoneNumber || '',
               bio: data.bio || '',
               city: data.city || '',
               state: data.state || '',
-              addresses: data.addresses || [],
-              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+              addresses: Array.isArray(data.addresses) ? data.addresses : [],
+              createdAt: data.createdAt?.toDate?.()?.toISOString() || String(data.createdAt || new Date().toISOString()),
             };
-            setCurrentUser(activeUser);
-            localStorage.setItem('fs_active_user', JSON.stringify(activeUser));
+            if (isMounted) {
+              setCurrentUser(activeUser);
+              localStorage.setItem('fs_active_user', JSON.stringify(activeUser));
+              localStorage.setItem('fs_v5_user', JSON.stringify(activeUser));
+            }
 
-            // Sync admin role back to doc if needed
             if (isMasterAdmin && data.role !== 'admin') {
-              await updateDoc(doc(db, 'users', firebaseUser.uid), {
+              await updateDoc(uidDocRef, {
                 role: 'admin',
                 updatedAt: serverTimestamp(),
               }).catch(() => {});
             }
           } else {
-            // New Google User - create minimal profile
+            // New Google User - create minimal profile or preserve cached session fields
+            let cachedUser: Partial<User> = {};
+            try {
+              const saved = localStorage.getItem('fs_active_user') || localStorage.getItem('fs_v5_user');
+              if (saved) cachedUser = JSON.parse(saved);
+            } catch {}
+
             const newUser: User = {
               id: firebaseUser.uid,
-              name: firebaseUser.displayName || 'New User',
-              email: firebaseUser.email || '',
-              photoURL: firebaseUser.photoURL || '',
-              phone: firebaseUser.phoneNumber || '',
-              role: isMasterAdmin ? 'admin' : 'customer',
-              addresses: [],
+              name: cachedUser.name || firebaseUser.displayName || 'New User',
+              email: firebaseUser.email || cachedUser.email || '',
+              photoURL: firebaseUser.photoURL || cachedUser.photoURL || '',
+              phone: cachedUser.phone || firebaseUser.phoneNumber || '',
+              role: isMasterAdmin ? 'admin' : (cachedUser.role || 'customer'),
+              isDriver: Boolean(cachedUser.isDriver || cachedUser.role === 'delivery'),
+              addresses: Array.isArray(cachedUser.addresses) ? cachedUser.addresses : [],
               createdAt: new Date().toISOString(),
             };
-            
-            await setDoc(doc(db, 'users', firebaseUser.uid), {
+
+            await setDoc(doc(db, 'users', firebaseUser.uid), sanitizeFirestoreData({
               ...newUser,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
-            }).catch(() => {});
-            
-            setCurrentUser(newUser);
-            localStorage.setItem('fs_active_user', JSON.stringify(newUser));
+            }), { merge: true }).catch(() => {});
+
+            if (isMounted) {
+              setCurrentUser(newUser);
+              localStorage.setItem('fs_active_user', JSON.stringify(newUser));
+              localStorage.setItem('fs_v5_user', JSON.stringify(newUser));
+            }
           }
         } catch (err) {
           console.warn('Firestore user fetch failed, keeping active user session:', err);
+          // Fallback to firebaseUser + cached data so refresh never logs user out
+          if (isMounted) {
+            setCurrentUser((prev) => {
+              const fallback: User = prev || {
+                id: firebaseUser.uid,
+                name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'),
+                email: firebaseUser.email || '',
+                photoURL: firebaseUser.photoURL || '',
+                phone: firebaseUser.phoneNumber || '',
+                role: isMasterAdmin ? 'admin' : 'customer',
+                addresses: [],
+                createdAt: new Date().toISOString(),
+              };
+              localStorage.setItem('fs_active_user', JSON.stringify(fallback));
+              localStorage.setItem('fs_v5_user', JSON.stringify(fallback));
+              return fallback;
+            });
+          }
         }
       } else {
-        // When Firebase Auth is null, check if there is an active local session (e.g. email/password login or stored user)
+        // When Firebase Auth is null, always restore/keep the active local session (e.g. email/password login or stored user)
         try {
-          const savedSession = localStorage.getItem('fs_active_user');
+          const savedSession = localStorage.getItem('fs_active_user') || localStorage.getItem('fs_v5_user');
           if (savedSession) {
             const parsed = JSON.parse(savedSession);
             if (parsed && (parsed.id || parsed.email)) {
-              setCurrentUser(parsed);
-              setIsAuthLoading(false);
+              const restoredUser: User = {
+                ...parsed,
+                addresses: Array.isArray(parsed.addresses) ? parsed.addresses : [],
+              };
+              if (isMounted) {
+                setCurrentUser(restoredUser);
+                setIsAuthLoading(false);
+              }
+              // Refresh user's latest role & driver status from Firestore in background
+              const docId = parsed.id || parsed.email.trim().toLowerCase().replace(/[@.]/g, '_');
+              getDoc(doc(db, 'users', docId))
+                .then((snap) => {
+                  if (snap.exists() && isMounted) {
+                    const freshData = snap.data();
+                    setCurrentUser((prev) => {
+                      if (!prev) return prev;
+                      const merged: User = {
+                        ...prev,
+                        role: freshData.role || prev.role,
+                        isDriver: Boolean(freshData.isDriver || freshData.role === 'delivery' || prev.isDriver),
+                        addresses: Array.isArray(freshData.addresses) ? freshData.addresses : prev.addresses,
+                      };
+                      localStorage.setItem('fs_active_user', JSON.stringify(merged));
+                      localStorage.setItem('fs_v5_user', JSON.stringify(merged));
+                      return merged;
+                    });
+                  }
+                })
+                .catch(() => {});
               return;
             }
           }
         } catch {
           // ignore
         }
-        setCurrentUser(null);
+        if (isMounted) {
+          setCurrentUser(null);
+        }
       }
-      setIsAuthLoading(false);
+      if (isMounted) {
+        setIsAuthLoading(false);
+      }
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(authTimeout);
+      unsubscribe();
+    };
   }, []);
 
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -715,9 +964,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const unsubscribe = onSnapshot(
           colRef,
           async (snapshot) => {
-            if (snapshot.empty && initialData && initialData.length > 0 && currentUser?.role === 'admin') {
-              // Seed the collection only if current user is admin and we haven't explicitly cleared it
-              if (storeSettings.isDemoDataSeeded === false) {
+            if (snapshot.empty && initialData && initialData.length > 0) {
+              setter(initialData);
+              if (currentUser?.role === 'admin' && storeSettings.isDemoDataSeeded === false) {
                 const batch = writeBatch(db);
                 initialData.forEach((item) => {
                   const docRef = doc(collection(db, collectionName), item.id || createUniqueId('seed'));
@@ -760,13 +1009,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [collectionName, currentUser?.role]);
   };
 
-  // Sync public collections (open to all customers and storefront visitors)
+  // Sync public collections (open to all customers, drivers, and storefront visitors)
   useCollectionSync('products', setProducts, INITIAL_PRODUCTS);
   useCollectionSync('categories', setCategories, INITIAL_CATEGORIES, 'slug');
   useCollectionSync('banners', setBanners, INITIAL_BANNERS);
   useCollectionSync('coupons', setCoupons, INITIAL_COUPONS, 'code');
   useCollectionSync('reviews', setReviews, INITIAL_REVIEWS, 'createdAt');
   useCollectionSync('customer_messages', setCustomerMessages, [], 'createdAt');
+  useCollectionSync('delivery_personnel', setDeliveryPersonnel, DEFAULT_DELIVERY_PERSONNEL);
   useCollectionSync(
     'hero_slides',
     (data) => {
@@ -810,18 +1060,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (err) => handleFirestoreError(err, OperationType.GET, 'inventory_adjustments')
     );
 
-    const unsubPersonnel = onSnapshot(
-      collection(db, 'delivery_personnel'),
-      (snapshot) => {
-        setDeliveryPersonnel(snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as DeliveryPersonnel[]);
-      },
-      (err) => handleFirestoreError(err, OperationType.GET, 'delivery_personnel')
-    );
-
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
       (snapshot) => {
-        const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as User[];
+        const list = snapshot.docs.map((d) => ({
+          ...d.data(),
+          id: d.id,
+          addresses: Array.isArray(d.data().addresses) ? d.data().addresses : [],
+        })) as User[];
         setAllUsers(list);
       },
       (err) => {
@@ -844,71 +1090,110 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => {
       unsubExpenses();
       unsubInventory();
-      unsubPersonnel();
       unsubUsers();
       unsubEmailAlerts();
     };
   }, [currentUser?.role]);
 
-  // Notifications Sync: Admin sees all, Customers see theirs
+  // All notifications from Firestore (no composite index required; sorted & filtered in memory)
+  const [rawNotifications, setRawNotifications] = useState<Notification[]>(() => {
+    try {
+      const saved = localStorage.getItem('fs_saved_notifications');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
   useEffect(() => {
     try {
       const col = collection(db, 'notifications');
-      let q = query(col, orderBy('time', 'desc'));
-      
-      if (currentUser && currentUser.role !== 'admin') {
-        q = query(col, where('userId', '==', currentUser.id), orderBy('time', 'desc'));
-      }
+      const unsubscribe = onSnapshot(
+        col,
+        (snapshot) => {
+          const list = snapshot.docs.map((d) => {
+            const raw = d.data();
+            let timeStr = raw.time;
+            if (!timeStr && raw.createdAt?.toDate) {
+              timeStr = raw.createdAt.toDate().toISOString();
+            } else if (typeof timeStr === 'object' && timeStr?.toDate) {
+              timeStr = timeStr.toDate().toISOString();
+            } else if (!timeStr) {
+              timeStr = new Date().toISOString();
+            }
+            return {
+              ...raw,
+              id: d.id,
+              time: String(timeStr),
+            } as Notification;
+          });
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const list = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Notification[];
-        setNotifications(list);
-      });
+          list.sort((a, b) => {
+            const tA = new Date(a.time).getTime() || 0;
+            const tB = new Date(b.time).getTime() || 0;
+            return tB - tA;
+          });
+
+          setRawNotifications(list);
+          try {
+            localStorage.setItem('fs_saved_notifications', JSON.stringify(list));
+          } catch {}
+        },
+        (err) => {
+          console.warn('Notifications listener notice:', err);
+        }
+      );
 
       return () => unsubscribe();
     } catch (err) {
-      console.warn("Notifications listener notice:", err);
+      console.warn('Notifications listener setup notice:', err);
     }
-  }, [currentUser?.id, currentUser?.role]);
+  }, []);
 
-  // Delivery assignments: admin or delivery personnel
+  // Delivery assignments: synced for customers (live tracking), drivers (portal queue), and admins
   useEffect(() => {
-    if (currentUser?.role !== 'admin' && currentUser?.role !== 'delivery') {
-      return;
+    try {
+      const unsubAssignments = onSnapshot(
+        collection(db, 'delivery_assignments'),
+        (snapshot) => {
+          const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as DeliveryAssignment[];
+          list.sort((a, b) => {
+            const tA = (a as any).createdAt?.toMillis?.() || new Date(a.assignedAt || 0).getTime() || 0;
+            const tB = (b as any).createdAt?.toMillis?.() || new Date(b.assignedAt || 0).getTime() || 0;
+            return tB - tA;
+          });
+          setDeliveryAssignments(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.GET, 'delivery_assignments')
+      );
+
+      return () => unsubAssignments();
+    } catch (err) {
+      console.warn('Delivery assignments listener notice:', err);
     }
+  }, []);
 
-    const unsubAssignments = onSnapshot(
-      collection(db, 'delivery_assignments'),
-      (snapshot) => {
-        const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as DeliveryAssignment[];
-        list.sort((a, b) => {
-          const tA = (a as any).createdAt?.toMillis?.() || 0;
-          const tB = (b as any).createdAt?.toMillis?.() || 0;
-          return tB - tA;
-        });
-        setDeliveryAssignments(list);
-      },
-      (err) => handleFirestoreError(err, OperationType.GET, 'delivery_assignments')
-    );
-
-    return () => unsubAssignments();
-  }, [currentUser?.role]);
-
-  // Support Threads: Admin sees all, Customer sees their own
+  // Support Threads: synced and filtered in memory so customers matching by ID or email see replies immediately
   useEffect(() => {
     try {
       const col = collection(db, 'support_threads');
-      const q = (!currentUser || currentUser.role === 'admin')
-        ? col
-        : query(col, where('customerId', '==', currentUser.id));
-
       const unsubSupport = onSnapshot(
-        q,
+        col,
         (snapshot) => {
-          const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as SupportThread[];
+          const list = snapshot.docs.map((d) => {
+            const data = d.data();
+            return {
+              ...data,
+              id: d.id,
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : String(data.createdAt || ''),
+              updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : String(data.updatedAt || ''),
+            } as SupportThread;
+          });
           list.sort((a, b) => {
-            const tA = (a as any).updatedAt?.toMillis?.() || (a as any).createdAt?.toMillis?.() || 0;
-            const tB = (b as any).updatedAt?.toMillis?.() || (b as any).createdAt?.toMillis?.() || 0;
+            const tA = new Date(a.updatedAt || a.createdAt || 0).getTime() || 0;
+            const tB = new Date(b.updatedAt || b.createdAt || 0).getTime() || 0;
             return tB - tA;
           });
           setSupportThreads(list);
@@ -920,18 +1205,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, 'support_threads');
     }
-  }, [currentUser?.id, currentUser?.role]);
+  }, []);
 
-  // Orders Sync: Admin sees ALL store orders in real-time. Customer sees their own orders.
+  // Orders Sync: synced in real-time so Admin, Delivery Drivers, and Customers (by userId or email) all see live updates
   useEffect(() => {
     try {
       const ordersCol = collection(db, 'orders');
-      const q = (currentUser && currentUser.role === 'customer')
-        ? query(ordersCol, where('userId', '==', currentUser.id))
-        : ordersCol;
-
       const unsubOrders = onSnapshot(
-        q,
+        ordersCol,
         (snapshot) => {
           const firestoreOrders = snapshot.docs.map((d) => ({ ...d.data(), id: d.id })) as Order[];
           firestoreOrders.sort((a, b) => {
@@ -950,7 +1231,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setOrders((prev) => {
             const map = new Map<string, Order>();
             firestoreOrders.forEach((o) => map.set(o.id, o));
-            // Retain any newly placed local order in case of network latency
             prev.forEach((o) => {
               if (!map.has(o.id)) map.set(o.id, o);
             });
@@ -972,45 +1252,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.warn('Orders listener setup notice:', err);
       handleFirestoreError(err, OperationType.GET, 'orders');
     }
-  }, [currentUser?.id, currentUser?.role]);
+  }, []);
 
-  // Sync Store Settings
-  useEffect(() => {
-    const settingsDoc = doc(db, 'settings', 'global');
-    const unsubscribe = onSnapshot(settingsDoc, (snapshot) => {
-      if (snapshot.exists()) {
-        setStoreSettings(snapshot.data() as StoreSettings);
-      } else if (currentUser?.role === 'admin') {
-        // Seed initial settings only if admin
-        setDoc(settingsDoc, {
-          ...storeSettings,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }).catch(err => console.warn("Notice seeding store settings:", err));
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'settings/global');
-    });
-    return () => unsubscribe();
-  }, [currentUser?.role]);
-
-
-  const [storeSettings, setStoreSettings] = useState<StoreSettings>({
+  const DEFAULT_STORE_SETTINGS: StoreSettings = {
     storeName: 'FATHIMA STORES',
     tagline: 'Quality Stationery & Everyday Office Essentials',
     contactEmail: 'care@fathimastores.com',
     contactPhone: '+91 98450 12345',
     address: 'Commercial Complex, MG Road, Trivandrum, Kerala 695001',
+    storeHubName: 'Fathima Stores Main Hub (MG Road, Trivandrum)',
+    storeLat: 8.5241,
+    storeLng: 76.9366,
+    storeCity: 'Trivandrum',
+    storeState: 'Kerala',
+    storePinCode: '695001',
+    deliveryRadiusKm: 25,
     currency: '₹',
     freeDeliveryThreshold: 500,
     standardDeliveryFee: 40,
     gstNumber: '32AABCF1234F1Z8',
     upiId: 'fathimastores@oksbi',
     upiMerchantName: 'FATHIMA STORES TRIVANDRUM',
+    enableOnlinePayments: true,
     enableGPay: true,
     enablePhonePe: true,
     enablePaytm: true,
+    enableUpiQr: true,
+    enableCards: true,
+    enableNetBanking: true,
     enableCOD: true,
+    autoVerifyOnlinePayments: true,
+    autoConfirmPaidOrders: true,
+    autoSendPaymentReceipt: true,
+    autoRefundOnCancel: true,
+    prepaidDiscountPct: 2,
+    codHandlingFee: 0,
+    paymentGatewayProvider: 'Razorpay',
+    paymentGatewayMode: 'live',
+    razorpayKeyId: 'rzp_live_FS8923471928',
+    merchantBankName: 'State Bank of India (Commercial Branch)',
+    merchantAccountLast4: '8921',
     showAnnouncement: false,
     announcementText: '',
     heroBadge: 'STATIONERY & ESSENTIALS',
@@ -1071,7 +1352,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     logoUrl: '',
     logoHeight: 36,
     isDemoDataSeeded: false,
+  };
+
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
+    try {
+      const saved = localStorage.getItem('fs_saved_store_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return { ...DEFAULT_STORE_SETTINGS, ...parsed };
+        }
+      }
+    } catch {}
+    return DEFAULT_STORE_SETTINGS;
   });
+
+  // Sync Store Settings
+  useEffect(() => {
+    const settingsDoc = doc(db, 'settings', 'global');
+    const unsubscribe = onSnapshot(settingsDoc, (snapshot) => {
+      if (snapshot.exists()) {
+        const merged = { ...DEFAULT_STORE_SETTINGS, ...(snapshot.data() as StoreSettings) };
+        setStoreSettings(merged);
+        try {
+          localStorage.setItem('fs_saved_store_settings', JSON.stringify(merged));
+        } catch {}
+      } else if (currentUser?.role === 'admin') {
+        // Seed initial settings only if admin
+        setDoc(settingsDoc, sanitizeFirestoreData({
+          ...storeSettings,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }), { merge: true }).catch(err => console.warn("Notice seeding store settings:", err));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
+    });
+    return () => unsubscribe();
+  }, [currentUser?.role]);
 
 
 
@@ -1121,6 +1439,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     status: CustomerMessage["status"],
     replyNotes?: string
   ) => {
+    const targetMsg = customerMessages.find((m) => m.id === id);
     setCustomerMessages((prev) =>
       prev.map((m) =>
         m.id === id
@@ -1142,6 +1461,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err) {
       console.warn("Message status updated locally:", err);
     }
+
+    if (status === 'replied' && targetMsg && replyNotes) {
+      const matchedUser = allUsers.find(
+        (u) => u.email?.toLowerCase() === targetMsg.email?.toLowerCase()
+      );
+      await sendNotification({
+        type: 'customer',
+        userId: matchedUser?.id || (currentUser?.email?.toLowerCase() === targetMsg.email?.toLowerCase() ? currentUser?.id : undefined),
+        userEmail: targetMsg.email?.toLowerCase(),
+        target: 'customer',
+        title: `Store Replied: ${targetMsg.subject || 'Your Inquiry'}`,
+        message: replyNotes,
+      });
+    }
   };
 
   const deleteCustomerMessage = async (id: string) => {
@@ -1153,8 +1486,102 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  // Delivery Driver Portal Auth & Helpers
+  // Compute whether the currently logged-in user has been authorized as a Driver by Admin
+  const isDriver = React.useMemo(() => {
+    if (!currentUser) return false;
+    const emailNorm = (currentUser.email || '').trim().toLowerCase();
+    const driverEmails = new Set(
+      (storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const driverIds = new Set(storeSettings.customDriverIds || []);
+    if (currentUser.role === 'delivery' || currentUser.isDriver === true) return true;
+    if (emailNorm && driverEmails.has(emailNorm)) return true;
+    if (currentUser.id && driverIds.has(currentUser.id)) return true;
+    return false;
+  }, [currentUser, storeSettings.customDriverEmails, storeSettings.customDriverIds]);
 
+  const effectiveDeliveryPersonnel = React.useMemo(() => {
+    const baseList = deliveryPersonnel.length > 0 ? [...deliveryPersonnel] : [...DEFAULT_DELIVERY_PERSONNEL];
+    // If currentUser is an authorized driver and not yet in the list, synthesize their driver profile
+    if (currentUser && isDriver) {
+      const emailNorm = (currentUser.email || '').trim().toLowerCase();
+      const exists = baseList.some(
+        (dp) =>
+          dp.id === currentUser.id ||
+          dp.userId === currentUser.id ||
+          (emailNorm && dp.email.trim().toLowerCase() === emailNorm)
+      );
+      if (!exists) {
+        baseList.unshift({
+          id: `dp-${currentUser.id}`,
+          userId: currentUser.id,
+          name: currentUser.name || 'Authorized Driver',
+          email: currentUser.email || '',
+          phone: currentUser.phone || '+91 98450 12345',
+          vehicleType: 'Bike',
+          vehicleNumber: 'KL-01-DR-2026',
+          status: 'available',
+          rating: 5.0,
+          totalDeliveries: 0,
+          currentLat: storeSettings.storeLat || 8.5241,
+          currentLng: storeSettings.storeLng || 76.9366,
+          lastUpdatedLocation: storeSettings.storeHubName || 'Store Dispatch Hub',
+          avatar: currentUser.photoURL || currentUser.avatar,
+        });
+      }
+    }
+    return baseList;
+  }, [deliveryPersonnel, currentUser, isDriver, storeSettings.storeLat, storeSettings.storeLng, storeSettings.storeHubName]);
 
+  const currentDeliveryPerson = React.useMemo(() => {
+    if (currentUser && isDriver) {
+      const emailNorm = (currentUser.email || '').trim().toLowerCase();
+      const matchedByUser = effectiveDeliveryPersonnel.find(
+        (dp) =>
+          dp.id === currentUser.id ||
+          dp.userId === currentUser.id ||
+          (emailNorm && dp.email.trim().toLowerCase() === emailNorm)
+      );
+      if (matchedByUser) return matchedByUser;
+    }
+    if (currentDeliveryPersonId) {
+      const matchedById = effectiveDeliveryPersonnel.find((dp) => dp.id === currentDeliveryPersonId);
+      if (matchedById) return matchedById;
+    }
+    return null;
+  }, [currentUser, isDriver, effectiveDeliveryPersonnel, currentDeliveryPersonId]);
+
+  const isDeliveryLoggedIn = Boolean(isDriver && currentDeliveryPerson);
+
+  const deliveryLogin = (email: string, phone: string): boolean => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+
+    const matched = effectiveDeliveryPersonnel.find((dp) => {
+      const dpEmail = dp.email.trim().toLowerCase();
+      const dpPhone = dp.phone.replace(/\D/g, '').slice(-10);
+      return dpEmail === cleanEmail && (cleanPhone.length >= 6 ? dpPhone.endsWith(cleanPhone) : dp.phone.trim() === phone.trim());
+    });
+
+    if (matched) {
+      setCurrentDeliveryPersonId(matched.id);
+      try {
+        localStorage.setItem('fs_active_driver_id', matched.id);
+      } catch {}
+      showToast(`Active driver profile switched to ${matched.name}!`, 'success');
+      return true;
+    }
+    return false;
+  };
+
+  const deliveryLogout = () => {
+    setCurrentDeliveryPersonId(null);
+    try {
+      localStorage.removeItem('fs_active_driver_id');
+    } catch {}
+    showToast('Exited Delivery Driver Portal', 'info');
+  };
 
   const updateDeliveryAssignmentStatus = async (
     assignmentId: string,
@@ -1168,67 +1595,177 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         : notesOrData
         ? { deliveryNotes: notesOrData }
         : {};
-    
+
+    const completedTime = status === 'Delivered' ? new Date().toISOString() : undefined;
+
+    setDeliveryAssignments((prev) =>
+      prev.map((a) =>
+        a.id === assignmentId
+          ? {
+              ...a,
+              status,
+              ...extraData,
+              ...(photoUrl ? { proofPhotoUrl: photoUrl } : {}),
+              ...(completedTime ? { completedAt: completedTime } : {}),
+            }
+          : a
+      )
+    );
+
     const updateData: any = {
       status,
       ...extraData,
       ...(photoUrl ? { proofPhotoUrl: photoUrl } : {}),
-      ...(status === 'Delivered' ? { completedAt: new Date().toISOString() } : {}),
+      ...(completedTime ? { completedAt: completedTime } : {}),
       updatedAt: serverTimestamp(),
     };
 
-    await updateDoc(doc(db, 'delivery_assignments', assignmentId), updateData);
+    await updateDoc(doc(db, 'delivery_assignments', assignmentId), sanitizeFirestoreData(updateData)).catch((err) =>
+      console.warn('Delivery assignment update notice:', err)
+    );
 
-    const assignment = deliveryAssignments.find(a => a.id === assignmentId);
+    const assignment = deliveryAssignments.find((a) => a.id === assignmentId);
     if (assignment?.orderId) {
+      const order = orders.find((o) => o.id === assignment.orderId);
       let orderStatus: OrderStatus = 'Out for Delivery';
       if (status === 'Delivered') orderStatus = 'Delivered';
-      if (status === 'Failed') orderStatus = 'Cancelled';
-      updateOrderStatus(assignment.orderId, orderStatus);
+      else if (status === 'Failed') orderStatus = 'Cancelled';
+      else if (status === 'Picked_Up' || status === 'Picked Up') orderStatus = 'Shipped';
+      else if (status === 'In Transit' || status === 'Out_for_Delivery') {
+        orderStatus = 'Out for Delivery';
+      }
+
+      if (order) {
+        const statusLabel = status.replace(/_/g, ' ');
+        await updateOrderDeliveryStatus(
+          order.id,
+          orderStatus,
+          assignment.deliveryPersonName || order.courierName || 'Fathima Express Delivery',
+          order.trackingNumber,
+          `Driver ${assignment.deliveryPersonName} updated delivery status to "${statusLabel}"`
+        );
+
+        // If delivered and COD / unpaid, automatically record cash collection & mark order Paid
+        if (status === 'Delivered' && order.paymentStatus !== 'Paid') {
+          await recordOrderPayment(
+            order.id,
+            order.outstandingBalance || order.total,
+            order.paymentMethod || 'COD',
+            `COD-DRV-${Date.now().toString(36).toUpperCase()}`,
+            'final',
+            `Collected upon delivery by driver ${assignment.deliveryPersonName}`
+          );
+        }
+      }
+    }
+
+    // Increment driver's totalDeliveries count when completed
+    if (status === 'Delivered' && assignment?.deliveryPersonId) {
+      const drv = effectiveDeliveryPersonnel.find((d) => d.id === assignment.deliveryPersonId);
+      if (drv) {
+        const nextTotal = (drv.totalDeliveries || 0) + 1;
+        setDeliveryPersonnel((prev) =>
+          prev.map((d) => (d.id === drv.id ? { ...d, totalDeliveries: nextTotal } : d))
+        );
+        updateDoc(doc(db, 'delivery_personnel', drv.id), {
+          totalDeliveries: nextTotal,
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
+      }
     }
   };
 
-
-  const assignDeliveryPerson = async (orderId: string, deliveryPersonId: string) => {
-    const worker = deliveryPersonnel.find((dp) => dp.id === deliveryPersonId);
+  const assignOrderToDelivery = async (orderId: string, deliveryPersonId: string, notes?: string) => {
+    const worker = effectiveDeliveryPersonnel.find((dp) => dp.id === deliveryPersonId);
     const order = orders.find((o) => o.id === orderId);
     if (!worker || !order) return;
 
-    const id = createUniqueId('da');
+    const existing = deliveryAssignments.find((a) => a.orderId === orderId);
+    const id = existing ? existing.id : createUniqueId('da');
     const newAssignment: DeliveryAssignment = {
       id,
       orderId,
-      deliveryPersonId,
+      deliveryPersonId: worker.id,
       deliveryPersonName: worker.name,
       deliveryPersonPhone: worker.phone,
       assignedAt: new Date().toISOString(),
       status: 'Assigned',
-      pickupAddress: 'Fathima Stationers Main Store, MG Road, Ernakulam, Kerala 682016',
+      pickupAddress: storeSettings.address || 'Fathima Stores Main Hub, MG Road, Trivandrum, Kerala 695001',
       dropAddress: order.shippingAddress,
       estimatedMinutes: 25,
+      ...(notes ? { deliveryNotes: notes } : {}),
     };
 
-    await setDoc(doc(db, 'delivery_assignments', id), {
-      ...newAssignment,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    
-    updateOrderStatus(orderId, 'Out for Delivery');
-    showToast(`Order #${orderId.slice(-6)} assigned to ${worker.name}`, 'success');
+    setDeliveryAssignments((prev) => [newAssignment, ...prev.filter((a) => a.id !== id && a.orderId !== orderId)]);
+
+    await setDoc(
+      doc(db, 'delivery_assignments', id),
+      sanitizeFirestoreData({
+        ...newAssignment,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    ).catch((err) => console.warn('Assign delivery notice:', err));
+
+    await updateOrderDeliveryStatus(
+      orderId,
+      'Out for Delivery',
+      `${worker.name} (${worker.vehicleType})`,
+      order.trackingNumber,
+      `Assigned to delivery partner ${worker.name} (${worker.phone}). ${notes ? `Note: ${notes}` : ''}`
+    );
+
+    showToast(`Order #${orderId} assigned to ${worker.name}`, 'success');
   };
 
+  const assignDeliveryPerson = async (orderId: string, deliveryPersonId: string) => {
+    await assignOrderToDelivery(orderId, deliveryPersonId);
+  };
+
+  const completeDeliveryAssignment = async (assignmentId: string, proofNotes?: string) => {
+    await updateDeliveryAssignmentStatus(
+      assignmentId,
+      'Delivered',
+      proofNotes || 'Package handed over to customer at pinned delivery location'
+    );
+    showToast('Delivery marked as completed!', 'success');
+  };
 
   const updateDeliveryPersonLocation = async (personId: string, lat: number, lng: number) => {
+    setDeliveryPersonnel((prev) =>
+      prev.map((dp) => (dp.id === personId ? { ...dp, currentLat: lat, currentLng: lng } : dp))
+    );
     await updateDoc(doc(db, 'delivery_personnel', personId), {
       currentLat: lat,
       currentLng: lng,
       updatedAt: serverTimestamp(),
-    });
+    }).catch(() => {});
   };
 
+  // Compute Admin Notifications and Customer-facing Notifications from rawNotifications
+  const notifications = rawNotifications;
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const customerNotifications = React.useMemo(() => {
+    const userId = currentUser?.id;
+    const userEmail = currentUser?.email?.toLowerCase().trim();
+    const myOrderIds = new Set(
+      orders
+        .filter(
+          (o) =>
+            (userId && o.userId === userId) ||
+            (userEmail && o.email?.toLowerCase().trim() === userEmail)
+        )
+        .map((o) => o.id)
+    );
+
+    return rawNotifications.filter((n) => {
+      if (n.target === 'all') return true;
+      if (userId && n.userId === userId) return true;
+      if (userEmail && n.userEmail && n.userEmail.toLowerCase().trim() === userEmail) return true;
+      if (n.orderId && myOrderIds.has(n.orderId)) return true;
+      return false;
+    });
+  }, [rawNotifications, currentUser?.id, currentUser?.email, orders]);
 
   // Apply accent colors, typography and theme mode dynamically via CSS variables to root
   useEffect(() => {
@@ -1297,14 +1834,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // so we don't need to sync them to localStorage anymore.
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && (currentUser.id || currentUser.email)) {
       safeStorageSet('fs_v5_user', currentUser);
-    } else {
-      try {
-        localStorage.removeItem('fs_v5_user');
-      } catch {
-        // ignore
-      }
     }
   }, [currentUser]);
 
@@ -1460,7 +1991,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     showToast('Coupon deleted.', 'info');
   };
 
-  // Order Placement
+  // Order Placement with Automated Online Payment Verification & Receipt Pipeline
   const placeOrder = async (orderData: {
     customerName: string;
     email: string;
@@ -1468,6 +1999,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     shippingAddress: ShippingAddress;
     paymentMethod: PaymentMethod;
     deliveryMethod: string;
+    paymentDetails?: OnlinePaymentDetails;
+    finalTotalOverride?: number;
+    prepaidDiscount?: number;
+    codFee?: number;
   }): Promise<Order> => {
 
     const randomNum = Math.floor(1000 + Math.random() * 9000);
@@ -1483,29 +2018,72 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       sku: item.product.sku,
     }));
 
-    const isPaid = orderData.paymentMethod !== 'COD';
+    const isPaidOnline = orderData.paymentMethod !== 'COD';
+    const autoVerify = storeSettings.autoVerifyOnlinePayments !== false;
+    const autoConfirm = storeSettings.autoConfirmPaidOrders !== false;
+    const gatewayName =
+      orderData.paymentDetails?.gatewayName ||
+      storeSettings.paymentGatewayProvider ||
+      'Razorpay / NPCI UPI';
+
+    const finalOrderTotal =
+      orderData.finalTotalOverride !== undefined ? orderData.finalTotalOverride : cartTotal;
+
+    const txnId =
+      orderData.paymentDetails?.transactionId ||
+      (isPaidOnline ? `pay_RZP${Date.now().toString().slice(-8)}` : undefined);
+    const utrNum =
+      orderData.paymentDetails?.utrNumber ||
+      (isPaidOnline ? `4293${Math.floor(10000000 + Math.random() * 90000000)}` : undefined);
+
     const nowTimeStr = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-    const initialPaid = isPaid ? cartTotal : 0;
-    const initialOutstanding = isPaid ? 0 : cartTotal;
-    const initialTimeline: DeliveryTimelineStep[] = [
-      {
-        status: 'Confirmed',
-        timestamp: nowTimeStr,
-        note: isPaid ? 'Order confirmed and payment verified via gateway' : 'Cash on Delivery order confirmed',
-      },
-    ];
-    const initialRecords: PaymentRecord[] = isPaid
+    const initialPaid = isPaidOnline && autoVerify ? finalOrderTotal : 0;
+    const initialOutstanding = isPaidOnline && autoVerify ? 0 : finalOrderTotal;
+    const effectiveOrderStatus: OrderStatus =
+      isPaidOnline && autoVerify && autoConfirm ? 'Processing' : 'Confirmed';
+
+    const initialTimeline: DeliveryTimelineStep[] =
+      isPaidOnline && autoVerify && autoConfirm
+        ? [
+            {
+              status: 'Processing',
+              timestamp: nowTimeStr,
+              note: `Online payment of ₹${finalOrderTotal} auto-verified via ${gatewayName} (UTR: ${utrNum}). Queued for priority dispatch from ${storeSettings.storeHubName || 'Store Hub'}.`,
+            },
+            {
+              status: 'Confirmed',
+              timestamp: nowTimeStr,
+              note: `Order placed via ${orderData.paymentMethod} (Txn ID: ${txnId})`,
+            },
+          ]
+        : [
+            {
+              status: 'Confirmed',
+              timestamp: nowTimeStr,
+              note: isPaidOnline
+                ? `Online payment submitted via ${orderData.paymentMethod} (UTR: ${utrNum})`
+                : 'Cash on Delivery (COD) order confirmed',
+            },
+          ];
+
+    const initialRecords: PaymentRecord[] = isPaidOnline
       ? [
           {
             id: createUniqueId('pay'),
             orderId: newOrderId,
-            amount: cartTotal,
+            amount: finalOrderTotal,
             date: new Date().toISOString().split('T')[0],
             method: orderData.paymentMethod,
-            reference: `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
-            recordedBy: 'Payment Gateway',
+            reference: txnId || `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
+            utrNumber: utrNum,
+            gatewayName,
+            payerInfo: orderData.paymentDetails?.payerInfo || orderData.phone,
+            autoVerified: autoVerify,
+            recordedBy: autoVerify ? `Automated ${gatewayName} Webhook` : 'Online Checkout',
             type: 'final',
-            notes: 'Successful transaction verified on server',
+            notes: autoVerify
+              ? `Instant automated payment verification • UTR: ${utrNum} • Txn: ${txnId}`
+              : `Online payment recorded • UTR: ${utrNum}`,
           },
         ]
       : [];
@@ -1520,20 +2098,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       shippingAddress: orderData.shippingAddress,
       deliveryMethod: orderData.deliveryMethod,
       paymentMethod: orderData.paymentMethod,
-      paymentStatus: 'Pending',
-      paymentVerified: false,
-      orderStatus: 'Confirmed',
+      paymentStatus: isPaidOnline ? (autoVerify ? 'Paid' : 'Pending') : 'Pending',
+      paymentVerified: isPaidOnline && autoVerify,
+      ...(isPaidOnline && autoVerify
+        ? {
+            paymentVerifiedAt: new Date().toISOString(),
+            paymentVerifiedBy: `Automated ${gatewayName} Webhook`,
+          }
+        : {}),
+      ...(txnId ? { transactionId: txnId } : {}),
+      ...(utrNum ? { utrNumber: utrNum } : {}),
+      ...(isPaidOnline ? { paymentGateway: gatewayName } : {}),
+      orderStatus: effectiveOrderStatus,
       items: orderItems,
       subtotal: cartSubtotal,
-      discount: cartDiscount,
+      discount: cartDiscount + (orderData.prepaidDiscount || 0),
+      ...(orderData.prepaidDiscount ? { prepaidDiscount: orderData.prepaidDiscount } : {}),
+      ...(orderData.codFee ? { codFee: orderData.codFee } : {}),
       couponCode: appliedCoupon?.code || '',
       deliveryCharge: cartDeliveryCharge,
-      total: cartTotal,
-      estimatedDelivery: '3 to 5 business days',
+      total: finalOrderTotal,
+      estimatedDelivery: orderData.deliveryMethod.includes('Same-Day')
+        ? 'Today by 6:00 PM'
+        : orderData.deliveryMethod.includes('Pickup')
+        ? 'Ready in 2 Hours at Store Hub'
+        : '2 to 4 business days',
       trackingNumber: `FS-TRK-${Math.floor(10000 + Math.random() * 90000)}`,
-      courierName: 'BlueDart / Delhivery Express',
-      paidAmount: 0,
-      outstandingBalance: cartTotal,
+      courierName: 'Fathima Express / BlueDart',
+      paidAmount: initialPaid,
+      outstandingBalance: initialOutstanding,
       paymentRecords: initialRecords,
       deliveryTimeline: initialTimeline,
       returnStatus: 'None',
@@ -1573,7 +2166,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updatedAt: serverTimestamp(),
       });
       await setDoc(doc(db, 'orders', newOrderId), cleanOrder);
-      console.log(`Order #${newOrderId} saved to Firestore orders collection.`);
     } catch (error) {
       console.warn("Retrying order with timestamp fallback:", error);
       try {
@@ -1587,17 +2179,151 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // Send admin notification
+    // Send automated customer & admin notification with payment verification details
     await sendNotification({
-      title: 'New Order Received',
-      message: `Order #${newOrderId} received from ${orderData.customerName} (₹${cartTotal}).`,
+      title: isPaidOnline
+        ? `Payment Verified & Order #${newOrderId} Confirmed`
+        : `Order Confirmed (#${newOrderId})`,
+      message: isPaidOnline
+        ? `Payment of ₹${finalOrderTotal} via ${orderData.paymentMethod} (UTR: ${utrNum}) was automatically verified! Your order #${newOrderId} is now ${effectiveOrderStatus}.`
+        : `Thank you ${orderData.customerName}! Your COD order #${newOrderId} for ₹${finalOrderTotal} has been placed.`,
       type: 'order',
       orderId: newOrderId,
+      userId: currentUser?.id || 'guest',
+      userEmail: orderData.email?.toLowerCase().trim(),
+      target: 'customer',
     });
+
+    // Automated Email Receipt Alert
+    if (storeSettings.autoSendPaymentReceipt !== false && orderData.email) {
+      const emailId = createUniqueId('email');
+      const receiptAlert: EmailAlertRecord = {
+        id: emailId,
+        type: 'order_confirmation',
+        recipientEmail: orderData.email,
+        orderId: newOrderId,
+        orderStatus: effectiveOrderStatus,
+        subject: isPaidOnline
+          ? `[Fathima Stores] Official Payment Receipt (₹${finalOrderTotal} • UTR ${utrNum}) & Order #${newOrderId}`
+          : `[Fathima Stores] Order Confirmation #${newOrderId} (₹${finalOrderTotal})`,
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+      };
+      setEmailAlertLogs((prev) => [receiptAlert, ...prev]);
+      setDoc(doc(db, 'email_alerts', emailId), sanitizeFirestoreData({
+        ...receiptAlert,
+        createdAt: serverTimestamp(),
+      })).catch(() => {});
+    }
 
     // Clear cart
     clearCart();
     return newOrder;
+  };
+
+  // Complete Online Payment for an existing Pending or COD Order
+  const completeOnlineOrderPayment = async (
+    orderId: string,
+    method: PaymentMethod,
+    paymentDetails?: OnlinePaymentDetails
+  ) => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+
+    const gatewayName =
+      paymentDetails?.gatewayName ||
+      storeSettings.paymentGatewayProvider ||
+      'Razorpay / NPCI UPI';
+    const txnId =
+      paymentDetails?.transactionId || `pay_RZP${Date.now().toString().slice(-8)}`;
+    const utrNum =
+      paymentDetails?.utrNumber || `4293${Math.floor(10000000 + Math.random() * 90000000)}`;
+    const amountToPay = order.outstandingBalance && order.outstandingBalance > 0 ? order.outstandingBalance : order.total;
+    const nowTimeStr = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+    const newRecord: PaymentRecord = {
+      id: createUniqueId('pay'),
+      orderId,
+      amount: amountToPay,
+      date: new Date().toISOString().split('T')[0],
+      method,
+      reference: txnId,
+      utrNumber: utrNum,
+      gatewayName,
+      payerInfo: paymentDetails?.payerInfo || order.phone,
+      autoVerified: true,
+      recordedBy: `Automated ${gatewayName} Webhook`,
+      type: 'final',
+      notes: `Online payment completed & auto-verified • UTR: ${utrNum} • Txn: ${txnId}`,
+    };
+
+    const nextOrderStatus: OrderStatus =
+      order.orderStatus === 'Pending' || order.orderStatus === 'Confirmed'
+        ? 'Processing'
+        : order.orderStatus;
+
+    const step: DeliveryTimelineStep = {
+      status: nextOrderStatus,
+      timestamp: nowTimeStr,
+      note: `Online payment of ₹${amountToPay} verified via ${method} (UTR: ${utrNum}).`,
+    };
+
+    const updatedOrder: Order = {
+      ...order,
+      paymentMethod: method,
+      paymentStatus: 'Paid',
+      paymentVerified: true,
+      paymentVerifiedAt: new Date().toISOString(),
+      paymentVerifiedBy: `Automated ${gatewayName} Webhook`,
+      transactionId: txnId,
+      utrNumber: utrNum,
+      paymentGateway: gatewayName,
+      paidAmount: order.total,
+      outstandingBalance: 0,
+      orderStatus: nextOrderStatus,
+      paymentRecords: [newRecord, ...(order.paymentRecords || [])],
+      deliveryTimeline: [step, ...(order.deliveryTimeline || [])],
+    };
+
+    setOrders((prev) => {
+      const next = prev.map((o) => (o.id === orderId ? updatedOrder : o));
+      try {
+        localStorage.setItem('fs_saved_orders', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    await updateDoc(
+      doc(db, 'orders', orderId),
+      sanitizeFirestoreData({
+        paymentMethod: method,
+        paymentStatus: 'Paid',
+        paymentVerified: true,
+        paymentVerifiedAt: updatedOrder.paymentVerifiedAt,
+        paymentVerifiedBy: updatedOrder.paymentVerifiedBy,
+        transactionId: txnId,
+        utrNumber: utrNum,
+        paymentGateway: gatewayName,
+        paidAmount: order.total,
+        outstandingBalance: 0,
+        orderStatus: nextOrderStatus,
+        paymentRecords: updatedOrder.paymentRecords,
+        deliveryTimeline: updatedOrder.deliveryTimeline,
+        updatedAt: serverTimestamp(),
+      })
+    ).catch((err) => console.warn('Online payment update notice:', err));
+
+    await sendNotification({
+      userId: order.userId || undefined,
+      userEmail: (order.email || order.shippingAddress?.email || '').toLowerCase().trim() || undefined,
+      orderId: order.id,
+      target: 'customer',
+      type: 'order',
+      title: `Online Payment Verified (#${order.id})`,
+      message: `We received and auto-verified your payment of ₹${amountToPay} via ${method} (UTR: ${utrNum}) for order #${order.id}.`,
+    });
+
+    showToast(`Online payment of ₹${amountToPay} verified for Order #${orderId} (UTR: ${utrNum})!`, 'success');
   };
 
 
@@ -1621,10 +2347,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         house: 'Store Walk-in',
         street: 'Main Road',
         area: 'Central Market',
-        city: 'Trivandrum',
-        district: 'Trivandrum',
-        state: 'Kerala',
-        pinCode: '695001',
+        city: storeSettings.storeCity || 'Trivandrum',
+        district: storeSettings.storeCity || 'Trivandrum',
+        state: storeSettings.storeState || 'Kerala',
+        pinCode: storeSettings.storePinCode || '695001',
       },
       deliveryMethod: orderData.deliveryMethod || 'Standard Delivery',
       paymentMethod: orderData.paymentMethod || 'Online',
@@ -1697,18 +2423,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
 
   const sendOrderStatusAlert = async (order: Order, status: string, note?: string) => {
-    // 1. Send Dashboard Notification to User
-    if (order.userId) {
-      await sendNotification({
-        userId: order.userId,
-        orderId: order.id,
-        type: 'order',
-        title: `Order Status Updated: ${status}`,
-        message: `Your order #${order.id} is now "${status}". ${note || ''}`,
-      });
-    }
+    // 1. Send Real-time Notification to User (matched by userId, userEmail, or orderId)
+    await sendNotification({
+      userId: order.userId || undefined,
+      userEmail: (order.email || order.shippingAddress?.email || '').toLowerCase().trim() || undefined,
+      orderId: order.id,
+      target: 'customer',
+      type: 'order',
+      title: `Order #${order.id}: ${status}`,
+      message: `Your order #${order.id} status is now "${status}". ${note ? note : ''}`.trim(),
+    });
 
-    // 2. Log Automated Email Alert (Simulated Dispatch)
+    // 2. Log Automated Email Alert
     const emailId = createUniqueId('email');
     const alert: EmailAlertRecord = {
       id: emailId,
@@ -1735,11 +2461,40 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    const shouldAutoRefund =
+      status === 'Cancelled' &&
+      order.paymentStatus === 'Paid' &&
+      storeSettings.autoRefundOnCancel !== false;
+
+    const refundRef = `RFD-${Date.now().toString(36).toUpperCase()}`;
+    const refundRecord: PaymentRecord | null = shouldAutoRefund
+      ? {
+          id: createUniqueId('pay'),
+          orderId,
+          amount: order.paidAmount || order.total,
+          date: new Date().toISOString().split('T')[0],
+          method: order.paymentMethod,
+          reference: refundRef,
+          gatewayName: order.paymentGateway || storeSettings.paymentGatewayProvider || 'Razorpay',
+          autoVerified: true,
+          recordedBy: 'Automated Refund Engine',
+          type: 'refund',
+          notes: `Automated online refund processed upon order cancellation (Ref: ${refundRef})`,
+        }
+      : null;
+
     const timelineStep: DeliveryTimelineStep = {
       status,
       timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-      note: `Order status updated to ${status}`,
+      note: shouldAutoRefund
+        ? `Order cancelled & automated online refund of ₹${order.paidAmount || order.total} initiated (${refundRef})`
+        : `Order status updated to ${status}`,
     };
+
+    const nextPaymentStatus: PaymentStatus = shouldAutoRefund ? 'Refunded' : order.paymentStatus;
+    const nextPaymentRecords = refundRecord
+      ? [refundRecord, ...(order.paymentRecords || [])]
+      : order.paymentRecords || [];
 
     setOrders((prev) =>
       prev.map((o) =>
@@ -1747,6 +2502,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           ? {
               ...o,
               orderStatus: status,
+              paymentStatus: nextPaymentStatus,
+              ...(shouldAutoRefund ? { paidAmount: 0, outstandingBalance: 0 } : {}),
+              paymentRecords: nextPaymentRecords,
               deliveryTimeline: [timelineStep, ...(o.deliveryTimeline || [])],
             }
           : o
@@ -1756,17 +2514,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
         orderStatus: status,
+        paymentStatus: nextPaymentStatus,
+        ...(shouldAutoRefund ? { paidAmount: 0, outstandingBalance: 0 } : {}),
+        paymentRecords: nextPaymentRecords,
         deliveryTimeline: [timelineStep, ...(order.deliveryTimeline || [])],
         updatedAt: serverTimestamp(),
       }));
-      
-      // Trigger Automated Alerts & Notifications
-      await sendOrderStatusAlert(order, status);
     } catch (err) {
       console.warn("Order status updated locally, Firestore sync notice:", err);
     }
 
-    showToast(`Order #${orderId} status set to "${status}"`);
+    // Always trigger Automated Alerts & Customer Notifications
+    await sendOrderStatusAlert(
+      order,
+      status,
+      shouldAutoRefund
+        ? `An automated refund of ₹${order.paidAmount || order.total} has been initiated to your original payment method (${order.paymentMethod}, Ref: ${refundRef}).`
+        : undefined
+    );
+
+    showToast(
+      shouldAutoRefund
+        ? `Order #${orderId} cancelled & ₹${order.paidAmount || order.total} auto-refunded!`
+        : `Order #${orderId} status set to "${status}"`
+    );
   };
 
   const bulkUpdateOrderStatus = async (orderIds: string[], status: OrderStatus) => {
@@ -1777,6 +2548,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
       note: `Bulk status update to ${status}`,
     };
+
+    const affectedOrders = orders.filter((o) => orderIds.includes(o.id));
 
     setOrders((prev) =>
       prev.map((o) =>
@@ -1803,6 +2576,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await batch.commit();
     } catch (err) {
       console.warn("Bulk order status update Firestore error:", err);
+    }
+
+    // Notify every affected customer
+    for (const ord of affectedOrders) {
+      await sendOrderStatusAlert(ord, status, `Your order status was updated to ${status} by Store Admin.`);
     }
 
     showToast(`Updated ${orderIds.length} orders to "${status}"`, 'success');
@@ -1889,6 +2667,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: serverTimestamp(),
     })).catch((err) => console.warn('Payment update notice:', err));
 
+    await sendNotification({
+      userId: order.userId || undefined,
+      userEmail: (order.email || order.shippingAddress?.email || '').toLowerCase().trim() || undefined,
+      orderId: order.id,
+      target: 'customer',
+      type: 'order',
+      title: `Payment Recorded (#${order.id})`,
+      message: `A ${type} payment of ₹${amount} via ${method} has been recorded for your order #${order.id}.`,
+    });
+
     showToast(`Payment of ₹${amount} recorded for order #${orderId}`);
   };
 
@@ -1907,6 +2695,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
       note: note || `Order updated to ${status} via ${courierName || order.courierName || 'Courier'}`,
     };
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              orderStatus: status,
+              courierName: courierName || o.courierName || 'BlueDart / Delhivery',
+              trackingNumber: trackingNumber || o.trackingNumber || '',
+              deliveryTimeline: [step, ...(o.deliveryTimeline || [])],
+            }
+          : o
+      )
+    );
 
     await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
       orderStatus: status,
@@ -1954,8 +2756,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Trigger Automated Alerts & Notifications
     await sendOrderStatusAlert(order, `Return ${status}`);
-
-    showToast(`Return ${status} for Order #${orderId}`);
 
     showToast(`Return for Order #${orderId} marked as "${status}"`);
   };
@@ -2030,6 +2830,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.warn('Verify order payment notice:', err);
     }
 
+    await sendNotification({
+      userId: order.userId || undefined,
+      userEmail: (order.email || order.shippingAddress?.email || '').toLowerCase().trim() || undefined,
+      orderId: order.id,
+      target: 'customer',
+      type: 'order',
+      title: verified ? `Payment Verified (#${order.id})` : `Payment Verification Pending (#${order.id})`,
+      message: verified
+        ? `Your payment of ₹${order.total} for Order #${order.id} has been verified by Store Admin.`
+        : `Your payment status for Order #${order.id} was updated to Pending Verification.`,
+    });
+
     if (verified) {
       showToast(`Payment of ₹${order.total} for Order #${orderId} verified and added to income!`, 'success');
     } else {
@@ -2066,7 +2878,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
 
-  // Customer Support Chat
   // Customer Support Chat
   const createSupportThread = async (subject: string, message: string, orderId?: string): Promise<SupportThread> => {
     const threadId = createUniqueId('th');
@@ -2135,6 +2946,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       updatedAt: serverTimestamp(),
       status: senderRole === 'admin' && thread.status === 'open' ? 'in_progress' : thread.status,
     })).catch((err) => console.warn('Send support message notice:', err));
+
+    if (senderRole === 'admin') {
+      await sendNotification({
+        type: 'customer',
+        userId: thread.customerId !== 'guest' ? thread.customerId : undefined,
+        userEmail: thread.customerEmail?.toLowerCase().trim(),
+        orderId: thread.orderId || undefined,
+        target: 'customer',
+        title: `New Support Reply: ${thread.subject}`,
+        message,
+      });
+    }
   };
 
   const updateSupportThreadStatus = async (threadId: string, status: 'open' | 'in_progress' | 'resolved') => {
@@ -2456,6 +3279,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     rating: number;
     comment: string;
     userName: string;
+    reviewTitle?: string;
+    tags?: string[];
   }) => {
     const reviewId = createUniqueId('rev');
     const userId = currentUser?.id || `guest-${Date.now().toString(36)}`;
@@ -2469,6 +3294,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       userName: reviewData.userName || currentUser?.name || 'Customer',
       userAvatar: currentUser?.photoURL || currentUser?.avatar || '',
       rating: reviewData.rating,
+      ...(reviewData.reviewTitle ? { reviewTitle: reviewData.reviewTitle } : {}),
+      ...(reviewData.tags && reviewData.tags.length > 0 ? { tags: reviewData.tags } : {}),
       comment: reviewData.comment,
       date: new Date().toISOString().split('T')[0],
       verifiedPurchase: isVerified,
@@ -2511,7 +3338,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         })).catch(() => {});
       }
 
-      showToast('Thank you! Your review has been submitted.', 'success');
+      showToast('Thank you! Your rating & review have been published.', 'success');
     } catch (error) {
       console.warn("Retrying review with fallback timestamp:", error);
       try {
@@ -2529,20 +3356,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const checkIfUserPurchasedProduct = async (productId: string, userId: string): Promise<boolean> => {
     try {
+      const userEmailNorm = currentUser?.email?.toLowerCase().trim();
+      const matchedLocal = orders.some(
+        (o) =>
+          (o.userId === userId || (userEmailNorm && o.email?.toLowerCase().trim() === userEmailNorm)) &&
+          o.orderStatus !== 'Cancelled' &&
+          o.items?.some((item) => item.productId === productId)
+      );
+      if (matchedLocal) return true;
+
       const q = query(
         collection(db, 'orders'),
-        where('userId', '==', userId),
-        where('orderStatus', '==', 'Delivered')
+        where('userId', '==', userId)
       );
-      
       const snapshot = await getDocs(q);
-      
-      return snapshot.docs.some(orderDoc => {
+      return snapshot.docs.some((orderDoc) => {
         const orderData = orderDoc.data() as Order;
-        return orderData.items?.some(item => item.productId === productId);
+        return (
+          orderData.orderStatus !== 'Cancelled' &&
+          orderData.items?.some((item) => item.productId === productId)
+        );
       });
     } catch (error) {
-      console.error("Error verifying purchase:", error);
       return false;
     }
   };
@@ -2603,11 +3438,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Settings Handlers
   const updateStoreSettings = async (updates: Partial<StoreSettings>) => {
-    setStoreSettings((prev) => ({ ...prev, ...updates }));
-    await updateDoc(doc(db, 'settings', 'global'), sanitizeFirestoreData({
-      ...updates,
-      updatedAt: serverTimestamp(),
-    })).catch((err) => console.warn('Settings update notice:', err));
+    setStoreSettings((prev) => {
+      const next = { ...prev, ...updates };
+      try {
+        localStorage.setItem('fs_saved_store_settings', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    await setDoc(
+      doc(db, 'settings', 'global'),
+      sanitizeFirestoreData({
+        ...updates,
+        updatedAt: serverTimestamp(),
+      }),
+      { merge: true }
+    ).catch((err) => console.warn('Settings update notice:', err));
     showToast('Store settings saved successfully', 'success');
   };
 
@@ -2829,11 +3674,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const logoutUser = async () => {
     try {
       localStorage.removeItem('fs_active_user');
+      localStorage.removeItem('fs_v5_user');
+      localStorage.removeItem('fs_active_driver_id');
       setCurrentUser(null);
       await signOut(auth).catch(() => {});
       showToast('Logged out successfully', 'info');
     } catch (error) {
       localStorage.removeItem('fs_active_user');
+      localStorage.removeItem('fs_v5_user');
       setCurrentUser(null);
       showToast('Logged out', 'info');
     }
@@ -2893,7 +3741,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     showToast('Default address updated', 'success');
   };
 
-  // Customer VIP and Admin Access Management
+  // Customer VIP, Admin, and Delivery Driver Access Management
   const toggleCustomerVIP = async (customerEmailOrId: string, isVip: boolean) => {
     try {
       const emailNorm = (customerEmailOrId || '').trim().toLowerCase();
@@ -2942,6 +3790,165 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err) {
       console.error('Failed to grant admin access:', err);
       showToast('Could not update admin role', 'error');
+    }
+  };
+
+  const grantCustomerDriver = async (
+    customerEmailOrId: string,
+    grant: boolean,
+    vehicleDetails?: {
+      vehicleType?: DeliveryPersonnel['vehicleType'];
+      vehicleNumber?: string;
+      name?: string;
+      phone?: string;
+    }
+  ) => {
+    try {
+      const emailNorm = (customerEmailOrId || '').trim().toLowerCase();
+      const userDoc = allUsers.find(
+        (u) => u.id === customerEmailOrId || (u.email && u.email.toLowerCase() === emailNorm)
+      );
+      const targetEmail = (userDoc?.email || emailNorm).toLowerCase().trim();
+      const targetId = userDoc?.id || customerEmailOrId;
+
+      const currentDriverEmails = new Set(
+        (storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim())
+      );
+      const currentDriverIds = new Set(storeSettings.customDriverIds || []);
+
+      if (grant) {
+        if (targetEmail && targetEmail.includes('@')) currentDriverEmails.add(targetEmail);
+        if (targetId) currentDriverIds.add(targetId);
+      } else {
+        if (targetEmail) currentDriverEmails.delete(targetEmail);
+        if (targetId) currentDriverIds.delete(targetId);
+      }
+
+      await updateStoreSettings({
+        customDriverEmails: Array.from(currentDriverEmails),
+        customDriverIds: Array.from(currentDriverIds),
+      });
+
+      // Update user document in Firestore & allUsers state
+      if (userDoc) {
+        const nextRole = grant
+          ? userDoc.role === 'admin'
+            ? 'admin'
+            : 'delivery'
+          : userDoc.role === 'admin'
+          ? 'admin'
+          : 'customer';
+        await updateDoc(doc(db, 'users', userDoc.id), {
+          role: nextRole,
+          isDriver: grant,
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
+        setAllUsers((prev) =>
+          prev.map((u) => (u.id === userDoc.id ? { ...u, role: nextRole, isDriver: grant } : u))
+        );
+      } else if (targetEmail && targetEmail.includes('@')) {
+        const emailDocId = targetEmail.replace(/[@.]/g, '_');
+        await setDoc(
+          doc(db, 'users', emailDocId),
+          sanitizeFirestoreData({
+            id: emailDocId,
+            email: targetEmail,
+            name: vehicleDetails?.name || targetEmail.split('@')[0],
+            phone: vehicleDetails?.phone || '+91 98450 12345',
+            role: grant ? 'delivery' : 'customer',
+            isDriver: grant,
+            updatedAt: serverTimestamp(),
+          }),
+          { merge: true }
+        ).catch(() => {});
+      }
+
+      // Sync currentUser if Admin is modifying their own or active user's driver access
+      if (
+        currentUser &&
+        (currentUser.id === targetId ||
+          (targetEmail && currentUser.email?.toLowerCase().trim() === targetEmail))
+      ) {
+        setCurrentUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                isDriver: grant,
+                role: grant ? (prev.role === 'admin' ? 'admin' : 'delivery') : prev.role === 'admin' ? 'admin' : 'customer',
+              }
+            : null
+        );
+      }
+
+      // Create or remove DeliveryPersonnel entry in delivery_personnel collection
+      const dpId = `dp-${(targetId || targetEmail).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      if (grant) {
+        const existingDp = deliveryPersonnel.find(
+          (dp) =>
+            dp.id === dpId ||
+            dp.userId === targetId ||
+            (targetEmail && dp.email.toLowerCase().trim() === targetEmail)
+        );
+        const finalDpId = existingDp ? existingDp.id : dpId;
+        const driverProfile: DeliveryPersonnel = {
+          id: finalDpId,
+          userId: targetId,
+          name: vehicleDetails?.name || userDoc?.name || existingDp?.name || targetEmail.split('@')[0] || 'Store Driver',
+          email: targetEmail || userDoc?.email || existingDp?.email || '',
+          phone: vehicleDetails?.phone || userDoc?.phone || existingDp?.phone || '+91 98450 12345',
+          vehicleType: vehicleDetails?.vehicleType || existingDp?.vehicleType || 'Bike',
+          vehicleNumber: vehicleDetails?.vehicleNumber || existingDp?.vehicleNumber || 'KL-01-DR-2026',
+          status: 'available',
+          rating: existingDp?.rating || 5.0,
+          totalDeliveries: existingDp?.totalDeliveries || 0,
+          currentLat: storeSettings.storeLat || 8.5241,
+          currentLng: storeSettings.storeLng || 76.9366,
+          lastUpdatedLocation: storeSettings.storeHubName || 'Store Dispatch Hub',
+          avatar: userDoc?.photoURL || userDoc?.avatar || existingDp?.avatar,
+        };
+        setDeliveryPersonnel((prev) => [
+          driverProfile,
+          ...prev.filter((d) => d.id !== finalDpId && d.email.toLowerCase() !== targetEmail),
+        ]);
+        await setDoc(
+          doc(db, 'delivery_personnel', finalDpId),
+          sanitizeFirestoreData({
+            ...driverProfile,
+            updatedAt: serverTimestamp(),
+          }),
+          { merge: true }
+        ).catch(() => {});
+
+        await sendNotification({
+          userId: userDoc?.id,
+          userEmail: targetEmail || undefined,
+          target: 'user',
+          type: 'customer',
+          title: 'Driver Portal Access Granted',
+          message: `You have been appointed as an official Delivery Driver for ${storeSettings.storeName || 'Fathima Stores'}. You can now access the Driver Portal from your Account Center!`,
+        });
+      } else {
+        const matchedDp = deliveryPersonnel.find(
+          (dp) =>
+            dp.id === dpId ||
+            dp.userId === targetId ||
+            (targetEmail && dp.email.toLowerCase().trim() === targetEmail)
+        );
+        if (matchedDp) {
+          setDeliveryPersonnel((prev) => prev.filter((d) => d.id !== matchedDp.id));
+          await deleteDoc(doc(db, 'delivery_personnel', matchedDp.id)).catch(() => {});
+        }
+      }
+
+      showToast(
+        grant
+          ? `Driver Portal access granted to ${userDoc?.name || targetEmail}!`
+          : `Driver Portal access revoked for ${userDoc?.name || targetEmail}.`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Failed to update driver role:', err);
+      showToast('Could not update driver access', 'error');
     }
   };
 
@@ -3005,6 +4012,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       read: false,
     };
 
+    setRawNotifications((prev) => {
+      const updated = [newNotif, ...prev.filter((n) => n.id !== id)];
+      try {
+        localStorage.setItem('fs_saved_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     try {
       await setDoc(doc(db, 'notifications', id), sanitizeFirestoreData({
         ...newNotif,
@@ -3013,12 +4028,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }));
     } catch (err) {
       console.warn("Failed to send persistent notification:", err);
-      // Fallback to local state if Firestore fails (though onSnapshot will eventually sync it)
-      setNotifications(prev => [newNotif, ...prev]);
     }
   };
 
+  const sendCustomCustomerNotification = async (data: {
+    title: string;
+    message: string;
+    type?: Notification['type'];
+    targetEmail?: string;
+    targetUserId?: string;
+    orderId?: string;
+    isBroadcast?: boolean;
+  }) => {
+    const matchedUser = data.targetEmail
+      ? allUsers.find((u) => u.email?.toLowerCase().trim() === data.targetEmail?.toLowerCase().trim())
+      : undefined;
+
+    await sendNotification({
+      title: data.title,
+      message: data.message,
+      type: data.type || 'customer',
+      userId: data.targetUserId || matchedUser?.id || undefined,
+      userEmail: data.targetEmail?.toLowerCase().trim() || undefined,
+      orderId: data.orderId || undefined,
+      target: data.isBroadcast ? 'all' : 'customer',
+    });
+
+    showToast(
+      data.isBroadcast
+        ? 'Broadcast notification sent to all customers!'
+        : `Notification sent to ${data.targetEmail || 'customer'}!`,
+      'success'
+    );
+  };
+
   const markNotificationAsRead = async (id: string) => {
+    setRawNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
     try {
       await updateDoc(doc(db, 'notifications', id), {
         read: true,
@@ -3026,30 +4073,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
     } catch (err) {
       console.warn("Failed to mark notification as read:", err);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-      );
     }
   };
 
   const markAllNotificationsAsRead = async () => {
-    const unread = notifications.filter(n => !n.read);
+    const targetList = currentUser?.role === 'admin' ? notifications : customerNotifications;
+    const unreadIds = new Set(targetList.filter((n) => !n.read).map((n) => n.id));
+    if (unreadIds.size === 0) return;
+
+    setRawNotifications((prev) =>
+      prev.map((n) => (unreadIds.has(n.id) ? { ...n, read: true } : n))
+    );
+
     const batch = writeBatch(db);
-    unread.forEach(n => {
-      batch.update(doc(db, 'notifications', n.id), {
+    unreadIds.forEach((id) => {
+      batch.update(doc(db, 'notifications', id), {
         read: true,
         updatedAt: serverTimestamp(),
       });
     });
-    await batch.commit().catch(err => console.warn("Failed to mark all as read:", err));
+    await batch.commit().catch((err) => console.warn("Failed to mark all as read:", err));
   };
 
   const clearNotifications = async () => {
+    const targetList = currentUser?.role === 'admin' ? notifications : customerNotifications;
+    const targetIds = new Set(targetList.map((n) => n.id));
+    if (targetIds.size === 0) return;
+
+    setRawNotifications((prev) => prev.filter((n) => !targetIds.has(n.id)));
+
     const batch = writeBatch(db);
-    notifications.forEach(n => {
-      batch.delete(doc(db, 'notifications', n.id));
+    targetIds.forEach((id) => {
+      batch.delete(doc(db, 'notifications', id));
     });
-    await batch.commit().catch(err => console.warn("Failed to clear notifications:", err));
+    await batch.commit().catch((err) => console.warn("Failed to clear notifications:", err));
+    showToast('Notifications cleared', 'info');
   };
 
   const removeSelectedCategoryButton = async () => {
@@ -3263,6 +4321,7 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         orders,
         placeOrder,
         createDirectOrder,
+        completeOnlineOrderPayment,
         updateOrderStatus,
         deleteOrder,
         recordOrderPayment,
@@ -3308,7 +4367,15 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
 
         currentUser,
         allUsers,
-        isAdmin: currentUser?.role === 'admin',
+        isAdmin:
+          currentUser?.role === 'admin' ||
+          Boolean(
+            currentUser?.email &&
+              (storeSettings.customAdminEmails || [])
+                .map((e) => e.toLowerCase().trim())
+                .includes(currentUser.email.toLowerCase().trim())
+          ),
+        isDriver,
         isAuthLoading,
         unauthorizedDomainInfo,
         setUnauthorizedDomainInfo,
@@ -3320,6 +4387,7 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         updateUserProfile,
         toggleCustomerVIP,
         grantCustomerAdmin,
+        grantCustomerDriver,
         deleteCustomer,
         showForceSignInModal,
         setShowForceSignInModal,
@@ -3332,6 +4400,9 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         setIsSearchOpen,
 
         notifications,
+        customerNotifications,
+        sendNotification,
+        sendCustomCustomerNotification,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         clearNotifications,
@@ -3348,10 +4419,16 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         updateCustomerMessageStatus,
         deleteCustomerMessage,
 
-        deliveryPersonnel,
+        deliveryPersonnel: effectiveDeliveryPersonnel,
         deliveryAssignments,
+        isDeliveryLoggedIn,
+        currentDeliveryPerson,
+        deliveryLogin,
+        deliveryLogout,
         updateDeliveryAssignmentStatus,
         assignDeliveryPerson,
+        assignOrderToDelivery,
+        completeDeliveryAssignment,
 
         resetToDefaultData,
         clearAllData,

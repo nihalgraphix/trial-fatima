@@ -100,9 +100,23 @@ export interface PaymentRecord {
   date: string;
   method: string;
   reference: string;
+  utrNumber?: string;
+  gatewayName?: string;
+  payerInfo?: string;
+  autoVerified?: boolean;
   recordedBy: string;
   type: 'advance' | 'installment' | 'final' | 'refund';
   notes?: string;
+}
+
+export interface OnlinePaymentDetails {
+  transactionId: string;
+  utrNumber: string;
+  gatewayName: string;
+  method: PaymentMethod;
+  payerInfo?: string;
+  paidAt: string;
+  autoVerified: boolean;
 }
 
 export interface DeliveryTimelineStep {
@@ -136,6 +150,8 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   discount: number;
+  prepaidDiscount?: number;
+  codFee?: number;
   couponCode?: string;
   deliveryCharge: number;
   total: number;
@@ -144,6 +160,9 @@ export interface Order {
   courierName?: string;
   paidAmount?: number;
   outstandingBalance?: number;
+  transactionId?: string;
+  utrNumber?: string;
+  paymentGateway?: string;
   paymentRecords?: PaymentRecord[];
   deliveryTimeline?: DeliveryTimelineStep[];
   returnRequested?: boolean;
@@ -212,6 +231,7 @@ export interface User {
   email: string;
   phone: string;
   role: 'customer' | 'admin' | 'delivery';
+  isDriver?: boolean;
   addresses: ShippingAddress[];
   createdAt: string;
   avatar?: string;
@@ -247,6 +267,8 @@ export interface Review {
   userName: string;
   userAvatar?: string;
   rating: number;
+  reviewTitle?: string;
+  tags?: string[];
   comment: string;
   date: string;
   verifiedPurchase: boolean;
@@ -288,7 +310,9 @@ export interface Notification {
   type: 'order' | 'stock' | 'customer' | 'review';
   read: boolean;
   userId?: string;
+  userEmail?: string;
   orderId?: string;
+  target?: 'all' | 'user' | 'admin';
 }
 
 export interface StoreSettings {
@@ -297,16 +321,38 @@ export interface StoreSettings {
   contactEmail: string;
   contactPhone: string;
   address: string;
+  storeHubName?: string;
+  storeLat?: number;
+  storeLng?: number;
+  storeCity?: string;
+  storeState?: string;
+  storePinCode?: string;
+  deliveryRadiusKm?: number;
   currency: string;
   freeDeliveryThreshold: number;
   standardDeliveryFee: number;
   gstNumber: string;
   upiId: string;
   upiMerchantName: string;
+  enableOnlinePayments?: boolean;
   enableGPay: boolean;
   enablePhonePe: boolean;
   enablePaytm: boolean;
+  enableUpiQr?: boolean;
+  enableCards?: boolean;
+  enableNetBanking?: boolean;
   enableCOD: boolean;
+  autoVerifyOnlinePayments?: boolean;
+  autoConfirmPaidOrders?: boolean;
+  autoSendPaymentReceipt?: boolean;
+  autoRefundOnCancel?: boolean;
+  prepaidDiscountPct?: number;
+  codHandlingFee?: number;
+  paymentGatewayProvider?: 'Razorpay' | 'PhonePe PG' | 'Paytm PG' | 'Cashfree' | 'Direct NPCI UPI';
+  paymentGatewayMode?: 'live' | 'test';
+  razorpayKeyId?: string;
+  merchantBankName?: string;
+  merchantAccountLast4?: string;
 
   // Announcement Bar Customization
   showAnnouncement: boolean;
@@ -416,6 +462,8 @@ export interface StoreSettings {
   // Admin customer overrides & removals
   customVipEmails?: string[];
   customAdminEmails?: string[];
+  customDriverEmails?: string[];
+  customDriverIds?: string[];
   removedCustomerEmails?: string[];
   removedCustomerIds?: string[];
   removedCategoryIds?: string[];
@@ -452,6 +500,7 @@ export interface GeoCoordinates {
 
 export interface DeliveryPersonnel {
   id: string;
+  userId?: string;
   name: string;
   phone: string;
   email: string;
@@ -473,7 +522,7 @@ export interface DeliveryAssignment {
   deliveryPersonName: string;
   deliveryPersonPhone: string;
   assignedAt: string;
-  status: 'Assigned' | 'Accepted' | 'Arrived_at_Pickup' | 'Picked_Up' | 'Out_for_Delivery' | 'Delivered' | 'Failed';
+  status: 'Assigned' | 'Accepted' | 'Arrived_at_Pickup' | 'Picked_Up' | 'Picked Up' | 'In Transit' | 'Out_for_Delivery' | 'Delivered' | 'Failed';
   pickupAddress: string;
   dropAddress: ShippingAddress;
   deliveryNotes?: string;
@@ -532,6 +581,7 @@ export type ActivePage =
   | 'admin'
   | 'admin-login'
   | 'delivery'
+  | 'delivery-portal'
   | 'delivery-login';
 
 

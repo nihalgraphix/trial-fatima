@@ -12,15 +12,43 @@ export const QuickViewModal: React.FC = () => {
     isInWishlist,
     navigateToProduct,
     storeSettings,
+    reviews,
+    addReview,
+    currentUser,
+    showToast,
   } = useStore();
 
   const [quantity, setQuantity] = useState(1);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const [quickRating, setQuickRating] = useState(5);
+  const [quickComment, setQuickComment] = useState('');
+  const [quickReviewerName, setQuickReviewerName] = useState(currentUser?.name || '');
+  const [showReviewBox, setShowReviewBox] = useState(false);
 
   if (!quickViewProduct) return null;
 
+  const productReviews = (reviews || []).filter(
+    (r) => r.productId === quickViewProduct.id && (r.status === 'approved' || !r.status)
+  );
   const isFavorited = isInWishlist(quickViewProduct.id);
   const hasOffer = quickViewProduct.offer?.active;
+
+  const handleQuickReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickComment.trim()) {
+      showToast('Please enter a short review comment.', 'error');
+      return;
+    }
+    await addReview({
+      productId: quickViewProduct.id,
+      productName: quickViewProduct.name,
+      rating: quickRating,
+      comment: quickComment.trim(),
+      userName: quickReviewerName.trim() || currentUser?.name || 'Customer',
+    });
+    setQuickComment('');
+    setShowReviewBox(false);
+  };
 
   const handleAddToCart = () => {
     addToCart(quickViewProduct, quantity);
@@ -170,6 +198,93 @@ export const QuickViewModal: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Quick Rating & Customer Reviews Section */}
+            <div className="bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <div className="flex text-amber-500">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`w-3.5 h-3.5 ${
+                          i < Math.round(quickViewProduct.rating || 4.5)
+                            ? 'fill-current'
+                            : 'text-neutral-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs font-extrabold text-[#171717]">
+                    {quickViewProduct.rating || 4.5}
+                  </span>
+                  <span className="text-[11px] text-[#6B6B6B]">
+                    ({Math.max(productReviews.length, quickViewProduct.reviewCount || 0)} reviews)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewBox(!showReviewBox)}
+                  className="text-[11px] font-bold text-[#71883F] hover:underline cursor-pointer"
+                >
+                  {showReviewBox ? 'Cancel' : '+ Write a Review'}
+                </button>
+              </div>
+
+              {showReviewBox && (
+                <form onSubmit={handleQuickReviewSubmit} className="space-y-2 pt-2 border-t border-[#E8E8E3] text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[#171717]">Your Rating:</span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setQuickRating(s)}
+                          className="p-0.5 text-amber-500 cursor-pointer"
+                        >
+                          <Star
+                            className={`w-4 h-4 ${
+                              s <= quickRating ? 'fill-amber-400 text-amber-500' : 'text-neutral-300'
+                            }`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={quickReviewerName || currentUser?.name || ''}
+                    onChange={(e) => setQuickReviewerName(e.target.value)}
+                    placeholder="Your Name"
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-xs outline-none focus:border-[#71883F]"
+                    required
+                  />
+                  <textarea
+                    rows={2}
+                    value={quickComment}
+                    onChange={(e) => setQuickComment(e.target.value)}
+                    placeholder="Share your feedback about this product..."
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E8E8E3] rounded-lg text-xs outline-none focus:border-[#71883F]"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="w-full py-1.5 bg-[#71883F] hover:bg-[#5F7334] text-white font-bold rounded-lg text-xs cursor-pointer"
+                  >
+                    Post Review
+                  </button>
+                </form>
+              )}
+
+              {!showReviewBox && productReviews.length > 0 && (
+                <div className="text-[11px] text-[#6B6B6B] pt-1 border-t border-[#E8E8E3]">
+                  <span className="font-bold text-[#171717]">{productReviews[0].userName}:</span> "
+                  {productReviews[0].comment.slice(0, 80)}
+                  {productReviews[0].comment.length > 80 ? '...' : ''}"
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Action Row */}

@@ -27,11 +27,14 @@ export const Header: React.FC = () => {
     setIsSearchOpen,
     currentUser,
     isAdmin,
+    isDriver,
     switchRole,
     logoutUser,
     loginWithGoogle,
     customerMessages,
     notifications,
+    customerNotifications,
+    isDeliveryLoggedIn,
     categories,
     storeSettings,
     setIsSupportChatOpen,
@@ -39,8 +42,18 @@ export const Header: React.FC = () => {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const unreadNotificationsCount = (notifications || []).filter(n => !n.read).length;
-  const unreadAdminRepliesCount = (customerMessages || []).filter((m) => (m.replyNotes || m.status === 'replied') && m.status !== 'read').length;
+  const activeNotifList = isAdmin
+    ? notifications || []
+    : (customerNotifications || []).length > 0
+    ? customerNotifications
+    : (notifications || []).filter((n) => !n.userId || n.userId === 'guest' || n.target === 'all');
+  const unreadNotificationsCount = activeNotifList.filter((n) => !n.read).length;
+  const userEmailNorm = currentUser?.email?.toLowerCase().trim();
+  const unreadAdminRepliesCount = (customerMessages || []).filter(
+    (m) =>
+      (!userEmailNorm || m.email?.toLowerCase().trim() === userEmailNorm) &&
+      (m.replyNotes || m.status === 'replied')
+  ).length;
   const totalAlertsCount = unreadNotificationsCount + unreadAdminRepliesCount;
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
@@ -256,12 +269,19 @@ export const Header: React.FC = () => {
                             <p className="text-[10px] text-[#6B6B6B] truncate">{currentUser.email}</p>
                           </div>
                         </div>
-                        <span className="inline-block text-[9px] px-2 py-0.5 rounded-full bg-[#EFF4E6] text-[#71883F] font-black uppercase tracking-wider">
-                          {currentUser.role === 'admin' ? 'Store Administrator' : 'Verified Customer'}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="inline-block text-[9px] px-2 py-0.5 rounded-full bg-[#EFF4E6] text-[#71883F] font-black uppercase tracking-wider">
+                            {currentUser.role === 'admin' ? 'Store Administrator' : 'Verified Customer'}
+                          </span>
+                          {isDriver && (
+                            <span className="inline-block text-[9px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black uppercase tracking-wider">
+                              Driver
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      {isAdmin ? (
+                      {isAdmin && (
                         <button
                           onClick={() => {
                             setActivePage('admin');
@@ -272,38 +292,41 @@ export const Header: React.FC = () => {
                           <ShieldCheck className="w-4 h-4 text-[#71883F]" />
                           Admin Dashboard
                         </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => {
-                              setActivePage('account');
-                              setAccountDropdownOpen(false);
-                            }}
-                            className="w-full text-left px-5 py-2.5 text-xs font-bold text-[#171717] hover:bg-[#F7F8F3] hover:text-[#71883F] transition-colors"
-                          >
-                            My Orders & Returns
-                          </button>
-                          <button
-                            onClick={() => {
-                              setActivePage('profile');
-                              setAccountDropdownOpen(false);
-                            }}
-                            className="w-full text-left px-5 py-2.5 text-xs font-bold text-[#171717] hover:bg-[#F7F8F3] hover:text-[#71883F] transition-colors"
-                          >
-                            Edit Profile Details
-                          </button>
-                          <button
-                            onClick={() => {
-                              setActivePage('wishlist');
-                              setAccountDropdownOpen(false);
-                            }}
-                            className="w-full text-left px-5 py-2.5 text-xs font-bold text-[#171717] hover:bg-[#F7F8F3] hover:text-[#71883F] transition-colors flex items-center justify-between"
-                          >
-                            <span>Saved Items</span>
-                            <span className="text-[10px] bg-[#EFF4E6] text-[#71883F] px-2 py-0.5 rounded-full">{wishlist.length}</span>
-                          </button>
-                        </>
                       )}
+
+                      <button
+                        onClick={() => {
+                          setActivePage('account');
+                          setAccountDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-5 py-2.5 text-xs font-bold text-[#171717] hover:bg-[#F7F8F3] hover:text-[#71883F] transition-colors flex items-center justify-between"
+                      >
+                        <span>Account Center & Orders</span>
+                        {isDriver && (
+                          <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full font-extrabold">
+                            Driver Portal
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActivePage('profile');
+                          setAccountDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-5 py-2.5 text-xs font-bold text-[#171717] hover:bg-[#F7F8F3] hover:text-[#71883F] transition-colors"
+                      >
+                        Edit Profile Details
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActivePage('wishlist');
+                          setAccountDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-5 py-2.5 text-xs font-bold text-[#171717] hover:bg-[#F7F8F3] hover:text-[#71883F] transition-colors flex items-center justify-between"
+                      >
+                        <span>Saved Items</span>
+                        <span className="text-[10px] bg-[#EFF4E6] text-[#71883F] px-2 py-0.5 rounded-full">{wishlist.length}</span>
+                      </button>
 
                       <div className="mt-2 pt-2 border-t border-[#F7F8F3]">
                         <button

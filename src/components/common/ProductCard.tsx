@@ -133,15 +133,39 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             {product.name}
           </h4>
 
-          {/* Rating */}
-          <div className="flex items-center gap-1 mt-1.5 text-xs">
-            <Star className="w-3 h-3 text-amber-500 fill-current" />
-            <span className="font-semibold text-xs text-[#171717] tabular-nums">
-              {product.rating}
-            </span>
-            <span className="text-[10px] text-[#6B6B6B] tabular-nums">
-              ({product.reviewCount})
-            </span>
+          {/* Rating & Review Trigger */}
+          <div className="flex items-center justify-between mt-1.5 text-xs">
+            <button
+              type="button"
+              onClick={() => navigateToProduct(product.id)}
+              className="flex items-center gap-1 hover:opacity-80 cursor-pointer"
+              title="View ratings & reviews"
+            >
+              <div className="flex items-center text-amber-500">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`w-3 h-3 ${
+                      i < Math.round(product.rating || 4.5) ? 'fill-current' : 'text-neutral-300'
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="font-bold text-[11px] text-[#171717] tabular-nums ml-0.5">
+                {product.rating || 4.5}
+              </span>
+              <span className="text-[10px] text-[#6B6B6B] tabular-nums">
+                ({product.reviewCount || 0})
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigateToProduct(product.id)}
+              className="text-[10px] font-bold text-[#71883F] hover:underline cursor-pointer"
+            >
+              Rate & Review
+            </button>
           </div>
         </div>
 
