@@ -59,6 +59,7 @@ import { AdminCustomerModal, AdminCustomerRecord } from './AdminCustomerModal';
 import { AdminAnalyticsView } from './AdminAnalyticsView';
 import { AdminTextEditorView } from './AdminTextEditorView';
 import { StoreLocationConfigCard } from './StoreLocationConfigCard';
+import { AdminDriverPerformanceView } from './AdminDriverPerformanceView';
 
 type AdminTab =
   | 'overview'
@@ -76,6 +77,7 @@ type AdminTab =
   | 'hero-slides'
   | 'deliveries'
   | 'delivery'
+  | 'driver-performance'
   | 'marketing'
   | 'reports'
   | 'settings';
@@ -123,6 +125,7 @@ export const AdminDashboard: React.FC = () => {
     storeSettings,
     updateStoreSettings,
     notifications,
+    sendNotification,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     clearNotifications,
@@ -199,6 +202,28 @@ export const AdminDashboard: React.FC = () => {
   const [prodStockFilter, setProdStockFilter] = useState('all');
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'low' | 'out'>('all');
   const [reviewRatingFilter, setReviewRatingFilter] = useState('all');
+
+  // Direct customer notification state used in Notifications tab
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifMessage, setNotifMessage] = useState('');
+  const [notifTargetEmail, setNotifTargetEmail] = useState('');
+  const sendCustomCustomerNotification = (opts: {
+    title: string;
+    message: string;
+    targetEmail?: string;
+    targetUserId?: string;
+    isBroadcast?: boolean;
+    type?: 'promo' | 'order' | 'system';
+  }) => {
+    sendNotification({
+      title: opts.title,
+      message: opts.message,
+      userEmail: opts.targetEmail,
+      userId: opts.targetUserId,
+      target: 'customer',
+      type: 'customer',
+    });
+  };
 
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionStats, setCompressionStats] = useState<{
@@ -1525,6 +1550,7 @@ export const AdminDashboard: React.FC = () => {
     { id: 'inbox' as const, label: 'Inbox', icon: Mail, count: unreadMessagesCount, alert: unreadMessagesCount > 0 },
     { id: 'reports' as const, label: 'Business Reports', icon: BarChart3 },
     { id: 'delivery' as const, label: 'Delivery & Live Map', icon: Truck },
+    { id: 'driver-performance' as const, label: 'Driver Performance', icon: TrendingUp },
     { id: 'reviews' as const, label: 'Reviews', icon: Star, count: reviews.length },
     { id: 'marketing' as const, label: 'Coupons & Discounts', icon: Tag },
     { id: 'text-editor' as const, label: 'Website Text Editor', icon: Type },
@@ -4680,6 +4706,9 @@ export const AdminDashboard: React.FC = () => {
           {(currentTab === 'deliveries' || currentTab === 'delivery') && (
             <AdminDeliveryManagement />
           )}
+
+          {/* 11. DRIVER PERFORMANCE ANALYTICS TAB */}
+          {currentTab === 'driver-performance' && <AdminDriverPerformanceView />}
 
           {currentTab === 'settings' && (
             <div className="space-y-6 max-w-6xl w-full">

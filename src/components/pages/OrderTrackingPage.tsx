@@ -18,6 +18,7 @@ import {
   Clock,
   UserCheck,
   CreditCard,
+  Star,
 } from 'lucide-react';
 import { ProductImage } from '../common/ProductImage';
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
@@ -36,6 +37,7 @@ export const OrderTrackingPage: React.FC = () => {
     setSelectedOrderId,
     storeSettings,
     completeOnlineOrderPayment,
+    rateDeliveryAssignment,
   } = useStore();
 
   const [searchOrderId, setSearchOrderId] = useState('');
@@ -44,6 +46,8 @@ export const OrderTrackingPage: React.FC = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [copiedTracking, setCopiedTracking] = useState(false);
   const [showPayNowModal, setShowPayNowModal] = useState(false);
+  const [driverStars, setDriverStars] = useState<number>(5);
+  const [driverComment, setDriverComment] = useState<string>('');
 
   // Find assignment for active order if dispatched
   const activeAssignment: DeliveryAssignment | undefined = activeOrder
@@ -57,22 +61,19 @@ export const OrderTrackingPage: React.FC = () => {
   // Sync with selectedOrderId from store or default to first order
   useEffect(() => {
     if (selectedOrderId) {
-      const found = orders.find(o => o.id === selectedOrderId);
+      const found = orders.find((o) => o.id === selectedOrderId);
       if (found) {
         setActiveOrder(found);
         setSearchOrderId(found.id);
         setHasSearched(true);
+        return;
       }
-    } else if (orders && orders.length > 0) {
+    }
+    if (orders && orders.length > 0 && !activeOrder) {
       setActiveOrder(orders[0]);
       setSearchOrderId(orders[0].id);
     }
-
-    return () => {
-      // Clear selection on unmount to not interfere with next visit
-      if (selectedOrderId) setSelectedOrderId(null);
-    };
-  }, [orders, selectedOrderId, setSelectedOrderId]);
+  }, [orders, selectedOrderId, activeOrder]);
 
 
   const handleSearch = (e: React.FormEvent) => {
@@ -370,6 +371,75 @@ export const OrderTrackingPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Customer Delivery Driver Satisfaction Rating */}
+              {activeAssignment && (
+                <div className="mt-6 pt-6 border-t border-[#E9E5DE]">
+                  <div className="bg-[#FAF7F2] border border-[#E9E5DE] rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-extrabold text-[#202320] block">
+                        Rate Delivery Driver: {activeAssignment.deliveryPersonName}
+                      </span>
+                      <p className="text-xs text-[#77766F]">
+                        {activeAssignment.customerRating
+                          ? `You rated this delivery ${activeAssignment.customerRating} / 5 stars. ${
+                              activeAssignment.customerFeedback
+                                ? `"${activeAssignment.customerFeedback}"`
+                                : ''
+                            }`
+                          : 'Share your satisfaction with the delivery speed and handover experience.'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => {
+                          const currentVal = activeAssignment.customerRating || driverStars;
+                          return (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setDriverStars(star)}
+                              className="p-1.5 rounded-lg bg-white border border-[#E9E5DE] hover:border-amber-400 cursor-pointer"
+                            >
+                              <Star
+                                className={`w-4 h-4 ${
+                                  currentVal >= star
+                                    ? 'text-amber-500 fill-amber-500'
+                                    : 'text-neutral-300'
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <input
+                        type="text"
+                        value={driverComment}
+                        onChange={(e) => setDriverComment(e.target.value)}
+                        placeholder={
+                          activeAssignment.customerFeedback || 'Optional delivery feedback...'
+                        }
+                        className="px-3 py-1.5 bg-white border border-[#E9E5DE] rounded-xl text-xs outline-none focus:border-[#145A38]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          rateDeliveryAssignment(
+                            activeAssignment.id,
+                            driverStars,
+                            driverComment.trim() || activeAssignment.customerFeedback
+                          );
+                          setDriverComment('');
+                        }}
+                        className="px-3.5 py-1.5 bg-[#145A38] hover:bg-[#0E4228] text-white rounded-xl text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        {activeAssignment.customerRating ? 'Update Rating' : 'Submit Rating'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
 
             {/* Grid 2 Columns: Purchased Items & Delivery Address */}
@@ -491,17 +561,24 @@ export const OrderTrackingPage: React.FC = () => {
               We couldn't find any order matching "<strong className="text-[#202320]">{searchOrderId}</strong>". Please check your confirmation email or log in to view your orders.
             </p>
             <div className="pt-2 flex justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (orders && orders.length > 0) {
+              {orders && orders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
                     setActiveOrder(orders[0]);
                     setSearchOrderId(orders[0].id);
-                  }
-                }}
+                  }}
+                  className="px-4 py-2 bg-[#145A38] text-white rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
+                >
+                  View Latest Order
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setActivePage('shop')}
                 className="px-4 py-2 bg-[#145A38] text-white rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
               >
-                View Latest Order
+                Browse Shop
               </button>
               <button
                 type="button"
@@ -512,7 +589,35 @@ export const OrderTrackingPage: React.FC = () => {
               </button>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="bg-white border border-[#E9E5DE] rounded-3xl p-10 text-center space-y-3 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-[#EFF4E6] text-[#145A38] flex items-center justify-center mx-auto">
+              <Package className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-extrabold text-[#202320]">
+              Enter an Order ID Above to Track Live
+            </h3>
+            <p className="text-xs text-[#77766F] max-w-md mx-auto">
+              Enter your order reference number (e.g. <span className="font-mono font-bold text-[#202320]">ORD-98214</span>) or place an order from our store to track live GPS dispatch from Trivandrum Hub.
+            </p>
+            <div className="pt-2 flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setActivePage('shop')}
+                className="px-4 py-2 bg-[#145A38] hover:bg-[#0E4228] text-white rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
+              >
+                Shop Stationery Now
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePage('account')}
+                className="px-4 py-2 bg-[#FAF7F2] border border-[#E9E5DE] text-[#202320] rounded-xl text-xs font-bold hover:border-[#145A38] cursor-pointer"
+              >
+                View My Orders
+              </button>
+            </div>
+          </div>
+        )}
 
         {activeOrder && (
           <IndianPaymentGatewayModal
@@ -523,8 +628,8 @@ export const OrderTrackingPage: React.FC = () => {
             customerPhone={activeOrder.phone}
             customerEmail={activeOrder.email}
             orderReferenceId={activeOrder.id}
-            onPaymentSuccess={async (_, paymentDetails) => {
-              await completeOnlineOrderPayment(activeOrder.id, paymentDetails);
+            onPaymentSuccess={async (chosenMethod, paymentDetails) => {
+              await completeOnlineOrderPayment(activeOrder.id, chosenMethod, paymentDetails);
               setShowPayNowModal(false);
             }}
           />

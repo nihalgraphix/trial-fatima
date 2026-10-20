@@ -29,6 +29,7 @@ interface IndianPaymentGatewayModalProps {
   customerPhone: string;
   customerEmail: string;
   orderReference?: string;
+  orderReferenceId?: string;
   onPaymentSuccess: (method: PaymentMethod, details: OnlinePaymentDetails) => void;
 }
 
@@ -43,6 +44,7 @@ export const IndianPaymentGatewayModal: React.FC<IndianPaymentGatewayModalProps>
   customerPhone,
   customerEmail,
   orderReference,
+  orderReferenceId,
   onPaymentSuccess,
 }) => {
   const { storeSettings, showToast } = useStore();

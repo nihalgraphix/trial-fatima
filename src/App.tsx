@@ -73,6 +73,10 @@ const MainContent: React.FC = () => {
         setActivePage('categories');
       } else if (hash === 'cart') {
         setActivePage('cart');
+      } else if (hash === 'checkout') {
+        setActivePage('checkout');
+      } else if (hash === 'order-success') {
+        setActivePage('order-success');
       } else if (hash === 'account') {
         setActivePage('account');
       } else if (hash === 'profile') {
@@ -83,6 +87,16 @@ const MainContent: React.FC = () => {
         setActivePage('delivery-portal');
       } else if (hash === 'order-tracking' || hash === 'track-order' || hash === 'track') {
         setActivePage('order-tracking');
+      } else if (hash === 'about') {
+        setActivePage('about');
+      } else if (hash === 'contact') {
+        setActivePage('contact');
+      } else if (hash === 'login') {
+        setActivePage('login');
+      } else if (hash === 'register') {
+        setActivePage('register');
+      } else if (hash === 'home') {
+        setActivePage('home');
       }
     };
 

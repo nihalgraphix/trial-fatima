@@ -195,6 +195,10 @@ const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
     status: 'available',
     rating: 4.9,
     totalDeliveries: 342,
+    failedDeliveries: 5,
+    avgCompletionMinutes: 21,
+    onTimeRatePct: 96,
+    satisfactionReviewsCount: 128,
     currentLat: 8.5241,
     currentLng: 76.9366,
     lastUpdatedLocation: 'MG Road Hub, Trivandrum',
@@ -209,6 +213,10 @@ const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
     status: 'available',
     rating: 4.8,
     totalDeliveries: 289,
+    failedDeliveries: 7,
+    avgCompletionMinutes: 24,
+    onTimeRatePct: 93,
+    satisfactionReviewsCount: 104,
     currentLat: 8.5285,
     currentLng: 76.942,
     lastUpdatedLocation: 'Pattom Junction, Trivandrum',
@@ -223,6 +231,10 @@ const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
     status: 'available',
     rating: 4.9,
     totalDeliveries: 410,
+    failedDeliveries: 4,
+    avgCompletionMinutes: 19,
+    onTimeRatePct: 98,
+    satisfactionReviewsCount: 162,
     currentLat: 8.5581,
     currentLng: 76.8816,
     lastUpdatedLocation: 'Kazhakkoottam / Technopark',
@@ -237,6 +249,10 @@ const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
     status: 'available',
     rating: 4.7,
     totalDeliveries: 195,
+    failedDeliveries: 8,
+    avgCompletionMinutes: 28,
+    onTimeRatePct: 89,
+    satisfactionReviewsCount: 74,
     currentLat: 8.5262,
     currentLng: 76.9615,
     lastUpdatedLocation: 'Kowdiar Avenue, Trivandrum',
@@ -313,6 +329,7 @@ interface StoreContextType {
 
   // Orders
   orders: Order[];
+  allOrders: Order[];
   placeOrder: (orderData: {
     customerName: string;
     email: string;
@@ -328,11 +345,11 @@ interface StoreContextType {
   createDirectOrder: (orderData: Partial<Order>) => Promise<Order>;
   completeOnlineOrderPayment: (
     orderId: string,
-    method: PaymentMethod,
+    methodOrDetails: PaymentMethod | OnlinePaymentDetails,
     paymentDetails?: OnlinePaymentDetails
   ) => Promise<void>;
 
-  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
+  updateOrderStatus: (orderId: string, status: OrderStatus, note?: string) => Promise<void>;
   bulkUpdateOrderStatus: (orderIds: string[], status: OrderStatus) => Promise<void>;
   bulkArchiveOrders: (orderIds: string[], archive: boolean) => Promise<void>;
   deleteOrder: (orderId: string) => Promise<void>;
@@ -384,6 +401,8 @@ interface StoreContextType {
     userName: string;
     reviewTitle?: string;
     tags?: string[];
+    pros?: string;
+    recommend?: boolean;
   }) => Promise<void>;
   updateReviewStatus: (reviewId: string, status: 'approved' | 'hidden') => Promise<void>;
   deleteReview: (reviewId: string) => Promise<void>;
@@ -409,6 +428,7 @@ interface StoreContextType {
   // User & Auth
   currentUser: User | null;
   allUsers: User[];
+  users: User[];
   isAdmin: boolean;
   isDriver: boolean;
   isAuthLoading: boolean;
@@ -487,6 +507,22 @@ interface StoreContextType {
   assignDeliveryPerson: (orderId: string, deliveryPersonId: string) => Promise<void>;
   assignOrderToDelivery: (orderId: string, deliveryPersonId: string, notes?: string) => Promise<void>;
   completeDeliveryAssignment: (assignmentId: string, proofNotes?: string) => Promise<void>;
+  rateDeliveryAssignment: (
+    assignmentId: string,
+    rating: number,
+    feedback?: string
+  ) => Promise<void>;
+  logDriverPerformanceRecord: (record: {
+    deliveryPersonId: string;
+    orderId?: string;
+    status: 'Delivered' | 'Failed';
+    actualCompletionMinutes?: number;
+    estimatedMinutes?: number;
+    customerRating?: number;
+    customerFeedback?: string;
+    failureReason?: string;
+    deliveryNotes?: string;
+  }) => Promise<void>;
 
   // Customer Inbox Messages
   customerMessages: CustomerMessage[];
@@ -500,6 +536,11 @@ interface StoreContextType {
   exportStoreData: () => string;
   importStoreData: (jsonStr: string) => boolean;
   updateDeliveryPersonLocation: (personId: string, lat: number, lng: number) => Promise<void>;
+  updateDeliveryLocation: (
+    orderId: string,
+    location: { lat: number; lng: number; address?: string }
+  ) => Promise<void>;
+  updateDeliveryPersonnel: (personId: string, updates: Partial<DeliveryPersonnel>) => Promise<void>;
 
   // Automated Inventory Email Alerts
   emailAlertLogs: EmailAlertRecord[];
@@ -561,18 +602,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Navigation State with Hash & LocalStorage Persistence so Refreshing Never Loses Active Page
   const [activePage, setActivePageState] = useState<ActivePage>(() => {
     try {
-      const hash = window.location.hash.replace('#', '').trim();
+      const rawHash = window.location.hash.replace('#', '').trim();
+      const hash = rawHash.split('?')[0];
       if (hash === 'admin') return 'admin';
       if (hash === 'admin/login' || hash === 'admin-login') return 'admin-login';
       if (hash === 'shop') return 'shop';
       if (hash === 'categories') return 'categories';
       if (hash === 'cart') return 'cart';
       if (hash === 'checkout') return 'checkout';
+      if (hash === 'order-success') return 'order-success';
       if (hash === 'account') return 'account';
       if (hash === 'profile') return 'profile';
       if (hash === 'wishlist') return 'wishlist';
       if (hash === 'about') return 'about';
       if (hash === 'contact') return 'contact';
+      if (hash === 'login') return 'login';
+      if (hash === 'register') return 'register';
       if (hash === 'delivery-portal' || hash === 'delivery') return 'delivery-portal';
       if (hash === 'order-tracking' || hash === 'track-order' || hash === 'track') return 'order-tracking';
       if (hash === 'product-details') return 'product-details';
@@ -612,7 +657,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(null);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderIdState] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem('fs_selected_order_id') || null;
+    } catch {
+      return null;
+    }
+  });
+  const setSelectedOrderId = React.useCallback((id: string | null) => {
+    setSelectedOrderIdState(id);
+    try {
+      if (id) sessionStorage.setItem('fs_selected_order_id', id);
+      else sessionStorage.removeItem('fs_selected_order_id');
+    } catch {}
+  }, []);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1393,10 +1451,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addCustomerMessage = async (msgData: Omit<CustomerMessage, "id" | "createdAt" | "status">) => {
     const id = createUniqueId("msg");
+    const resolvedName = msgData.name || msgData.customerName || 'Customer';
+    const resolvedEmail = msgData.email || msgData.customerEmail || '';
+    const resolvedPhone = msgData.phone || msgData.customerPhone || '';
     const newMsg: CustomerMessage = {
       ...msgData,
       id,
-      phone: msgData.phone || '',
+      name: resolvedName,
+      email: resolvedEmail,
+      phone: resolvedPhone,
+      customerName: resolvedName,
+      customerEmail: resolvedEmail,
+      customerPhone: resolvedPhone,
       subject: msgData.subject || 'General Customer Inquiry',
       createdAt: new Date().toISOString(),
       status: "unread",
@@ -1427,7 +1493,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await sendNotification({
       type: "customer",
       title: "New Customer Inquiry Received",
-      message: `From ${msgData.name} (${msgData.email}): "${msgData.subject || "No Subject"}"`,
+      message: `From ${resolvedName} (${resolvedEmail}): "${msgData.subject || "No Subject"}"`,
     });
   };
 
@@ -1593,7 +1659,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ? { deliveryNotes: notesOrData }
         : {};
 
-    const completedTime = status === 'Delivered' ? new Date().toISOString() : undefined;
+    const assignment = deliveryAssignments.find((a) => a.id === assignmentId);
+    const completedTime =
+      status === 'Delivered' || status === 'Failed' ? new Date().toISOString() : undefined;
+
+    let computedCompletionMins: number | undefined = extraData.actualCompletionMinutes;
+    let computedOnTimeStatus: 'on_time' | 'delayed' | 'early' | undefined = extraData.onTimeStatus;
+
+    if (status === 'Delivered' && completedTime) {
+      if (computedCompletionMins === undefined && assignment?.assignedAt) {
+        const elapsedMs = new Date(completedTime).getTime() - new Date(assignment.assignedAt).getTime();
+        const rawMins = Math.round(elapsedMs / 60000);
+        computedCompletionMins = rawMins >= 2 && rawMins <= 240 ? rawMins : assignment.estimatedMinutes || 22;
+      } else if (computedCompletionMins === undefined) {
+        computedCompletionMins = assignment?.estimatedMinutes || 22;
+      }
+      const slaMins = assignment?.estimatedMinutes || 30;
+      computedOnTimeStatus =
+        computedCompletionMins <= slaMins - 5
+          ? 'early'
+          : computedCompletionMins <= slaMins
+          ? 'on_time'
+          : 'delayed';
+    }
 
     setDeliveryAssignments((prev) =>
       prev.map((a) =>
@@ -1604,6 +1692,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               ...extraData,
               ...(photoUrl ? { proofPhotoUrl: photoUrl } : {}),
               ...(completedTime ? { completedAt: completedTime } : {}),
+              ...(computedCompletionMins !== undefined
+                ? { actualCompletionMinutes: computedCompletionMins }
+                : {}),
+              ...(computedOnTimeStatus ? { onTimeStatus: computedOnTimeStatus } : {}),
             }
           : a
       )
@@ -1614,6 +1706,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...extraData,
       ...(photoUrl ? { proofPhotoUrl: photoUrl } : {}),
       ...(completedTime ? { completedAt: completedTime } : {}),
+      ...(computedCompletionMins !== undefined
+        ? { actualCompletionMinutes: computedCompletionMins }
+        : {}),
+      ...(computedOnTimeStatus ? { onTimeStatus: computedOnTimeStatus } : {}),
       updatedAt: serverTimestamp(),
     };
 
@@ -1621,7 +1717,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.warn('Delivery assignment update notice:', err)
     );
 
-    const assignment = deliveryAssignments.find((a) => a.id === assignmentId);
     if (assignment?.orderId) {
       const order = orders.find((o) => o.id === assignment.orderId);
       let orderStatus: OrderStatus = 'Out for Delivery';
@@ -1656,20 +1751,199 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // Increment driver's totalDeliveries count when completed
-    if (status === 'Delivered' && assignment?.deliveryPersonId) {
+    // Increment driver's totalDeliveries or failedDeliveries count when completed
+    if ((status === 'Delivered' || status === 'Failed') && assignment?.deliveryPersonId) {
       const drv = effectiveDeliveryPersonnel.find((d) => d.id === assignment.deliveryPersonId);
       if (drv) {
-        const nextTotal = (drv.totalDeliveries || 0) + 1;
-        setDeliveryPersonnel((prev) =>
-          prev.map((d) => (d.id === drv.id ? { ...d, totalDeliveries: nextTotal } : d))
+        if (status === 'Delivered') {
+          const nextTotal = (drv.totalDeliveries || 0) + 1;
+          setDeliveryPersonnel((prev) =>
+            prev.map((d) => (d.id === drv.id ? { ...d, totalDeliveries: nextTotal } : d))
+          );
+          updateDoc(doc(db, 'delivery_personnel', drv.id), {
+            totalDeliveries: nextTotal,
+            updatedAt: serverTimestamp(),
+          }).catch(() => {});
+        } else if (status === 'Failed') {
+          const nextFailed = (drv.failedDeliveries || 0) + 1;
+          setDeliveryPersonnel((prev) =>
+            prev.map((d) => (d.id === drv.id ? { ...d, failedDeliveries: nextFailed } : d))
+          );
+          updateDoc(doc(db, 'delivery_personnel', drv.id), {
+            failedDeliveries: nextFailed,
+            updatedAt: serverTimestamp(),
+          }).catch(() => {});
+        }
+      }
+    }
+  };
+
+  const rateDeliveryAssignment = async (
+    assignmentId: string,
+    rating: number,
+    feedback?: string
+  ) => {
+    const safeRating = Math.min(5, Math.max(1, Number(rating) || 5));
+    const ratedAt = new Date().toISOString();
+    const assignment = deliveryAssignments.find((a) => a.id === assignmentId);
+
+    setDeliveryAssignments((prev) =>
+      prev.map((a) =>
+        a.id === assignmentId
+          ? {
+              ...a,
+              customerRating: safeRating,
+              ...(feedback !== undefined ? { customerFeedback: feedback.trim() } : {}),
+              ratedAt,
+            }
+          : a
+      )
+    );
+
+    await updateDoc(
+      doc(db, 'delivery_assignments', assignmentId),
+      sanitizeFirestoreData({
+        customerRating: safeRating,
+        ...(feedback !== undefined ? { customerFeedback: feedback.trim() } : {}),
+        ratedAt,
+        updatedAt: serverTimestamp(),
+      })
+    ).catch((err) => console.warn('Rate delivery assignment notice:', err));
+
+    if (assignment?.deliveryPersonId) {
+      const drv = effectiveDeliveryPersonnel.find((d) => d.id === assignment.deliveryPersonId);
+      if (drv) {
+        const driverRatedAssignments = deliveryAssignments.filter(
+          (a) =>
+            a.deliveryPersonId === drv.id &&
+            a.id !== assignmentId &&
+            typeof a.customerRating === 'number'
         );
-        updateDoc(doc(db, 'delivery_personnel', drv.id), {
-          totalDeliveries: nextTotal,
+        const baseCount = drv.satisfactionReviewsCount || 10;
+        const baseRating = drv.rating || 4.8;
+        const totalWeighted =
+          baseRating * baseCount +
+          driverRatedAssignments.reduce((acc, a) => acc + (a.customerRating || 5), 0) +
+          safeRating;
+        const totalReviews = baseCount + driverRatedAssignments.length + 1;
+        const nextAvgRating = Number((totalWeighted / totalReviews).toFixed(2));
+
+        setDeliveryPersonnel((prev) =>
+          prev.map((d) =>
+            d.id === drv.id
+              ? { ...d, rating: nextAvgRating, satisfactionReviewsCount: totalReviews }
+              : d
+          )
+        );
+        await updateDoc(doc(db, 'delivery_personnel', drv.id), {
+          rating: nextAvgRating,
+          satisfactionReviewsCount: totalReviews,
           updatedAt: serverTimestamp(),
         }).catch(() => {});
       }
     }
+
+    showToast('Driver customer satisfaction rating saved!', 'success');
+  };
+
+  const logDriverPerformanceRecord = async (record: {
+    deliveryPersonId: string;
+    orderId?: string;
+    status: 'Delivered' | 'Failed';
+    actualCompletionMinutes?: number;
+    estimatedMinutes?: number;
+    customerRating?: number;
+    customerFeedback?: string;
+    failureReason?: string;
+    deliveryNotes?: string;
+  }) => {
+    const worker = effectiveDeliveryPersonnel.find((dp) => dp.id === record.deliveryPersonId);
+    if (!worker) return;
+
+    const matchedOrder = record.orderId ? orders.find((o) => o.id === record.orderId) : undefined;
+    const existingAssignment = record.orderId
+      ? deliveryAssignments.find((a) => a.orderId === record.orderId)
+      : undefined;
+
+    const id = existingAssignment ? existingAssignment.id : createUniqueId('da');
+    const nowIso = new Date().toISOString();
+    const estMins = record.estimatedMinutes || existingAssignment?.estimatedMinutes || 25;
+    const compMins =
+      record.status === 'Delivered'
+        ? record.actualCompletionMinutes || existingAssignment?.actualCompletionMinutes || 22
+        : undefined;
+    const assignedIso =
+      existingAssignment?.assignedAt ||
+      new Date(Date.now() - (compMins || 25) * 60000).toISOString();
+
+    const onTimeStatus: 'on_time' | 'delayed' | 'early' | undefined =
+      compMins !== undefined
+        ? compMins <= estMins - 5
+          ? 'early'
+          : compMins <= estMins
+          ? 'on_time'
+          : 'delayed'
+        : undefined;
+
+    const newEntry: DeliveryAssignment = {
+      id,
+      orderId: record.orderId || `ORD-LOG-${Math.floor(1000 + Math.random() * 9000)}`,
+      deliveryPersonId: worker.id,
+      deliveryPersonName: worker.name,
+      deliveryPersonPhone: worker.phone,
+      assignedAt: assignedIso,
+      completedAt: nowIso,
+      status: record.status,
+      pickupAddress:
+        storeSettings.address || 'Fathima Stores Main Hub, MG Road, Trivandrum, Kerala 695001',
+      dropAddress: matchedOrder?.shippingAddress || {
+        fullName: matchedOrder?.customerName || 'Verified Store Customer',
+        phone: matchedOrder?.phone || '+91 98450 00000',
+        email: matchedOrder?.email || 'customer@fathimastores.com',
+        house: 'Doorstep Delivery',
+        street: 'Main Street',
+        area: 'Trivandrum City',
+        city: 'Trivandrum',
+        district: 'Thiruvananthapuram',
+        state: 'Kerala',
+        pinCode: '695001',
+      },
+      estimatedMinutes: estMins,
+      ...(compMins !== undefined ? { actualCompletionMinutes: compMins } : {}),
+      ...(onTimeStatus ? { onTimeStatus } : {}),
+      ...(record.customerRating ? { customerRating: record.customerRating, ratedAt: nowIso } : {}),
+      ...(record.customerFeedback ? { customerFeedback: record.customerFeedback.trim() } : {}),
+      ...(record.failureReason ? { failureReason: record.failureReason.trim() } : {}),
+      ...(record.deliveryNotes ? { deliveryNotes: record.deliveryNotes.trim() } : {}),
+    };
+
+    setDeliveryAssignments((prev) => [
+      newEntry,
+      ...prev.filter((a) => a.id !== id),
+    ]);
+
+    await setDoc(
+      doc(db, 'delivery_assignments', id),
+      sanitizeFirestoreData({
+        ...newEntry,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    ).catch((err) => console.warn('Log driver performance notice:', err));
+
+    if (matchedOrder) {
+      await updateOrderDeliveryStatus(
+        matchedOrder.id,
+        record.status === 'Delivered' ? 'Delivered' : 'Cancelled',
+        worker.name,
+        matchedOrder.trackingNumber,
+        record.status === 'Delivered'
+          ? `Delivered by ${worker.name} in ${compMins} mins`
+          : `Delivery attempt failed (${record.failureReason || 'Customer unavailable'})`
+      );
+    }
+
+    showToast(`Performance record logged for ${worker.name}`, 'success');
   };
 
   const assignOrderToDelivery = async (orderId: string, deliveryPersonId: string, notes?: string) => {
@@ -1704,6 +1978,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       })
     ).catch((err) => console.warn('Assign delivery notice:', err));
 
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              assignedDeliveryId: worker.id,
+              assignedDeliveryName: worker.name,
+              assignedDeliveryPhone: worker.phone,
+            }
+          : o
+      )
+    );
+    await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
+      assignedDeliveryId: worker.id,
+      assignedDeliveryName: worker.name,
+      assignedDeliveryPhone: worker.phone,
+      updatedAt: serverTimestamp(),
+    })).catch(() => {});
+
     await updateOrderDeliveryStatus(
       orderId,
       'Out for Delivery',
@@ -1737,6 +2030,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       currentLng: lng,
       updatedAt: serverTimestamp(),
     }).catch(() => {});
+  };
+
+  const updateDeliveryLocation = async (
+    orderId: string,
+    location: { lat: number; lng: number; address?: string }
+  ) => {
+    const locObj = {
+      lat: location.lat,
+      lng: location.lng,
+      address: location.address || 'Live Courier GPS',
+      updatedAt: new Date().toISOString(),
+    };
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, deliveryLocation: locObj } : o))
+    );
+    await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
+      deliveryLocation: locObj,
+      updatedAt: serverTimestamp(),
+    })).catch(() => {});
+    showToast('Live delivery GPS location broadcasted!', 'info');
+  };
+
+  const updateDeliveryPersonnel = async (
+    personId: string,
+    updates: Partial<DeliveryPersonnel>
+  ) => {
+    setDeliveryPersonnel((prev) =>
+      prev.map((dp) => (dp.id === personId ? { ...dp, ...updates } : dp))
+    );
+    await setDoc(
+      doc(db, 'delivery_personnel', personId),
+      sanitizeFirestoreData({
+        ...updates,
+        updatedAt: serverTimestamp(),
+      }),
+      { merge: true }
+    ).catch(() => {});
+    showToast('Driver profile & status updated!', 'success');
   };
 
   // Compute Admin Notifications and Customer-facing Notifications from rawNotifications
@@ -2221,20 +2552,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Complete Online Payment for an existing Pending or COD Order
   const completeOnlineOrderPayment = async (
     orderId: string,
-    method: PaymentMethod,
+    methodOrDetails: PaymentMethod | OnlinePaymentDetails,
     paymentDetails?: OnlinePaymentDetails
   ) => {
     const order = orders.find((o) => o.id === orderId);
     if (!order) return;
 
+    const method: PaymentMethod =
+      typeof methodOrDetails === 'string' ? methodOrDetails : 'Online';
+    const resolvedDetails: OnlinePaymentDetails | undefined =
+      typeof methodOrDetails === 'object' ? methodOrDetails : paymentDetails;
+
     const gatewayName =
-      paymentDetails?.gatewayName ||
+      resolvedDetails?.gatewayName ||
       storeSettings.paymentGatewayProvider ||
       'Razorpay / NPCI UPI';
     const txnId =
-      paymentDetails?.transactionId || `pay_RZP${Date.now().toString().slice(-8)}`;
+      resolvedDetails?.transactionId || `pay_RZP${Date.now().toString().slice(-8)}`;
     const utrNum =
-      paymentDetails?.utrNumber || `4293${Math.floor(10000000 + Math.random() * 90000000)}`;
+      resolvedDetails?.utrNumber || `4293${Math.floor(10000000 + Math.random() * 90000000)}`;
     const amountToPay = order.outstandingBalance && order.outstandingBalance > 0 ? order.outstandingBalance : order.total;
     const nowTimeStr = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -2247,7 +2583,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       reference: txnId,
       utrNumber: utrNum,
       gatewayName,
-      payerInfo: paymentDetails?.payerInfo || order.phone,
+      payerInfo: resolvedDetails?.payerInfo || order.phone,
       autoVerified: true,
       recordedBy: `Automated ${gatewayName} Webhook`,
       type: 'final',
@@ -2454,7 +2790,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus, customNote?: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
@@ -2483,9 +2819,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const timelineStep: DeliveryTimelineStep = {
       status,
       timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-      note: shouldAutoRefund
-        ? `Order cancelled & automated online refund of ₹${order.paidAmount || order.total} initiated (${refundRef})`
-        : `Order status updated to ${status}`,
+      note:
+        customNote ||
+        (shouldAutoRefund
+          ? `Order cancelled & automated online refund of ₹${order.paidAmount || order.total} initiated (${refundRef})`
+          : `Order status updated to ${status}`),
     };
 
     const nextPaymentStatus: PaymentStatus = shouldAutoRefund ? 'Refunded' : order.paymentStatus;
@@ -4316,6 +4654,7 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         deleteCoupon,
 
         orders,
+        allOrders: orders,
         placeOrder,
         createDirectOrder,
         completeOnlineOrderPayment,
@@ -4364,6 +4703,7 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
 
         currentUser,
         allUsers,
+        users: allUsers,
         isAdmin:
           currentUser?.role === 'admin' ||
           Boolean(
@@ -4426,12 +4766,16 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         assignDeliveryPerson,
         assignOrderToDelivery,
         completeDeliveryAssignment,
+        rateDeliveryAssignment,
+        logDriverPerformanceRecord,
 
         resetToDefaultData,
         clearAllData,
         exportStoreData,
         importStoreData,
         updateDeliveryPersonLocation,
+        updateDeliveryLocation,
+        updateDeliveryPersonnel,
         checkIfUserPurchasedProduct,
 
         // Automated Inventory Email Alerts

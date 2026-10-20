@@ -14,9 +14,11 @@ import {
   Route as RouteIcon,
   Sparkles,
   Building2,
+  TrendingUp,
 } from 'lucide-react';
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
 import { AdminRouteOptimizer } from './AdminRouteOptimizer';
+import { AdminDriverPerformanceView } from './AdminDriverPerformanceView';
 
 export const AdminDeliveryManagement: React.FC = () => {
   const {
@@ -37,7 +39,11 @@ export const AdminDeliveryManagement: React.FC = () => {
   const nonArchivedOrders = sourceOrders.filter((o) => !o.isArchived && o.orderStatus !== 'Cancelled');
 
   const [viewMode, setViewMode] = useState<
-    'single_tracking' | 'multi_stop_optimizer' | 'store_location_hub' | 'manage_drivers'
+    | 'single_tracking'
+    | 'multi_stop_optimizer'
+    | 'store_location_hub'
+    | 'manage_drivers'
+    | 'driver_performance'
   >('multi_stop_optimizer');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(
     nonArchivedOrders[0]?.id || null
@@ -155,6 +161,18 @@ export const AdminDeliveryManagement: React.FC = () => {
               <Truck className="w-3.5 h-3.5" />
               <span>Authorize Drivers ({deliveryPersonnel.length})</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('driver_performance')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'driver_performance'
+                  ? 'bg-[#71883F] text-white shadow-2xs'
+                  : 'text-[#6B6B6B] hover:text-[#171717]'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Driver Performance</span>
+            </button>
           </div>
 
           <div className="bg-white border border-[#E8E8E3] rounded-xl px-3 py-2 flex items-center gap-2 shadow-2xs">
@@ -166,7 +184,9 @@ export const AdminDeliveryManagement: React.FC = () => {
         </div>
       </div>
 
-      {viewMode === 'manage_drivers' ? (
+      {viewMode === 'driver_performance' ? (
+        <AdminDriverPerformanceView />
+      ) : viewMode === 'manage_drivers' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left: Authorize Registered User or Email as Driver */}
           <div className="lg:col-span-7 bg-white border border-[#E8E8E3] rounded-2xl p-6 space-y-5 shadow-2xs">

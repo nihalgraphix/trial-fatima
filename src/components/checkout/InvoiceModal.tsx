@@ -5,11 +5,14 @@ import { X, Printer, CheckCircle2, ShieldCheck } from 'lucide-react';
 
 interface InvoiceModalProps {
   order: Order;
+  isOpen?: boolean;
   onClose: () => void;
 }
 
-export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, onClose }) => {
+export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen = true, onClose }) => {
   const { storeSettings } = useStore();
+
+  if (!isOpen) return null;
 
   const handlePrint = () => {
     window.print();
@@ -84,7 +87,10 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, onClose }) =>
               <p className="font-bold text-sm mt-2">Invoice #: INV-{order.id.replace('ORD-', '')}</p>
               <p className="text-[#6B6B6B]">Order ID: {order.id}</p>
               <p className="text-[#6B6B6B]">
-                Date: {new Date(order.createdAt).toLocaleDateString('en-IN')}
+                Date:{' '}
+                {order.createdAt || order.date
+                  ? new Date(order.createdAt || order.date).toLocaleDateString('en-IN')
+                  : new Date().toLocaleDateString('en-IN')}
               </p>
             </div>
           </div>
@@ -95,25 +101,35 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, onClose }) =>
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block mb-1">
                 Billed & Shipped To
               </span>
-              <p className="font-bold text-sm">{order.shippingAddress.fullName}</p>
-              <p className="text-[#6B6B6B] mt-0.5">
-                {order.shippingAddress.house}, {order.shippingAddress.street}
+              <p className="font-bold text-sm">
+                {order.shippingAddress?.fullName || order.customerName}
               </p>
-              {order.shippingAddress.area && (
+              <p className="text-[#6B6B6B] mt-0.5">
+                {order.shippingAddress?.house || ''}, {order.shippingAddress?.street || ''}
+              </p>
+              {order.shippingAddress?.area && (
                 <p className="text-[#6B6B6B]">{order.shippingAddress.area}</p>
               )}
               <p className="text-[#6B6B6B]">
-                {order.shippingAddress.city}, {order.shippingAddress.state} -{' '}
-                {order.shippingAddress.pinCode}
+                {order.shippingAddress?.city || 'Trivandrum'},{' '}
+                {order.shippingAddress?.state || 'Kerala'} -{' '}
+                {order.shippingAddress?.pinCode || '695001'}
               </p>
-              <p className="text-[#6B6B6B] mt-1">Phone: {order.shippingAddress.phone}</p>
+              <p className="text-[#6B6B6B] mt-1">
+                Phone: {order.shippingAddress?.phone || order.phone}
+              </p>
             </div>
 
             <div className="sm:text-right">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block mb-1">
                 Payment & Automated Verification Details
               </span>
-              <p className="font-semibold">Payment Method: {order.paymentMethod}</p>
+              <p className="font-semibold">
+                Payment Method:{' '}
+                {typeof order.paymentMethod === 'string'
+                  ? order.paymentMethod
+                  : 'Online Payment'}
+              </p>
               <p className="text-[#71883F] font-bold flex sm:justify-end items-center gap-1 mt-0.5">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Status: {order.paymentStatus}
               </p>
@@ -127,7 +143,9 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, onClose }) =>
                   Bank UTR / RRN: <span className="font-bold">{order.utrNumber}</span>
                 </p>
               )}
-              <p className="text-[#6B6B6B] mt-1">Courier Mode: {order.deliveryMethod}</p>
+              <p className="text-[#6B6B6B] mt-1">
+                Courier Mode: {order.deliveryMethod || order.courierName || 'Fathima Express'}
+              </p>
             </div>
           </div>
 
@@ -143,19 +161,27 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, onClose }) =>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E8E8E3]">
-                {order.items.map((item, idx) => (
-                  <tr key={`${item.product.id}-${idx}`}>
-                    <td className="py-3 px-4">
-                      <p className="font-semibold text-[#171717]">{item.product.name}</p>
-                      <p className="text-[10px] text-[#6B6B6B]">{item.product.brand}</p>
-                    </td>
-                    <td className="py-3 px-3 text-center tabular-nums">{item.quantity}</td>
-                    <td className="py-3 px-3 text-right tabular-nums">₹{item.product.price}</td>
-                    <td className="py-3 px-4 text-right font-semibold tabular-nums">
-                      ₹{item.product.price * item.quantity}
-                    </td>
-                  </tr>
-                ))}
+                {(order.items || []).map((item, idx) => {
+                  const itemId = item.productId || item.product?.id || `inv-${idx}`;
+                  const itemName = item.name || item.product?.name || 'Stationery Product';
+                  const itemBrand = item.brand || item.product?.brand || '';
+                  const itemPrice = item.price ?? item.product?.price ?? 0;
+                  return (
+                    <tr key={`${itemId}-${idx}`}>
+                      <td className="py-3 px-4">
+                        <p className="font-semibold text-[#171717]">{itemName}</p>
+                        {itemBrand && (
+                          <p className="text-[10px] text-[#6B6B6B]">{itemBrand}</p>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-center tabular-nums">{item.quantity}</td>
+                      <td className="py-3 px-3 text-right tabular-nums">₹{itemPrice}</td>
+                      <td className="py-3 px-4 text-right font-semibold tabular-nums">
+                        ₹{itemPrice * item.quantity}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -165,17 +191,23 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, onClose }) =>
             <div className="w-full sm:w-64 space-y-2">
               <div className="flex justify-between text-[#6B6B6B]">
                 <span>Subtotal (Incl. 18% GST)</span>
-                <span className="font-semibold text-[#171717] tabular-nums">₹{order.totalAmount}</span>
+                <span className="font-semibold text-[#171717] tabular-nums">
+                  ₹{order.totalAmount ?? order.subtotal ?? order.total ?? 0}
+                </span>
               </div>
               <div className="flex justify-between text-[#6B6B6B]">
                 <span>Shipping Charge</span>
                 <span className="font-semibold text-[#171717] tabular-nums">
-                  {order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}
+                  {!order.deliveryCharge || order.deliveryCharge === 0
+                    ? 'FREE'
+                    : `₹${order.deliveryCharge}`}
                 </span>
               </div>
               <div className="flex justify-between text-sm font-extrabold text-[#171717] pt-2 border-t border-[#E8E8E3]">
                 <span>Grand Total</span>
-                <span className="text-[#71883F] tabular-nums">₹{order.finalTotal}</span>
+                <span className="text-[#71883F] tabular-nums">
+                  ₹{order.finalTotal ?? order.total ?? 0}
+                </span>
               </div>
             </div>
           </div>

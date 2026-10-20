@@ -230,7 +230,6 @@ const InteractiveOsmPinMap: React.FC<{
 export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initialAddress }) => {
   const { mapsHealthy } = useGoogleMapsStatus();
   const map = useMap('checkout-delivery-map');
-  const geocodingLib = useMapsLibrary('geocoding');
   const placesLib = useMapsLibrary('places');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -258,58 +257,9 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
     }
   }, [placesLib]);
 
-  // Reverse geocode coordinates using Google Geocoder or OpenStreetMap Nominatim fallback
+  // Reverse geocode coordinates when user clicks or moves pin on Google Map
   const reverseGeocodeCoords = useCallback(
     async (lat: number, lng: number) => {
-      if (mapsHealthy && geocodingLib && (geocodingLib as any).Geocoder) {
-        try {
-          const geocoder = new (geocodingLib as any).Geocoder();
-          const response = await geocoder.geocode({ location: { lat, lng } });
-          if (response.results && response.results[0]) {
-            const place = response.results[0];
-            const components = place.address_components || [];
-
-            const getComponent = (type: string) =>
-              components.find((c: any) => c.types.includes(type))?.long_name || '';
-
-            const streetNumber = getComponent('street_number');
-            const route = getComponent('route');
-            const sublocality =
-              getComponent('sublocality_level_1') ||
-              getComponent('sublocality') ||
-              getComponent('neighborhood');
-            const locality =
-              getComponent('locality') || getComponent('administrative_area_level_2') || 'Trivandrum';
-            const district = getComponent('administrative_area_level_2') || locality;
-            const state = getComponent('administrative_area_level_1') || 'Kerala';
-            const pinCode = getComponent('postal_code') || '695001';
-            const premise = getComponent('premise') || getComponent('subpremise');
-
-            const formattedLabel = place.formatted_address || `${sublocality || locality} (${pinCode})`;
-            setPinnedLabel(formattedLabel);
-
-            onAddressSelect(
-              {
-                ...(premise ? { house: premise } : {}),
-                street: [streetNumber, route].filter(Boolean).join(' ') || route || formattedLabel.split(',')[0],
-                area: sublocality || locality,
-                city: locality,
-                district,
-                state,
-                pinCode,
-                lat,
-                lng,
-              },
-              { lat, lng }
-            );
-            return;
-          }
-        } catch (err) {
-          console.warn('Google Reverse Geocode fallback to Nominatim:', err);
-        }
-      }
-
-      // OpenStreetMap Nominatim Reverse Geocoding fallback
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${lat}&lon=${lng}`
@@ -353,7 +303,7 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
       setPinnedLabel(`Pinned Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
       onAddressSelect({ lat, lng }, { lat, lng });
     },
-    [geocodingLib, mapsHealthy, onAddressSelect]
+    [onAddressSelect]
   );
 
   // Places + Nominatim Autocomplete Search
@@ -712,6 +662,8 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
               defaultZoom={15}
               gestureHandling="greedy"
               disableDefaultUI={false}
+              internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+              className="w-full h-full"
               onClick={(ev) => {
                 const latLng = ev.detail?.latLng;
                 if (latLng) {
@@ -725,7 +677,9 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                     <span>Deliver Here</span>
                   </div>
-                  <Pin background={'#71883F'} glyphColor={'#FFF'} borderColor={'#171717'} scale={1.2} />
+                  <div className="w-8 h-8 rounded-full bg-[#71883F] border-2 border-white shadow-lg flex items-center justify-center text-white">
+                    <MapPin className="w-4 h-4" />
+                  </div>
                 </div>
               </AdvancedMarker>
             </Map>

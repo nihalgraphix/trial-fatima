@@ -36,6 +36,7 @@ export interface Product {
   showBadge?: boolean;
   showDiscountBadge?: boolean;
   offer?: ProductOffer;
+  image?: string;
 }
 
 export interface Category {
@@ -76,10 +77,12 @@ export type OrderStatus =
   | 'Pending'
   | 'Confirmed'
   | 'Processing'
+  | 'Packed'
   | 'Shipped'
   | 'Out for Delivery'
   | 'Delivered'
-  | 'Cancelled';
+  | 'Cancelled'
+  | 'Returned';
 
 export type PaymentMethod =
   | 'COD'
@@ -129,16 +132,20 @@ export interface OrderItem {
   productId: string;
   name: string;
   price: number;
-  mrp: number;
+  mrp?: number;
+  discountPrice?: number;
   quantity: number;
   image: string;
-  sku: string;
+  brand?: string;
+  sku?: string;
+  product?: Product;
 }
 
 export interface Order {
   id: string;
   userId?: string;
   date: string;
+  createdAt?: string;
   customerName: string;
   email: string;
   phone: string;
@@ -147,6 +154,7 @@ export interface Order {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   orderStatus: OrderStatus;
+  status?: OrderStatus;
   items: OrderItem[];
   subtotal: number;
   discount: number;
@@ -155,6 +163,9 @@ export interface Order {
   couponCode?: string;
   deliveryCharge: number;
   total: number;
+  finalTotal?: number;
+  totalAmount?: number;
+  BalanceAmount?: number;
   estimatedDelivery: string;
   trackingNumber: string;
   courierName?: string;
@@ -172,6 +183,15 @@ export interface Order {
   paymentVerifiedAt?: string;
   paymentVerifiedBy?: string;
   isArchived?: boolean;
+  assignedDeliveryId?: string;
+  assignedDeliveryName?: string;
+  assignedDeliveryPhone?: string;
+  deliveryLocation?: {
+    lat: number;
+    lng: number;
+    address?: string;
+    updatedAt?: string;
+  };
 }
 
 export interface Expense {
@@ -269,6 +289,9 @@ export interface Review {
   rating: number;
   reviewTitle?: string;
   tags?: string[];
+  pros?: string;
+  recommend?: boolean;
+  helpfulCount?: number;
   comment: string;
   date: string;
   verifiedPurchase: boolean;
@@ -312,7 +335,7 @@ export interface Notification {
   userId?: string;
   userEmail?: string;
   orderId?: string;
-  target?: 'all' | 'user' | 'admin';
+  target?: 'all' | 'user' | 'admin' | 'customer';
 }
 
 export interface StoreSettings {
@@ -322,12 +345,17 @@ export interface StoreSettings {
   contactPhone: string;
   address: string;
   storeHubName?: string;
+  storeLandmark?: string;
+  storePincode?: string;
   storeLat?: number;
   storeLng?: number;
   storeCity?: string;
   storeState?: string;
   storePinCode?: string;
   deliveryRadiusKm?: number;
+  maxDeliveryRadiusKm?: number;
+  googleMapsLink?: string;
+  whatsappNumber?: string;
   currency: string;
   freeDeliveryThreshold: number;
   standardDeliveryFee: number;
@@ -335,6 +363,11 @@ export interface StoreSettings {
   upiId: string;
   upiMerchantName: string;
   enableOnlinePayments?: boolean;
+  enableOnlinePayment?: boolean;
+  enableUpiPayment?: boolean;
+  enableCardPayment?: boolean;
+  enableNetBankingPayment?: boolean;
+  enableCodPayment?: boolean;
   enableGPay: boolean;
   enablePhonePe: boolean;
   enablePaytm: boolean;
@@ -343,13 +376,17 @@ export interface StoreSettings {
   enableNetBanking?: boolean;
   enableCOD: boolean;
   autoVerifyOnlinePayments?: boolean;
+  autoVerifyOnlinePayment?: boolean;
   autoConfirmPaidOrders?: boolean;
   autoSendPaymentReceipt?: boolean;
+  autoGeneratePaymentReceipt?: boolean;
   autoRefundOnCancel?: boolean;
   prepaidDiscountPct?: number;
+  onlinePaymentDiscountPercent?: number;
   codHandlingFee?: number;
-  paymentGatewayProvider?: 'Razorpay' | 'PhonePe PG' | 'Paytm PG' | 'Cashfree' | 'Direct NPCI UPI';
-  paymentGatewayMode?: 'live' | 'test';
+  codExtraFee?: number;
+  paymentGatewayProvider?: 'Razorpay' | 'PhonePe PG' | 'Paytm PG' | 'Cashfree' | 'Direct NPCI UPI' | 'PayU' | 'Stripe India';
+  paymentGatewayMode?: 'live' | 'test' | 'live_auto' | 'test_sandbox';
   razorpayKeyId?: string;
   merchantBankName?: string;
   merchantAccountLast4?: string;
@@ -504,13 +541,22 @@ export interface DeliveryPersonnel {
   name: string;
   phone: string;
   email: string;
-  vehicleType: 'Bike' | 'Scooter' | 'E-Bike' | 'Van';
+  vehicleType: 'Bike' | 'Scooter' | 'E-Bike' | 'Van' | 'Cycle';
   vehicleNumber: string;
-  status: 'available' | 'busy' | 'offline';
+  status: 'available' | 'busy' | 'offline' | 'Available' | 'On Delivery' | 'Offline';
   rating: number;
   totalDeliveries: number;
+  failedDeliveries?: number;
+  avgCompletionMinutes?: number;
+  onTimeRatePct?: number;
+  satisfactionReviewsCount?: number;
+  completedOrdersCount?: number;
   currentLat?: number;
   currentLng?: number;
+  lat?: number;
+  lng?: number;
+  currentLocation?: string;
+  area?: string;
   lastUpdatedLocation?: string;
   avatar?: string;
 }
@@ -533,6 +579,11 @@ export interface DeliveryAssignment {
   failureReason?: string;
   currentLocation?: GeoCoordinates;
   estimatedMinutes?: number;
+  actualCompletionMinutes?: number;
+  onTimeStatus?: 'on_time' | 'delayed' | 'early';
+  customerRating?: number;
+  customerFeedback?: string;
+  ratedAt?: string;
 }
 
 export interface LoyaltyAccount {
@@ -587,9 +638,13 @@ export type ActivePage =
 
 export interface CustomerMessage {
   id: string;
+  userId?: string;
   name: string;
   email: string;
   phone?: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
   subject?: string;
   message: string;
   createdAt: string;

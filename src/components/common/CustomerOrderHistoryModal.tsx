@@ -108,7 +108,8 @@ export const CustomerOrderHistoryModal: React.FC<CustomerOrderHistoryModalProps>
             </div>
           ) : (
             myOrders.map((order, idx) => {
-              const isDelivered = order.status === 'Delivered';
+              const orderStatusText = order.orderStatus || order.status || 'Confirmed';
+              const isDelivered = orderStatusText === 'Delivered';
               const targetLat =
                 order.shippingAddress?.lat && !Number.isNaN(Number(order.shippingAddress.lat))
                   ? Number(order.shippingAddress.lat)
@@ -124,16 +125,18 @@ export const CustomerOrderHistoryModal: React.FC<CustomerOrderHistoryModalProps>
               const driveMins = Math.max(8, Math.round((roadKm / 26) * 60));
               const totalEtaMins =
                 driveMins +
-                (order.status === 'Out for Delivery'
+                (orderStatusText === 'Out for Delivery'
                   ? 5
-                  : order.status === 'Shipped'
+                  : orderStatusText === 'Shipped'
                   ? 15
                   : 25);
               const canPayNow =
                 order.paymentStatus !== 'Paid' &&
                 order.paymentStatus !== 'Refunded' &&
-                order.status !== 'Cancelled' &&
-                order.status !== 'Delivered';
+                orderStatusText !== 'Cancelled' &&
+                orderStatusText !== 'Delivered';
+              const orderDateStr = order.createdAt || order.date;
+              const orderTotalVal = order.finalTotal ?? order.total ?? 0;
 
               return (
                 <div
@@ -151,7 +154,7 @@ export const CustomerOrderHistoryModal: React.FC<CustomerOrderHistoryModalProps>
                               : 'bg-amber-50 text-amber-700 border border-amber-200'
                           }`}
                         >
-                          {order.status}
+                          {orderStatusText}
                         </span>
                         <span
                           className={`px-2 py-0.5 text-[10px] font-bold rounded-full flex items-center gap-1 ${
@@ -173,15 +176,18 @@ export const CustomerOrderHistoryModal: React.FC<CustomerOrderHistoryModalProps>
                         </span>
                       </div>
                       <p className="text-[11px] text-[#6B6B6B] mt-0.5">
-                        Ordered on {new Date(order.createdAt).toLocaleDateString('en-IN')} •{' '}
-                        {order.items.length} items
+                        Ordered on{' '}
+                        {orderDateStr
+                          ? new Date(orderDateStr).toLocaleDateString('en-IN')
+                          : 'Recent'}{' '}
+                        • {(order.items || []).length} items
                         {order.utrNumber ? ` • UTR: ${order.utrNumber}` : ''}
                       </p>
                     </div>
 
                     <div className="text-right">
                       <span className="text-sm font-extrabold text-[#71883F] tabular-nums">
-                        ₹{order.finalTotal}
+                        ₹{orderTotalVal}
                       </span>
                       <p className="text-[10px] text-[#6B6B6B]">
                         {order.transactionId || order.paymentMethod}
@@ -191,24 +197,32 @@ export const CustomerOrderHistoryModal: React.FC<CustomerOrderHistoryModalProps>
 
                   {/* Items preview */}
                   <div className="flex items-center gap-3 overflow-x-auto pb-1">
-                    {order.items.map((item, idx2) => (
-                      <div
-                        key={`${item.product.id}-${idx2}`}
-                        className="flex items-center gap-2.5 bg-[#F7F8F3] px-3 py-2 rounded-lg border border-[#E8E8E3] shrink-0"
-                      >
-                        <img
-                          src={item.product.image}
-                          alt={item.product.name}
-                          className="w-8 h-8 rounded object-cover"
-                        />
-                        <div className="text-xs">
-                          <p className="font-semibold text-[#171717] max-w-[140px] truncate">
-                            {item.product.name}
-                          </p>
-                          <p className="text-[10px] text-[#6B6B6B]">Qty: {item.quantity}</p>
+                    {(order.items || []).map((item, idx2) => {
+                      const itemId = item.productId || item.product?.id || `item-${idx2}`;
+                      const itemName = item.name || item.product?.name || 'Stationery Item';
+                      const itemImage =
+                        item.image ||
+                        item.product?.image ||
+                        'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=200&auto=format&fit=crop&q=80';
+                      return (
+                        <div
+                          key={`${itemId}-${idx2}`}
+                          className="flex items-center gap-2.5 bg-[#F7F8F3] px-3 py-2 rounded-lg border border-[#E8E8E3] shrink-0"
+                        >
+                          <img
+                            src={itemImage}
+                            alt={itemName}
+                            className="w-8 h-8 rounded object-cover"
+                          />
+                          <div className="text-xs">
+                            <p className="font-semibold text-[#171717] max-w-[140px] truncate">
+                              {itemName}
+                            </p>
+                            <p className="text-[10px] text-[#6B6B6B]">Qty: {item.quantity}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Actions */}
@@ -216,7 +230,8 @@ export const CustomerOrderHistoryModal: React.FC<CustomerOrderHistoryModalProps>
                     <div className="flex items-center gap-1.5 text-[11px] text-[#6B6B6B]">
                       <MapPin className="w-3.5 h-3.5 text-[#71883F]" />
                       <span className="truncate max-w-[240px]">
-                        {storeHubName} → {order.shippingAddress.house}, {order.shippingAddress.city}
+                        {storeHubName} → {order.shippingAddress?.house || ''},{' '}
+                        {order.shippingAddress?.city || 'Trivandrum'}
                       </span>
                     </div>
 
@@ -258,13 +273,13 @@ export const CustomerOrderHistoryModal: React.FC<CustomerOrderHistoryModalProps>
         <IndianPaymentGatewayModal
           isOpen={!!payingOrder}
           onClose={() => setPayingOrder(null)}
-          amount={payingOrder.BalanceAmount ?? payingOrder.finalTotal}
+          amount={payingOrder.BalanceAmount ?? payingOrder.finalTotal ?? payingOrder.total ?? 0}
           customerName={payingOrder.customerName}
           customerPhone={payingOrder.phone}
           customerEmail={payingOrder.email}
           orderReferenceId={payingOrder.id}
-          onPaymentSuccess={async (_, paymentDetails) => {
-            await completeOnlineOrderPayment(payingOrder.id, paymentDetails);
+          onPaymentSuccess={async (chosenMethod, paymentDetails) => {
+            await completeOnlineOrderPayment(payingOrder.id, chosenMethod, paymentDetails);
             setPayingOrder(null);
           }}
         />

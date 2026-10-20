@@ -20,6 +20,7 @@ export const OrderSuccessPage: React.FC = () => {
   const {
     orders,
     selectedOrderId,
+    setSelectedOrderId,
     setActivePage,
     completeOnlineOrderPayment,
     storeSettings,
@@ -31,19 +32,39 @@ export const OrderSuccessPage: React.FC = () => {
 
   if (!order) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
-        <h2 className="text-xl font-bold text-[#171717]">Order Not Found</h2>
-        <button
-          onClick={() => setActivePage('home')}
-          className="mt-4 px-5 py-2.5 bg-[#71883F] text-white text-xs font-semibold rounded-lg cursor-pointer"
-        >
-          Back to Home
-        </button>
+      <div className="bg-[#F7F8F3] min-h-[75vh] flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white border border-[#E8E8E3] rounded-2xl p-8 max-w-md w-full shadow-xs">
+          <div className="w-14 h-14 rounded-full bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto mb-4">
+            <ShoppingBag className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-extrabold text-[#171717]">No Recent Order Found</h2>
+          <p className="text-xs text-[#6B6B6B] mt-2">
+            You haven&apos;t placed an order in this session yet, or your order details are still syncing. Browse our stationery collection or track an existing order.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => setActivePage('shop')}
+              className="px-5 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-semibold rounded-lg cursor-pointer transition-colors"
+            >
+              Browse Shop
+            </button>
+            <button
+              onClick={() => setActivePage('order-tracking')}
+              className="px-5 py-2.5 bg-[#F7F8F3] hover:bg-[#E8E8E3] text-[#171717] border border-[#E8E8E3] text-xs font-semibold rounded-lg cursor-pointer transition-colors"
+            >
+              Track Existing Order
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   const isOnlinePaid = order.paymentStatus === 'Paid';
+  const orderStatusText = order.orderStatus || order.status || 'Confirmed';
+  const finalAmount = order.finalTotal ?? order.total ?? 0;
+  const paymentMethodLabel =
+    typeof order.paymentMethod === 'string' ? order.paymentMethod : 'Online Payment';
 
   return (
     <div className="bg-[#F7F8F3] min-h-screen py-12">
@@ -106,7 +127,7 @@ export const OrderSuccessPage: React.FC = () => {
                     Payment Channel
                   </span>
                   <span className="font-bold text-emerald-950 text-[11px]">
-                    {order.paymentMethod} ({order.paymentGateway || 'Razorpay / NPCI'})
+                    {paymentMethodLabel} ({order.paymentGateway || 'Razorpay / NPCI'})
                   </span>
                 </div>
                 <div>
@@ -114,7 +135,7 @@ export const OrderSuccessPage: React.FC = () => {
                     Order Status
                   </span>
                   <span className="font-bold text-emerald-800 text-[11px]">
-                    {order.status} (Fast-Tracked)
+                    {orderStatusText} (Fast-Tracked)
                   </span>
                 </div>
               </div>
@@ -126,7 +147,7 @@ export const OrderSuccessPage: React.FC = () => {
                   Cash on Delivery Order — Want Faster Priority Dispatch?
                 </p>
                 <p className="text-[11px] text-amber-800 mt-0.5">
-                  Complete your ₹{order.finalTotal.toLocaleString('en-IN')} payment online now via UPI or Card for instant UTR verification and zero doorstep cash hassle.
+                  Complete your ₹{finalAmount.toLocaleString('en-IN')} payment online now via UPI or Card for instant UTR verification and zero doorstep cash hassle.
                 </p>
               </div>
               <button
@@ -134,7 +155,7 @@ export const OrderSuccessPage: React.FC = () => {
                 onClick={() => setShowPayNowModal(true)}
                 className="px-4 py-2 bg-[#71883F] hover:bg-[#5e7233] text-white text-xs font-bold rounded-lg shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
               >
-                <CreditCard className="w-3.5 h-3.5" /> Pay ₹{order.finalTotal} Online Now
+                <CreditCard className="w-3.5 h-3.5" /> Pay ₹{finalAmount} Online Now
               </button>
             </div>
           )}
@@ -145,15 +166,17 @@ export const OrderSuccessPage: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] flex items-center gap-1">
                 <Package className="w-3.5 h-3.5 text-[#71883F]" /> Order Status
               </span>
-              <p className="text-sm font-bold text-[#171717] mt-1">{order.status}</p>
-              <p className="text-[11px] text-[#6B6B6B]">Est. Arrival: {order.estimatedDelivery}</p>
+              <p className="text-sm font-bold text-[#171717] mt-1">{orderStatusText}</p>
+              <p className="text-[11px] text-[#6B6B6B]">
+                Est. Arrival: {order.estimatedDelivery || '2-3 Business Days'}
+              </p>
             </div>
 
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] flex items-center gap-1">
                 <CreditCard className="w-3.5 h-3.5 text-[#71883F]" /> Payment
               </span>
-              <p className="text-sm font-bold text-[#171717] mt-1">{order.paymentMethod}</p>
+              <p className="text-sm font-bold text-[#171717] mt-1">{paymentMethodLabel}</p>
               <p className="text-[11px] text-[#71883F] font-semibold">
                 Status: {order.paymentStatus}
               </p>
@@ -164,11 +187,12 @@ export const OrderSuccessPage: React.FC = () => {
                 <MapPin className="w-3.5 h-3.5 text-[#71883F]" /> Delivery Address
               </span>
               <p className="text-xs font-bold text-[#171717] mt-1 truncate">
-                {order.shippingAddress.fullName}
+                {order.shippingAddress?.fullName || order.customerName}
               </p>
               <p className="text-[11px] text-[#6B6B6B] truncate">
-                {order.shippingAddress.house}, {order.shippingAddress.city} -{' '}
-                {order.shippingAddress.pinCode}
+                {order.shippingAddress?.house || order.shippingAddress?.street || ''},{' '}
+                {order.shippingAddress?.city || 'Trivandrum'} -{' '}
+                {order.shippingAddress?.pinCode || '695001'}
               </p>
             </div>
           </div>
@@ -177,7 +201,7 @@ export const OrderSuccessPage: React.FC = () => {
           <div className="text-left border-t border-[#E8E8E3] pt-6 mb-8">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#6B6B6B]">
-                Order Summary ({order.items.length} items)
+                Order Summary ({order.items?.length || 0} items)
               </h3>
               <span className="text-[11px] text-neutral-500 flex items-center gap-1">
                 <Building2 className="w-3 h-3 text-[#71883F]" /> Hub:{' '}
@@ -185,41 +209,53 @@ export const OrderSuccessPage: React.FC = () => {
               </span>
             </div>
             <div className="space-y-3 divide-y divide-[#E8E8E3]">
-              {order.items.map((item, idx) => (
-                <div
-                  key={`${item.product.id}-${idx}`}
-                  className="pt-3 flex items-center justify-between text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={item.product.image}
-                      alt={item.product.name}
-                      className="w-10 h-10 rounded-lg object-cover border border-[#E8E8E3]"
-                    />
-                    <div>
-                      <p className="font-bold text-[#171717]">{item.product.name}</p>
-                      <p className="text-[11px] text-[#6B6B6B]">
-                        Qty: {item.quantity} × ₹{item.product.price}
-                      </p>
+              {(order.items || []).map((item, idx) => {
+                const itemId = item.productId || item.product?.id || `item-${idx}`;
+                const itemName = item.name || item.product?.name || 'Stationery Item';
+                const itemPrice = item.price ?? item.product?.price ?? 0;
+                const itemImage =
+                  item.image ||
+                  item.product?.image ||
+                  'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=200&auto=format&fit=crop&q=80';
+                return (
+                  <div
+                    key={`${itemId}-${idx}`}
+                    className="pt-3 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={itemImage}
+                        alt={itemName}
+                        className="w-10 h-10 rounded-lg object-cover border border-[#E8E8E3]"
+                      />
+                      <div>
+                        <p className="font-bold text-[#171717]">{itemName}</p>
+                        <p className="text-[11px] text-[#6B6B6B]">
+                          Qty: {item.quantity} × ₹{itemPrice}
+                        </p>
+                      </div>
                     </div>
+                    <span className="font-bold text-[#171717] tabular-nums">
+                      ₹{itemPrice * item.quantity}
+                    </span>
                   </div>
-                  <span className="font-bold text-[#171717] tabular-nums">
-                    ₹{item.product.price * item.quantity}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mt-4 pt-4 border-t border-[#E8E8E3] flex justify-between items-center text-base font-extrabold text-[#171717]">
               <span>Total Amount</span>
-              <span className="text-[#71883F] tabular-nums">₹{order.finalTotal}</span>
+              <span className="text-[#71883F] tabular-nums">₹{finalAmount}</span>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
-              onClick={() => setActivePage('order-tracking')}
+              onClick={() => {
+                setSelectedOrderId(order.id);
+                setActivePage('order-tracking');
+              }}
               className="px-5 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               Track Order Live <ArrowRight className="w-4 h-4" />
@@ -247,13 +283,13 @@ export const OrderSuccessPage: React.FC = () => {
       <IndianPaymentGatewayModal
         isOpen={showPayNowModal}
         onClose={() => setShowPayNowModal(false)}
-        amount={order.BalanceAmount ?? order.finalTotal}
+        amount={order.BalanceAmount ?? finalAmount}
         customerName={order.customerName}
         customerPhone={order.phone}
         customerEmail={order.email}
         orderReferenceId={order.id}
-        onPaymentSuccess={async (_, paymentDetails) => {
-          await completeOnlineOrderPayment(order.id, paymentDetails);
+        onPaymentSuccess={async (chosenMethod, paymentDetails) => {
+          await completeOnlineOrderPayment(order.id, chosenMethod, paymentDetails);
           setShowPayNowModal(false);
         }}
       />

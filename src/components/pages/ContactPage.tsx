@@ -12,6 +12,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
+import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { StoreLocationConfigCard } from '../admin/StoreLocationConfigCard';
 
 export const ContactPage: React.FC = () => {
@@ -42,6 +43,9 @@ export const ContactPage: React.FC = () => {
 
     addCustomerMessage({
       userId: currentUser?.id,
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
       customerName: name,
       customerEmail: email,
       customerPhone: phone,
@@ -168,17 +172,34 @@ export const ContactPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Dynamic Map Preview */}
+            {/* Dynamic Google Map Preview */}
             <div className="bg-white border border-[#E8E8E3] rounded-2xl overflow-hidden shadow-2xs">
-              <div className="h-56 w-full bg-[#EFF4E6]/40">
-                <iframe
-                  title="Fathima Stores Location"
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  loading="lazy"
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${storeLng - 0.015},${storeLat - 0.015},${storeLng + 0.015},${storeLat + 0.015}&layer=mapnik&marker=${storeLat},${storeLng}`}
-                />
+              <div className="h-64 w-full bg-[#EFF4E6]/40 relative">
+                <Map
+                  id="contact-page-store-map"
+                  mapId="DEMO_MAP_ID"
+                  defaultCenter={{ lat: storeLat, lng: storeLng }}
+                  center={{ lat: storeLat, lng: storeLng }}
+                  defaultZoom={16}
+                  gestureHandling="greedy"
+                  disableDefaultUI={false}
+                  internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+                  className="w-full h-full"
+                >
+                  <AdvancedMarker
+                    position={{ lat: storeLat, lng: storeLng }}
+                    title={storeHubName}
+                  >
+                    <div className="flex flex-col items-center">
+                      <div className="px-2.5 py-1 bg-[#171717] text-white text-[10px] font-bold rounded-full shadow-md mb-1 border border-white/20 whitespace-nowrap">
+                        {storeHubName}
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-[#71883F] text-white flex items-center justify-center shadow-lg border-2 border-white">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </AdvancedMarker>
+                </Map>
               </div>
               <div className="p-3 bg-white border-t border-[#E8E8E3] flex items-center justify-between text-xs">
                 <span className="font-semibold text-[#171717] truncate pr-2">{storeHubName}</span>

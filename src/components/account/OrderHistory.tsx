@@ -598,13 +598,13 @@ export const OrderHistory: React.FC = () => {
         <IndianPaymentGatewayModal
           isOpen={!!payingOrder}
           onClose={() => setPayingOrder(null)}
-          amount={payingOrder.BalanceAmount ?? payingOrder.finalTotal}
+          amount={payingOrder.BalanceAmount ?? payingOrder.finalTotal ?? payingOrder.total ?? 0}
           customerName={payingOrder.customerName}
           customerPhone={payingOrder.phone}
           customerEmail={payingOrder.email}
           orderReferenceId={payingOrder.id}
-          onPaymentSuccess={async (_, paymentDetails) => {
-            await completeOnlineOrderPayment(payingOrder.id, paymentDetails);
+          onPaymentSuccess={async (chosenMethod, paymentDetails) => {
+            await completeOnlineOrderPayment(payingOrder.id, chosenMethod, paymentDetails);
             setPayingOrder(null);
           }}
         />

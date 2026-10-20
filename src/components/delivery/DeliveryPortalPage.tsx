@@ -15,6 +15,7 @@ import {
   Box,
   BadgeCheck,
 } from 'lucide-react';
+import { DeliveryTrackingMap } from './DeliveryTrackingMap';
 
 interface DeliveryPortalPageProps {
   embedded?: boolean;
@@ -43,7 +44,7 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
   const [deliveryNotesMap, setDeliveryNotesMap] = useState<Record<string, string>>({});
 
   // Driver settings form state
-  const [vehicleType, setVehicleType] = useState<'Bike' | 'Scooter' | 'Van' | 'Cycle'>(
+  const [vehicleType, setVehicleType] = useState<'Bike' | 'Scooter' | 'Van' | 'Cycle' | 'E-Bike'>(
     currentDeliveryPerson?.vehicleType || 'Bike'
   );
   const [vehicleNumber, setVehicleNumber] = useState(currentDeliveryPerson?.vehicleNumber || '');
@@ -745,6 +746,14 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                           </button>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Live Interactive Google Map for Driver Navigation */}
+                    <div className="pt-2">
+                      <DeliveryTrackingMap
+                        order={order}
+                        deliveryPerson={currentDeliveryPerson}
+                      />
                     </div>
                   </div>
                 );
