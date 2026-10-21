@@ -67,12 +67,24 @@ export const AccountPage: React.FC = () => {
     house: '',
     street: '',
     area: '',
-    city: currentUser?.city || 'Trivandrum',
-    district: 'Trivandrum',
+    city: currentUser?.city || 'Kochi',
+    district: 'Ernakulam',
     state: currentUser?.state || 'Kerala',
-    pinCode: '695001',
+    pinCode: '682011',
     isDefault: false,
   });
+
+  const userOrders = React.useMemo(() => {
+    if (!currentUser) return [];
+    const emailNorm = (currentUser.email || '').toLowerCase().trim();
+    return (orders || []).filter(
+      (o) =>
+        (currentUser.id && o.userId === currentUser.id) ||
+        (emailNorm &&
+          ((o.email || '').toLowerCase().trim() === emailNorm ||
+            (o.shippingAddress?.email || '').toLowerCase().trim() === emailNorm))
+    );
+  }, [orders, currentUser]);
 
   // Password fields
   const [currentPwd, setCurrentPwd] = useState('');
@@ -203,10 +215,10 @@ export const AccountPage: React.FC = () => {
       house: '',
       street: '',
       area: '',
-      city: currentUser.city || 'Trivandrum',
-      district: 'Trivandrum',
+      city: currentUser.city || 'Kochi',
+      district: 'Ernakulam',
       state: currentUser.state || 'Kerala',
-      pinCode: '695001',
+      pinCode: '682011',
       isDefault: false,
     });
   };
@@ -358,7 +370,7 @@ export const AccountPage: React.FC = () => {
                   : 'text-[#171717] hover:bg-white/60'
               }`}
             >
-              <Package className="w-4 h-4" /> Orders History ({orders.length})
+              <Package className="w-4 h-4" /> Orders History ({userOrders.length})
             </button>
 
             <button
@@ -425,7 +437,7 @@ export const AccountPage: React.FC = () => {
                   <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-5">
                     <span className="text-xs text-[#6B6B6B] block">Total Orders</span>
                     <span className="text-2xl font-extrabold text-[#171717] tabular-nums mt-1 block">
-                      {orders.length}
+                      {userOrders.length}
                     </span>
                     <span className="text-[11px] text-[#71883F] mt-1 block font-medium">All fulfilled & tracked</span>
                   </div>
@@ -446,7 +458,7 @@ export const AccountPage: React.FC = () => {
                   <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-5">
                     <span className="text-xs text-[#6B6B6B] block">Primary Location</span>
                     <span className="text-sm font-bold text-[#171717] mt-1 block truncate">
-                      {currentUser.city || 'Trivandrum'}, {currentUser.state || 'Kerala'}
+                      {currentUser.city || 'Kochi'}, {currentUser.state || 'Kerala'}
                     </span>
                     <span className="text-[11px] text-[#6B6B6B] mt-1 block">Express shipping eligible</span>
                   </div>
@@ -526,15 +538,15 @@ export const AccountPage: React.FC = () => {
                       onClick={() => setActiveTab('orders')}
                       className="text-xs text-[#71883F] font-semibold hover:underline"
                     >
-                      View All ({orders.length}) →
+                      View All ({userOrders.length}) →
                     </button>
                   </div>
 
-                  {orders.length === 0 ? (
+                  {userOrders.length === 0 ? (
                     <p className="text-xs text-[#6B6B6B]">You haven't placed any orders yet.</p>
                   ) : (
                     <div className="divide-y divide-[#E8E8E3]">
-                      {orders.slice(0, 2).map((order) => (
+                      {userOrders.slice(0, 2).map((order) => (
                         <div key={order.id} className="py-3 flex items-center justify-between text-xs">
                           <div>
                             <span className="font-bold text-[#171717] block">{order.id}</span>
@@ -786,7 +798,7 @@ export const AccountPage: React.FC = () => {
                       required
                       value={addrForm.pinCode}
                       onChange={(e) => setAddrForm({ ...addrForm, pinCode: e.target.value })}
-                      placeholder="695001"
+                      placeholder="682011"
                       className="w-full px-3 py-2 border border-[#E8E8E3] rounded-lg outline-none focus:border-[#71883F]"
                     />
                   </div>

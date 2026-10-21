@@ -1,217 +1,261 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
-import { Search, MapPin, Loader2 } from 'lucide-react';
-import { useGoogleMapsStatus } from './GoogleMapsWrapper';
+import React, { useState, useCallback } from 'react';
+import { MapPin, Compass, CheckCircle2 } from 'lucide-react';
+import { InteractiveGoogleTileMap } from './GoogleMapsWrapper';
 
-interface Props {
-  onAddressSelect: (address: {
-    formattedAddress: string;
-    city: string;
-    state: string;
-    pinCode: string;
-    lat: number;
-    lng: number;
-  }) => void;
-  placeholder?: string;
+export interface SelectedMapLocation {
+  lat: number;
+  lng: number;
+  house?: string;
+  street: string;
+  area: string;
+  city: string;
+  district: string;
+  state: string;
+  pinCode: string;
+  formattedAddress: string;
 }
 
-interface UnifiedSuggestion {
-  id: string;
-  mainText: string;
-  secondaryText: string;
-  rawGoogle?: any;
-  rawNominatim?: any;
+interface GoogleMapAddressSelectorProps {
+  initialLat?: number;
+  initialLng?: number;
+  onSelectLocation?: (loc: SelectedMapLocation) => void;
+  onAddressSelect?: (loc: SelectedMapLocation) => void;
+  title?: string;
 }
 
-export const GoogleMapAddressSelector: React.FC<Props> = ({
+const QUICK_HUBS: SelectedMapLocation[] = [
+  {
+    lat: 9.9312,
+    lng: 76.2673,
+    street: 'MG Road, Shenoys',
+    area: 'MG Road',
+    city: 'Kochi',
+    district: 'Ernakulam',
+    state: 'Kerala',
+    pinCode: '682011',
+    formattedAddress: 'MG Road, Shenoys, Kochi, Kerala - 682011',
+  },
+  {
+    lat: 10.0159,
+    lng: 76.3419,
+    street: 'Infopark Expressway',
+    area: 'Kakkanad',
+    city: 'Kochi',
+    district: 'Ernakulam',
+    state: 'Kerala',
+    pinCode: '682030',
+    formattedAddress: 'Kakkanad Infopark, Kochi, Kerala - 682030',
+  },
+  {
+    lat: 10.0261,
+    lng: 76.3125,
+    street: 'NH 66 Bypass Junction',
+    area: 'Edappally',
+    city: 'Kochi',
+    district: 'Ernakulam',
+    state: 'Kerala',
+    pinCode: '682024',
+    formattedAddress: 'Edappally Junction, Kochi, Kerala - 682024',
+  },
+  {
+    lat: 9.9658,
+    lng: 76.3182,
+    street: 'SA Road - Vyttila Mobility Hub',
+    area: 'Vyttila',
+    city: 'Kochi',
+    district: 'Ernakulam',
+    state: 'Kerala',
+    pinCode: '682019',
+    formattedAddress: 'Vyttila Mobility Hub, Kochi, Kerala - 682019',
+  },
+];
+
+export const GoogleMapAddressSelector: React.FC<GoogleMapAddressSelectorProps> = ({
+  initialLat = 9.9312,
+  initialLng = 76.2673,
+  onSelectLocation,
   onAddressSelect,
-  placeholder = 'Search for your delivery address, street, or pincode...',
+  title = 'Pin Exact Delivery Location on Google Maps',
 }) => {
-  const placesLib = useMapsLibrary('places');
-  const { mapsHealthy } = useGoogleMapsStatus();
-  const [inputValue, setInputValue] = useState('');
-  const [suggestions, setSuggestions] = useState<UnifiedSuggestion[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const sessionTokenRef = useRef<any>(null);
+  const notifySelect = useCallback(
+    (loc: SelectedMapLocation) => {
+      if (onSelectLocation) onSelectLocation(loc);
+      if (onAddressSelect) onAddressSelect(loc);
+    },
+    [onSelectLocation, onAddressSelect]
+  );
 
-  useEffect(() => {
-    if (placesLib && !sessionTokenRef.current && (placesLib as any).AutocompleteSessionToken) {
-      sessionTokenRef.current = new (placesLib as any).AutocompleteSessionToken();
-    }
-  }, [placesLib]);
+  const [coords, setCoords] = useState<{ lat: number; lng: number }>({
+    lat: initialLat || 9.9312,
+    lng: initialLng || 76.2673,
+  });
+  const [activeAddress, setActiveAddress] = useState<string>(
+    'MG Road, Shenoys, Kochi, Kerala - 682011'
+  );
+  const [isLocating, setIsLocating] = useState(false);
 
-  useEffect(() => {
-    if (!inputValue || inputValue.trim().length < 3) {
-      setSuggestions([]);
-      return;
-    }
-
-    const fetchSuggestions = async () => {
-      setIsLoading(true);
+  const reverseLookup = useCallback(
+    async (lat: number, lng: number) => {
       try {
-        if (mapsHealthy && placesLib && (placesLib as any).AutocompleteSuggestion) {
-          try {
-            const { AutocompleteSuggestion } = placesLib as any;
-            const request: any = {
-              input: inputValue,
-              sessionToken: sessionTokenRef.current || undefined,
-              region: 'IN',
-            };
-            const { suggestions: results } =
-              await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
-            if (results && results.length > 0) {
-              setSuggestions(
-                results.map((r: any, idx: number) => ({
-                  id: `gmp-${idx}`,
-                  mainText: r.placePrediction?.text?.text || inputValue,
-                  secondaryText: r.placePrediction?.secondaryText?.text || 'India',
-                  rawGoogle: r,
-                }))
-              );
-              setIsLoading(false);
-              return;
-            }
-          } catch (gErr) {
-            console.warn('Google Places autocomplete fallback to Nominatim:', gErr);
-          }
-        }
-
-        // Real geocoding fallback via OpenStreetMap Nominatim (restricted to India)
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=in&q=${encodeURIComponent(
-            inputValue
-          )}`
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
         );
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data)) {
-            setSuggestions(
-              data.map((item: any, idx: number) => {
-                const parts = String(item.display_name || '').split(',');
-                return {
-                  id: `nom-${item.place_id || idx}`,
-                  mainText: parts.slice(0, 2).join(',').trim() || item.display_name,
-                  secondaryText: parts.slice(2).join(',').trim() || 'India',
-                  rawNominatim: item,
-                };
-              })
-            );
-          }
-        }
-      } catch (error) {
-        console.warn('Address search notice:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    const timeoutId = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(timeoutId);
-  }, [inputValue, placesLib, mapsHealthy]);
-
-  const handleSuggestionClick = async (item: UnifiedSuggestion) => {
-    setIsLoading(true);
-    try {
-      if (item.rawGoogle && placesLib) {
-        const place = item.rawGoogle.placePrediction.toPlace();
-        await place.fetchFields({
-          fields: ['displayName', 'formattedAddress', 'location', 'addressComponents'],
-        });
-
-        const location = place.location;
-        if (location) {
-          let city = '';
-          let state = '';
-          let pinCode = '';
-
-          place.addressComponents?.forEach((comp: any) => {
-            if (comp.types.includes('locality')) city = comp.longText || comp.long_name;
-            if (comp.types.includes('administrative_area_level_1'))
-              state = comp.longText || comp.long_name;
-            if (comp.types.includes('postal_code')) pinCode = comp.longText || comp.long_name;
+          const addr = data.address || {};
+          const street = addr.road || addr.pedestrian || addr.suburb || 'MG Road';
+          const area = addr.suburb || addr.neighbourhood || addr.residential || 'Kochi Central';
+          const city = addr.city || addr.town || addr.village || 'Kochi';
+          const district = addr.state_district || addr.county || 'Ernakulam';
+          const state = addr.state || 'Kerala';
+          const pinCode = addr.postcode || '682011';
+          const formatted =
+            data.display_name || `${street}, ${area}, ${city}, ${state} - ${pinCode}`;
+          setActiveAddress(formatted);
+          notifySelect({
+            lat,
+            lng,
+            street,
+            area,
+            city,
+            district,
+            state,
+            pinCode,
+            formattedAddress: formatted,
           });
-
-          onAddressSelect({
-            formattedAddress: place.formattedAddress || item.mainText,
-            city: city || 'Trivandrum',
-            state: state || 'Kerala',
-            pinCode: pinCode || '695001',
-            lat: location.lat(),
-            lng: location.lng(),
-          });
-
-          setInputValue(place.formattedAddress || item.mainText);
-          setSuggestions([]);
-          if ((placesLib as any).AutocompleteSessionToken) {
-            sessionTokenRef.current = new (placesLib as any).AutocompleteSessionToken();
-          }
           return;
         }
+      } catch {
+        // Fallback to coordinates in Kochi
       }
+      const fallback: SelectedMapLocation = {
+        lat,
+        lng,
+        street: 'Main Street Road',
+        area: 'Central Area',
+        city: 'Kochi',
+        district: 'Ernakulam',
+        state: 'Kerala',
+        pinCode: '682011',
+        formattedAddress: `Pinned GPS (${lat.toFixed(4)}, ${lng.toFixed(4)}), Kochi, Kerala`,
+      };
+      setActiveAddress(fallback.formattedAddress);
+      notifySelect(fallback);
+    },
+    [notifySelect]
+  );
 
-      if (item.rawNominatim) {
-        const nom = item.rawNominatim;
-        const addr = nom.address || {};
-        const city =
-          addr.city || addr.town || addr.village || addr.county || addr.state_district || 'Trivandrum';
-        const state = addr.state || 'Kerala';
-        const pinCode = addr.postcode || '695001';
-        const lat = parseFloat(nom.lat) || 8.5241;
-        const lng = parseFloat(nom.lon) || 76.9366;
-
-        onAddressSelect({
-          formattedAddress: nom.display_name || item.mainText,
-          city,
-          state,
-          pinCode,
-          lat,
-          lng,
-        });
-
-        setInputValue(nom.display_name || item.mainText);
-        setSuggestions([]);
-      }
-    } catch (error) {
-      console.warn('Place details selection notice:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleUseMyGPS = () => {
+    if (!navigator.geolocation) return;
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        setCoords({ lat, lng });
+        reverseLookup(lat, lng).finally(() => setIsLocating(false));
+      },
+      () => {
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 6000 }
+    );
   };
 
   return (
-    <div className="relative w-full">
-      <div className="relative">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder={placeholder}
-          className="w-full pl-10 pr-10 py-3 bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl text-sm text-[#171717] outline-none focus:border-[#71883F] transition-all"
-        />
-        <Search className="w-4 h-4 text-[#A1A1A1] absolute left-3.5 top-3.5" />
-        {isLoading && (
-          <Loader2 className="w-4 h-4 text-[#71883F] absolute right-3.5 top-3.5 animate-spin" />
-        )}
+    <div className="bg-[#FAFBF7] border border-[#E8E8E3] rounded-2xl p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-[#EFF4E6] text-[#71883F] flex items-center justify-center">
+            <MapPin className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="text-xs font-extrabold text-[#171717]">{title}</h4>
+            <p className="text-[10px] text-[#6B6B6B]">
+              Click anywhere on the interactive Google Map or select a hub below
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleUseMyGPS}
+          disabled={isLocating}
+          className="px-3 py-1.5 bg-[#71883F] hover:bg-[#5F7334] text-white text-[11px] font-bold rounded-xl flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all disabled:opacity-50"
+        >
+          <Compass className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+          {isLocating ? 'Locating GPS...' : 'Use Live GPS'}
+        </button>
       </div>
 
-      {suggestions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#E8E8E3] rounded-2xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
-          {suggestions.map((suggestion) => (
+      {/* Interactive Google Map */}
+      <div className="relative h-56 w-full rounded-xl overflow-hidden border border-[#E8E8E3]">
+        <InteractiveGoogleTileMap
+          center={coords}
+          zoom={14}
+          onPinMove={(lat, lng) => {
+            const cLat = Number(lat.toFixed(6));
+            const cLng = Number(lng.toFixed(6));
+            setCoords({ lat: cLat, lng: cLng });
+            reverseLookup(cLat, cLng);
+          }}
+          className="w-full h-full"
+          markers={[
+            {
+              id: 'selected-pin',
+              lat: coords.lat,
+              lng: coords.lng,
+              title: 'Deliver Here',
+              label: 'PIN',
+              color: '#71883F',
+            },
+          ]}
+        />
+      </div>
+
+      {/* Selected Coordinates & Address Display */}
+      <div className="p-2.5 bg-white border border-[#E8E8E3] rounded-xl flex items-start justify-between gap-2 text-xs">
+        <div className="flex items-start gap-2 min-w-0">
+          <CheckCircle2 className="w-4 h-4 text-[#71883F] shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold uppercase text-[#6B6B6B] block">
+              Selected Delivery Pin
+            </span>
+            <p className="text-xs font-semibold text-[#171717] truncate">{activeAddress}</p>
+          </div>
+        </div>
+        <span className="text-[10px] font-mono text-[#71883F] bg-[#EFF4E6] px-2 py-0.5 rounded shrink-0">
+          {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+        </span>
+      </div>
+
+      {/* Quick Select Hubs */}
+      <div className="space-y-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block">
+          Quick Select Kochi Delivery Zones
+        </span>
+        <div className="grid grid-cols-2 gap-1.5">
+          {QUICK_HUBS.map((hub, idx) => (
             <button
-              key={suggestion.id}
+              key={idx}
               type="button"
-              onClick={() => handleSuggestionClick(suggestion)}
-              className="w-full text-left px-4 py-3 hover:bg-[#F7F8F3] flex items-start gap-3 transition-colors border-b border-[#F7F8F3] last:border-0 cursor-pointer"
+              onClick={() => {
+                setCoords({ lat: hub.lat, lng: hub.lng });
+                setActiveAddress(hub.formattedAddress);
+                notifySelect(hub);
+              }}
+              className="p-2 text-left rounded-xl border border-[#E8E8E3] bg-white hover:border-[#71883F] transition-colors flex items-center gap-2 cursor-pointer"
             >
-              <MapPin className="w-4 h-4 text-[#71883F] shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-[#171717]">{suggestion.mainText}</p>
-                <p className="text-[10px] text-[#6B6B6B] mt-0.5">{suggestion.secondaryText}</p>
+              <MapPin className="w-3.5 h-3.5 text-[#71883F] shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-[#171717] truncate">{hub.area}</p>
+                <p className="text-[9px] text-[#6B6B6B] truncate">
+                  {hub.city} - {hub.pinCode}
+                </p>
               </div>
             </button>
           ))}
         </div>
-      )}
+      </div>
     </div>
   );
 };

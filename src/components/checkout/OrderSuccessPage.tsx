@@ -215,8 +215,8 @@ export const OrderSuccessPage: React.FC = () => {
               </p>
               <p className="text-[11px] text-[#6B6B6B] truncate">
                 {order.shippingAddress?.house || order.shippingAddress?.street || ''},{' '}
-                {order.shippingAddress?.city || 'Trivandrum'} -{' '}
-                {order.shippingAddress?.pinCode || '695001'}
+                {order.shippingAddress?.city || 'Kochi'} -{' '}
+                {order.shippingAddress?.pinCode || '682011'}
               </p>
             </div>
           </div>
@@ -229,7 +229,7 @@ export const OrderSuccessPage: React.FC = () => {
               </h3>
               <span className="text-[11px] text-neutral-500 flex items-center gap-1">
                 <Building2 className="w-3 h-3 text-[#71883F]" /> Hub:{' '}
-                {storeSettings?.storeHubName || 'MG Road, Trivandrum'}
+                {storeSettings?.storeHubName || 'MG Road, Kochi'}
               </span>
             </div>
             <div className="space-y-3 divide-y divide-[#E8E8E3]">

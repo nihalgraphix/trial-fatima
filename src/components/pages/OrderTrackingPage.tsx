@@ -81,7 +81,7 @@ export const OrderTrackingPage: React.FC = () => {
     ? deliveryPersonnel.find((dp) => dp.id === activeAssignment.deliveryPersonId)
     : undefined;
 
-  // Sync with selectedOrderId from store or default to first order
+  // Sync with selectedOrderId from store or default to user's own latest order
   useEffect(() => {
     if (selectedOrderId) {
       const found = combinedOrdersPool.find((o) => o.id === selectedOrderId);
@@ -92,11 +92,11 @@ export const OrderTrackingPage: React.FC = () => {
         return;
       }
     }
-    if (combinedOrdersPool && combinedOrdersPool.length > 0 && !activeOrder) {
-      setActiveOrder(combinedOrdersPool[0]);
-      setSearchOrderId(combinedOrdersPool[0].id);
+    if (orders && orders.length > 0 && !activeOrder) {
+      setActiveOrder(orders[0]);
+      setSearchOrderId(orders[0].id);
     }
-  }, [combinedOrdersPool, selectedOrderId, activeOrder]);
+  }, [combinedOrdersPool, orders, selectedOrderId, activeOrder]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -631,7 +631,7 @@ export const OrderTrackingPage: React.FC = () => {
               Enter an Order ID Above to Track Live
             </h3>
             <p className="text-xs text-[#77766F] max-w-md mx-auto">
-              Enter your order reference number (e.g. <span className="font-mono font-bold text-[#202320]">ORD-98214</span>) or place an order from our store to track live GPS dispatch from Trivandrum Hub.
+              Enter your order reference number (e.g. <span className="font-mono font-bold text-[#202320]">ORD-98214</span>) or place an order from our store to track live GPS dispatch from Kochi Hub.
             </p>
             <div className="pt-2 flex flex-wrap justify-center gap-3">
               <button

@@ -149,7 +149,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen = true
     <div>
       <h1 class="store-name">${storeTitle}</h1>
       <p style="margin: 4px 0 0; color: #666;">${storeSettings?.tagline || 'Premium Stationery & Everyday Office Essentials'}</p>
-      <p style="margin: 2px 0 0; color: #666;">${storeSettings?.address || 'MG Road, Trivandrum, Kerala 695001'}</p>
+      <p style="margin: 2px 0 0; color: #666;">${storeSettings?.address || 'MG Road, Near Maharaja Metro, Kochi, Kerala 682011'}</p>
       <p style="margin: 2px 0 0; color: #666;">GSTIN: ${storeSettings?.gstNumber || '32AABCF4521H1Z6'} | Care: ${storeSettings?.contactPhone || '+91 94470 12345'}</p>
     </div>
     <div class="invoice-title">
@@ -167,7 +167,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen = true
       <p style="margin: 0; font-weight: bold; font-size: 14px;">${order.shippingAddress?.fullName || order.customerName}</p>
       <p style="margin: 2px 0 0; color: #444;">${order.shippingAddress?.house || ''}, ${order.shippingAddress?.street || ''}</p>
       ${order.shippingAddress?.area ? `<p style="margin: 2px 0 0; color: #444;">${order.shippingAddress.area}</p>` : ''}
-      <p style="margin: 2px 0 0; color: #444;">${order.shippingAddress?.city || 'Trivandrum'}, ${order.shippingAddress?.state || 'Kerala'} - ${order.shippingAddress?.pinCode || '695001'}</p>
+      <p style="margin: 2px 0 0; color: #444;">${order.shippingAddress?.city || 'Kochi'}, ${order.shippingAddress?.state || 'Kerala'} - ${order.shippingAddress?.pinCode || '682011'}</p>
       <p style="margin: 4px 0 0; color: #666;">Phone: ${order.shippingAddress?.phone || order.phone}</p>
     </div>
     <div class="column" style="text-align: right;">
@@ -283,7 +283,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen = true
                 {storeSettings?.tagline || 'Premium Retail & Bulk Office Stationery'}
               </p>
               <p className="text-[#6B6B6B]">
-                {storeSettings?.address || 'MG Road, Opposite Secretariat, Trivandrum, Kerala - 695001'}
+                {storeSettings?.address || 'MG Road, Near Maharaja Metro, Kochi, Kerala - 682011'}
               </p>
               {storeSettings?.storeHubName && (
                 <p className="text-[#6B6B6B] font-medium">
@@ -328,9 +328,9 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen = true
                 <p className="text-[#6B6B6B]">{order.shippingAddress.area}</p>
               )}
               <p className="text-[#6B6B6B]">
-                {order.shippingAddress?.city || 'Trivandrum'},{' '}
+                {order.shippingAddress?.city || 'Kochi'},{' '}
                 {order.shippingAddress?.state || 'Kerala'} -{' '}
-                {order.shippingAddress?.pinCode || '695001'}
+                {order.shippingAddress?.pinCode || '682011'}
               </p>
               <p className="text-[#6B6B6B] mt-1">
                 Phone: {order.shippingAddress?.phone || order.phone}

@@ -1,15 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  Map,
-  AdvancedMarker,
-  useMap,
-  useMapsLibrary,
-} from '@vis.gl/react-google-maps';
+import React, { useEffect, useState } from 'react';
 import { Order, DeliveryPersonnel } from '../../types';
 import { useStore } from '../../context/StoreContext';
+import { InteractiveGoogleTileMap } from '../common/GoogleMapsWrapper';
 import {
   Navigation,
-  MapPin,
   Truck,
   ExternalLink,
   Clock,
@@ -25,76 +19,6 @@ interface DeliveryTrackingMapProps {
   deliveryPerson?: DeliveryPersonnel | null;
 }
 
-const ModernRoutesLayer: React.FC<{
-  mapIdKey: string;
-  origin: { lat: number; lng: number };
-  destination: { lat: number; lng: number };
-  onRouteCalculated: (distance: string, duration: string) => void;
-}> = ({ mapIdKey, origin, destination, onRouteCalculated }) => {
-  const map = useMap(mapIdKey);
-  const routesLib = useMapsLibrary('routes');
-  const polylinesRef = useRef<google.maps.Polyline[]>([]);
-
-  useEffect(() => {
-    if (!routesLib || !map || !(routesLib as any).Route) return;
-
-    // Clear previous polylines
-    polylinesRef.current.forEach((p) => p.setMap(null));
-    polylinesRef.current = [];
-
-    const request = {
-      origin,
-      destination,
-      travelMode: 'DRIVING',
-      fields: ['path', 'distanceMeters', 'durationMillis', 'viewport'],
-    };
-
-    (routesLib as any).Route.computeRoutes(request)
-      .then(({ routes }: { routes: any[] }) => {
-        if (!routes || routes.length === 0) return;
-        const primaryRoute = routes[0];
-
-        if (typeof primaryRoute.createPolylines === 'function') {
-          const newPolylines = primaryRoute.createPolylines();
-          newPolylines.forEach((polyline: google.maps.Polyline) => {
-            polyline.setOptions({
-              strokeColor: '#71883F',
-              strokeWeight: 5,
-              strokeOpacity: 0.9,
-            });
-            polyline.setMap(map);
-          });
-          polylinesRef.current = newPolylines;
-        }
-
-        if (primaryRoute.viewport) {
-          map.fitBounds(primaryRoute.viewport, 48);
-        }
-
-        const distMeters = Number(primaryRoute.distanceMeters || 0);
-        const durMillis = Number(primaryRoute.durationMillis || 0);
-        if (distMeters > 0) {
-          const km = (distMeters / 1000).toFixed(1);
-          const mins = Math.max(2, Math.round(durMillis / 60000));
-          onRouteCalculated(`${km} km`, `${mins} mins`);
-        }
-      })
-      .catch((err: any) => {
-        const msg = String(err?.message || err);
-        if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
-          window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-        }
-      });
-
-    return () => {
-      polylinesRef.current.forEach((p) => p.setMap(null));
-      polylinesRef.current = [];
-    };
-  }, [routesLib, map, origin.lat, origin.lng, destination.lat, destination.lng]);
-
-  return null;
-};
-
 export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
   order,
   storeAddress,
@@ -108,11 +32,11 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
     storeAddress ||
     storeSettings?.storeAddress ||
     storeSettings?.address ||
-    'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O, Thiruvananthapuram, Kerala 695008';
+    'Commercial Complex, MG Road, Kochi, Kerala 682011';
 
   const resolvedStoreCoords = storeCoords || {
-    lat: Number(storeSettings?.storeLat) || 8.4806,
-    lng: Number(storeSettings?.storeLng) || 76.9261,
+    lat: Number(storeSettings?.storeLat) || 9.9312,
+    lng: Number(storeSettings?.storeLng) || 76.2673,
   };
 
   const destCoords = {
@@ -154,6 +78,11 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
 
   const googleMapsDriveUrl = `https://www.google.com/maps/dir/?api=1&origin=${resolvedStoreCoords.lat},${resolvedStoreCoords.lng}&destination=${destCoords.lat},${destCoords.lng}&travelmode=driving`;
 
+  const midCenter = {
+    lat: (resolvedStoreCoords.lat + destCoords.lat) / 2,
+    lng: (resolvedStoreCoords.lng + destCoords.lng) / 2,
+  };
+
   return (
     <div className="bg-white border border-[#E8E8E3] rounded-2xl overflow-hidden shadow-2xs text-left">
       <div className="p-4 border-b border-[#E8E8E3] bg-[#F7F8F3] flex flex-wrap items-center justify-between gap-3">
@@ -166,7 +95,7 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
               Live Google Maps Route & Pinned Location
             </h4>
             <p className="text-[11px] text-[#6B6B6B]">
-              Origin: {storeSettings?.storeName || 'Fathima Stores'} Hub • Customer Pin:{' '}
+              Origin: {storeSettings?.storeName || 'Fathima Stores'} Hub (Kochi) • Customer Pin:{' '}
               {destCoords.lat.toFixed(4)}, {destCoords.lng.toFixed(4)}
             </p>
           </div>
@@ -206,58 +135,61 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
         </div>
       </div>
 
-      {/* Google Map View */}
+      {/* Interactive Google Map View */}
       <div className="relative h-80 sm:h-96 w-full bg-[#EFF4E6]/30">
-        <Map
-          id={mapInstanceId}
-          defaultCenter={destCoords}
-          defaultZoom={13}
-          mapId="DEMO_MAP_ID"
+        <InteractiveGoogleTileMap
+          center={midCenter}
+          zoom={13}
           mapTypeId={mapTypeId}
-          gestureHandling="greedy"
-          disableDefaultUI={false}
-          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-          className="w-full h-full"
-        >
-          {/* Store Origin Marker */}
-          <AdvancedMarker position={resolvedStoreCoords} title={resolvedStoreAddress}>
-            <div className="px-2.5 py-1 bg-[#171717] text-white text-[10px] font-bold rounded-full shadow-md flex items-center gap-1 border-2 border-white">
-              <span>Store Hub</span>
-            </div>
-          </AdvancedMarker>
-
-          {/* Live Courier GPS Marker (if broadcasted) */}
-          {liveCourierCoords && (
-            <AdvancedMarker position={liveCourierCoords} title="Live Delivery Courier GPS">
-              <div className="px-2.5 py-1 bg-sky-600 text-white text-[10px] font-bold rounded-full shadow-md flex items-center gap-1 border-2 border-white">
-                <Truck className="w-3 h-3" />
-                <span>Live Courier</span>
-              </div>
-            </AdvancedMarker>
-          )}
-
-          {/* Customer Destination Marker */}
-          <AdvancedMarker position={destCoords} title={order.shippingAddress?.fullName}>
-            <div className="flex flex-col items-center">
-              <div className="px-2.5 py-1 bg-[#71883F] text-white text-[10px] font-bold rounded-full shadow-md mb-1 border-2 border-white">
-                {order.shippingAddress?.fullName || 'Customer Location'}
-              </div>
-              <div className="w-7 h-7 rounded-full bg-[#71883F] text-white flex items-center justify-center shadow-lg border-2 border-white">
-                <MapPin className="w-4 h-4" />
-              </div>
-            </div>
-          </AdvancedMarker>
-
-          <ModernRoutesLayer
-            mapIdKey={mapInstanceId}
-            origin={resolvedStoreCoords}
-            destination={destCoords}
-            onRouteCalculated={(dist, dur) => {
-              setDistance(dist);
-              setDuration(dur);
-            }}
-          />
-        </Map>
+          markers={[
+            {
+              id: 'store-origin',
+              lat: resolvedStoreCoords.lat,
+              lng: resolvedStoreCoords.lng,
+              label: `Store Hub (Kochi)`,
+              color: '#171717',
+            },
+            ...(liveCourierCoords
+              ? [
+                  {
+                    id: 'live-courier',
+                    lat: liveCourierCoords.lat,
+                    lng: liveCourierCoords.lng,
+                    label: 'Live Courier GPS',
+                    color: '#0284C7',
+                    isPulse: true,
+                  },
+                ]
+              : []),
+            {
+              id: 'customer-dest',
+              lat: destCoords.lat,
+              lng: destCoords.lng,
+              label: order.shippingAddress?.fullName || order.customerName || 'Customer Drop-Off',
+              color: '#71883F',
+              isPulse: true,
+            },
+          ]}
+          polylines={[
+            {
+              id: `route-${order.id}`,
+              path: liveCourierCoords
+                ? [resolvedStoreCoords, liveCourierCoords, destCoords]
+                : [resolvedStoreCoords, destCoords],
+              color: '#71883F',
+              weight: 5,
+            },
+          ]}
+        />
+        <ModernRoutesLayer
+          mapIdKey={mapInstanceId}
+          origin={resolvedStoreCoords}
+          destination={destCoords}
+          onRouteCalculated={(dist, dur) => {
+            setDistance(dist);
+            setDuration(dur);
+          }}
+        />
       </div>
 
       {deliveryPerson && (
@@ -271,7 +203,7 @@ export const DeliveryTrackingMap: React.FC<DeliveryTrackingMapProps> = ({
                 Assigned Courier: {deliveryPerson.name} ({deliveryPerson.vehicleType} •{' '}
                 {deliveryPerson.vehicleNumber})
               </p>
-              <p className="text-[11px] text-[#6B6B6B]">Area: {deliveryPerson.area}</p>
+              <p className="text-[11px] text-[#6B6B6B]">Area: {deliveryPerson.area || 'Kochi'}</p>
             </div>
           </div>
           <a

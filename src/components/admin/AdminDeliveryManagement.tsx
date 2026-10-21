@@ -19,30 +19,25 @@ import {
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
 import { AdminRouteOptimizer } from './AdminRouteOptimizer';
 import { AdminDriverPerformanceView } from './AdminDriverPerformanceView';
-import { DEFAULT_DISPATCH_ORDERS } from '../../context/StoreContext';
 
 export const AdminDeliveryManagement: React.FC = () => {
   const {
     orders,
     allOrders,
     users,
+    userPermissions,
     deliveryPersonnel,
     deliveryAssignments,
     assignDeliveryPerson,
-    assignOrderToDelivery,
     updateOrderStatus,
     grantCustomerDriver,
-    seedSampleDispatchOrders,
+    revokeCustomerDeliveryPortalAccess,
     showToast,
     storeSettings,
   } = useStore();
 
   const sourceOrders =
-    (orders && orders.length > 0
-      ? orders
-      : allOrders && allOrders.length > 0
-      ? allOrders
-      : DEFAULT_DISPATCH_ORDERS) || [];
+    (allOrders && allOrders.length > 0 ? allOrders : orders) || [];
   const nonArchivedOrders = sourceOrders.filter((o) => !o.isArchived && o.orderStatus !== 'Cancelled');
 
   const [viewMode, setViewMode] = useState<
@@ -188,18 +183,6 @@ export const AdminDeliveryManagement: React.FC = () => {
               {deliveryPersonnel.filter((p) => String(p.status).toLowerCase() === 'available').length} Available Drivers
             </span>
           </div>
-
-          <button
-            type="button"
-            onClick={async () => {
-              await seedSampleDispatchOrders();
-            }}
-            className="px-3.5 py-2 rounded-xl bg-[#EFF4E6] hover:bg-[#71883F] text-[#71883F] hover:text-white border border-[#71883F]/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-            title="Populate ready-for-delivery orders across Trivandrum sectors"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Generate Sample Orders</span>
-          </button>
         </div>
       </div>
 
@@ -272,13 +255,37 @@ export const AdminDeliveryManagement: React.FC = () => {
                 })
                 .map((u) => {
                   const emailNorm = (u.email || '').toLowerCase().trim();
+                  const removedDriverEmails = new Set(
+                    (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
+                  );
+                  const removedDriverIds = new Set(storeSettings.removedDriverIds || []);
+                  const isRemovedDriver =
+                    (emailNorm && removedDriverEmails.has(emailNorm)) ||
+                    (u.id && removedDriverIds.has(u.id));
+
+                  const linkedPerm = (userPermissions || []).find(
+                    (p) =>
+                      (u.permissionDocId && p.id === u.permissionDocId) ||
+                      (u.id && (p.userId === u.id || p.id === u.id)) ||
+                      (emailNorm && p.email?.toLowerCase().trim() === emailNorm)
+                  );
+
                   const isUserDriver =
-                    Boolean(u.isDriver) ||
-                    u.role === 'delivery' ||
-                    (storeSettings.customDriverEmails || []).some(
-                      (e) => e.toLowerCase().trim() === emailNorm
-                    ) ||
-                    (storeSettings.customDriverIds || []).includes(u.id);
+                    !isRemovedDriver &&
+                    (linkedPerm
+                      ? Boolean(
+                          linkedPerm.deliveryPortalAccess ||
+                            linkedPerm.isDriver ||
+                            linkedPerm.role === 'delivery' ||
+                            linkedPerm.accessLevels?.includes('delivery_portal')
+                        )
+                      : Boolean(u.isDriver) ||
+                        Boolean(u.deliveryPortalAccess) ||
+                        u.role === 'delivery' ||
+                        (storeSettings.customDriverEmails || []).some(
+                          (e) => e.toLowerCase().trim() === emailNorm
+                        ) ||
+                        (storeSettings.customDriverIds || []).includes(u.id));
 
                   return (
                     <div
@@ -306,7 +313,17 @@ export const AdminDeliveryManagement: React.FC = () => {
 
                       <button
                         type="button"
-                        onClick={() => grantCustomerDriver(u.email || u.id, !isUserDriver)}
+                        onClick={async () => {
+                          if (isUserDriver) {
+                            await revokeCustomerDeliveryPortalAccess(u.email || u.id, u.id);
+                          } else {
+                            await grantCustomerDriver(u.email || u.id, true, {
+                              userId: u.id,
+                              name: u.name,
+                              phone: u.phone,
+                            });
+                          }
+                        }}
                         className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                           isUserDriver
                             ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
@@ -362,9 +379,14 @@ export const AdminDeliveryManagement: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => grantCustomerDriver(driver.id || driver.email || driver.userId || '', false)}
+                    onClick={() =>
+                      revokeCustomerDeliveryPortalAccess(
+                        driver.email || driver.id || driver.userId || '',
+                        driver.userId || driver.id
+                      )
+                    }
                     className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer transition-colors shrink-0"
-                    title="Revoke Driver Portal access"
+                    title="Delete Delivery Portal permission document and revoke access"
                   >
                     Revoke Driver
                   </button>
@@ -428,7 +450,7 @@ export const AdminDeliveryManagement: React.FC = () => {
                   const destQuery = hasPin
                     ? `${order.shippingAddress.lat},${order.shippingAddress.lng}`
                     : encodeURIComponent(
-                        `${order.shippingAddress?.house || ''}, ${order.shippingAddress?.street || ''}, ${order.shippingAddress?.city || 'Trivandrum'}`
+                        `${order.shippingAddress?.house || ''}, ${order.shippingAddress?.street || ''}, ${order.shippingAddress?.city || 'Kochi'}`
                       );
 
                   return (
@@ -620,10 +642,10 @@ export const AdminDeliveryManagement: React.FC = () => {
 
                 <DeliveryTrackingMap
                   order={selectedOrder}
-                  storeAddress={storeSettings?.address || 'Commercial Complex, MG Road, Trivandrum, Kerala 695001'}
+                  storeAddress={storeSettings?.address || 'Commercial Complex, MG Road, Kochi, Kerala 682011'}
                   storeCoords={{
-                    lat: storeSettings?.storeLat ?? 8.5241,
-                    lng: storeSettings?.storeLng ?? 76.9366,
+                    lat: storeSettings?.storeLat ?? 9.9312,
+                    lng: storeSettings?.storeLng ?? 76.2673,
                   }}
                   deliveryPerson={selectedPersonnel}
                 />

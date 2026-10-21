@@ -122,7 +122,11 @@
     },
     "delivery_assignments/{assignmentId}": {
       "schema": "object"
+    },
+    "user_permissions/{permissionId}": {
+      "schema": "object"
     }
   }
 }
+
 

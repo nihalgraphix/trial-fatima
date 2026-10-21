@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useMapsLibrary, useMap, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
+import { InteractiveGoogleTileMap } from '../common/GoogleMapsWrapper';
 import {
   Truck,
   MapPin,
@@ -25,14 +25,11 @@ interface Props {
 
 export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
   const { storeSettings } = useStore();
-  const map = useMap('admin-order-delivery-map');
-  const routesLib = useMapsLibrary('routes');
-  const polylinesRef = useRef<google.maps.Polyline[]>([]);
   const watchIdRef = useRef<number | null>(null);
 
   const STORE_HUB_COORDS = {
-    lat: storeSettings?.storeLat ?? 8.5241,
-    lng: storeSettings?.storeLng ?? 76.9366,
+    lat: storeSettings?.storeLat ?? 9.9312,
+    lng: storeSettings?.storeLng ?? 76.2673,
   };
 
   const [routeInfo, setRouteDetails] = useState<{
@@ -51,10 +48,14 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
   const [copiedCoords, setCopiedCoords] = useState(false);
 
   const safeStoreAddress =
-    storeAddress || storeSettings?.address || 'MG Road, Trivandrum, Kerala 695001';
+    storeAddress || storeSettings?.address || 'Commercial Complex, MG Road, Kochi, Kerala 682011';
   const customerLat = order.shippingAddress?.lat || STORE_HUB_COORDS.lat + 0.0044;
   const customerLng = order.shippingAddress?.lng || STORE_HUB_COORDS.lng + 0.0054;
   const hasExactPin = Boolean(order.shippingAddress?.lat && order.shippingAddress?.lng);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({
+    lat: customerLat,
+    lng: customerLng,
+  });
 
   // Manage live GPS tracking when Admin selects "Drive from My GPS"
   useEffect(() => {
@@ -112,91 +113,26 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
     originMode === 'live_gps' && adminLiveCoords ? adminLiveCoords : STORE_HUB_COORDS;
 
   useEffect(() => {
-    if (!routesLib || !map || !order.shippingAddress) return;
+    if (!order.shippingAddress) return;
 
-    const destination = hasExactPin
-      ? { lat: customerLat, lng: customerLng }
-      : `${order.shippingAddress.house || ''}, ${order.shippingAddress.street || ''}, ${order.shippingAddress.city || 'Trivandrum'}, ${order.shippingAddress.pinCode || ''}`;
-
-    const calculateRoute = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      polylinesRef.current.forEach((p) => p.setMap(null));
-      polylinesRef.current = [];
-
-      try {
-        const request = {
-          origin: activeOriginCoords,
-          destination,
-          travelMode,
-          fields: ['path', 'distanceMeters', 'durationMillis', 'viewport', 'legs'],
-        };
-
-        const { routes } = await (routesLib.Route as any).computeRoutes(request);
-
-        if (!routes || routes.length === 0) {
-          setError('Showing pinned customer coordinates on map.');
-          map.panTo({ lat: customerLat, lng: customerLng });
-          return;
-        }
-
-        const primaryRoute = routes[0];
-
-        const newPolylines = primaryRoute.createPolylines();
-        newPolylines.forEach((polyline: google.maps.Polyline) => {
-          polyline.setOptions({
-            strokeColor: originMode === 'live_gps' ? '#145A38' : '#71883F',
-            strokeWeight: 5,
-            strokeOpacity: 0.9,
-          });
-          polyline.setMap(map);
-        });
-        polylinesRef.current = newPolylines;
-
-        if (primaryRoute.viewport) {
-          map.fitBounds(primaryRoute.viewport, 50);
-        }
-
-        const extractedSteps: string[] = [];
-        const legs = primaryRoute.legs || [];
-        if (legs.length > 0 && Array.isArray(legs[0].steps)) {
-          for (const step of legs[0].steps.slice(0, 4)) {
-            const inst =
-              step.instructions ||
-              step.navigationInstruction?.instructions ||
-              '';
-            if (inst) {
-              extractedSteps.push(String(inst).replace(/<[^>]*>?/gm, ''));
-            }
-          }
-        }
-
-        setRouteDetails({
-          distance: ((primaryRoute.distanceMeters || 2500) / 1000).toFixed(1) + ' km',
-          duration: Math.max(3, Math.round((primaryRoute.durationMillis || 600000) / 60000)) + ' mins',
-          steps: extractedSteps,
-        });
-      } catch (err: any) {
-        console.warn('Route calculation notice:', err);
-        const msg = String(err?.message || err || '');
-        if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('OVER_QUERY_LIMIT') || msg.includes('429')) {
-          window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-        }
-        map.panTo({ lat: customerLat, lng: customerLng });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    calculateRoute();
-
-    return () => {
-      polylinesRef.current.forEach((p) => p.setMap(null));
-    };
+    // Calculate Haversine fallback estimate immediately
+    const R = 6371;
+    const dLat = ((customerLat - activeOriginCoords.lat) * Math.PI) / 180;
+    const dLon = ((customerLng - activeOriginCoords.lng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((activeOriginCoords.lat * Math.PI) / 180) *
+        Math.cos((customerLat * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const roadKm = Math.max(0.8, R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.28);
+    const speedFactor = travelMode === 'TWO_WHEELER' ? 2.6 : 3.1;
+    setRouteDetails({
+      distance: `${roadKm.toFixed(1)} km`,
+      duration: `${Math.max(4, Math.round(roadKm * speedFactor))} mins`,
+      steps: [],
+    });
   }, [
-    routesLib,
-    map,
     order,
     customerLat,
     customerLng,
@@ -210,7 +146,7 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
   const mapsDestinationQuery = hasExactPin
     ? `${customerLat},${customerLng}`
     : encodeURIComponent(
-        `${order.shippingAddress?.house || ''}, ${order.shippingAddress?.street || ''}, ${order.shippingAddress?.city || 'Trivandrum'} ${order.shippingAddress?.pinCode || ''}`
+        `${order.shippingAddress?.house || ''}, ${order.shippingAddress?.street || ''}, ${order.shippingAddress?.city || 'Kochi'} ${order.shippingAddress?.pinCode || ''}`
       );
 
   const mapsOriginQuery =
@@ -339,54 +275,51 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
 
       {/* Interactive Google Map */}
       <div className="h-[360px] w-full rounded-2xl overflow-hidden border border-[#E8E8E3] relative shadow-inner bg-[#E5E9E0]">
-        <Map
-          id="admin-order-delivery-map"
-          mapId="DEMO_MAP_ID"
+        <InteractiveGoogleTileMap
+          center={mapCenter}
+          zoom={14}
           mapTypeId={mapTypeId}
-          defaultCenter={{ lat: customerLat, lng: customerLng }}
-          defaultZoom={14}
-          gestureHandling="greedy"
-          disableDefaultUI={false}
-          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-        >
-          {/* Store Hub Origin Marker */}
-          <AdvancedMarker position={STORE_HUB_COORDS} title={safeStoreAddress}>
-            <div className="bg-white/95 border-2 border-[#71883F] px-2 py-0.5 rounded-full text-[10px] font-extrabold text-[#71883F] shadow-md flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-[#71883F]" />
-              <span>Store Hub</span>
-            </div>
-          </AdvancedMarker>
-
-          {/* Admin / Driver Live GPS Marker */}
-          {originMode === 'live_gps' && adminLiveCoords && (
-            <AdvancedMarker position={adminLiveCoords} title="Your Live Driver GPS Position">
-              <div className="relative flex items-center justify-center">
-                <div className="absolute w-9 h-9 bg-emerald-500/30 rounded-full animate-ping" />
-                <div className="bg-emerald-700 text-white px-2.5 py-1 rounded-full text-[10px] font-extrabold shadow-lg border-2 border-white flex items-center gap-1 z-10">
-                  <Navigation className="w-3 h-3" />
-                  <span>Admin / Driver GPS</span>
-                </div>
-              </div>
-            </AdvancedMarker>
-          )}
-
-          {/* Customer Destination Marker */}
-          <AdvancedMarker
-            position={{ lat: customerLat, lng: customerLng }}
-            title={`Customer: ${order.customerName}`}
-          >
-            <div className="flex flex-col items-center">
-              <div className="bg-[#171717] text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-lg mb-1 whitespace-nowrap border border-[#71883F]">
-                <span className="text-[#A9C46C] mr-1">Drop:</span>
-                {order.customerName}
-              </div>
-              <Pin background={'#171717'} glyphColor={'#FFF'} borderColor={'#71883F'} scale={1.15} />
-            </div>
-          </AdvancedMarker>
-        </Map>
+          markers={[
+            {
+              id: 'store-hub-origin',
+              lat: STORE_HUB_COORDS.lat,
+              lng: STORE_HUB_COORDS.lng,
+              label: 'Store Hub (Kochi)',
+              color: '#71883F',
+            },
+            ...(originMode === 'live_gps' && adminLiveCoords
+              ? [
+                  {
+                    id: 'admin-live-gps',
+                    lat: adminLiveCoords.lat,
+                    lng: adminLiveCoords.lng,
+                    label: 'Admin / Driver GPS',
+                    color: '#047857',
+                    isPulse: true,
+                  },
+                ]
+              : []),
+            {
+              id: 'customer-drop',
+              lat: customerLat,
+              lng: customerLng,
+              label: `Drop: ${order.customerName}`,
+              color: '#171717',
+              isPulse: true,
+            },
+          ]}
+          polylines={[
+            {
+              id: 'admin-delivery-route',
+              path: [activeOriginCoords, { lat: customerLat, lng: customerLng }],
+              color: originMode === 'live_gps' ? '#145A38' : '#71883F',
+              weight: 5,
+            },
+          ]}
+        />
 
         {/* Floating Map Controls (Satellite Toggle + Center Customer Pin) */}
-        <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
+        <div className="absolute bottom-3 left-3 right-3 z-30 flex items-center justify-between gap-2 pointer-events-none">
           <button
             type="button"
             onClick={() => setMapTypeId((prev) => (prev === 'roadmap' ? 'hybrid' : 'roadmap'))}
@@ -400,11 +333,10 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
             <button
               type="button"
               onClick={() => {
-                if (!map) return;
-                const bounds = new google.maps.LatLngBounds();
-                bounds.extend(activeOriginCoords);
-                bounds.extend({ lat: customerLat, lng: customerLng });
-                map.fitBounds(bounds, 50);
+                setMapCenter({
+                  lat: (activeOriginCoords.lat + customerLat) / 2,
+                  lng: (activeOriginCoords.lng + customerLng) / 2,
+                });
               }}
               className="px-2.5 py-1.5 bg-white/95 hover:bg-white border border-[#E8E8E3] rounded-xl text-[10px] font-bold text-[#171717] shadow-md cursor-pointer"
             >
@@ -413,10 +345,7 @@ export const AdminDeliveryMap: React.FC<Props> = ({ order, storeAddress }) => {
             <button
               type="button"
               onClick={() => {
-                if (map) {
-                  map.panTo({ lat: customerLat, lng: customerLng });
-                  map.setZoom(18);
-                }
+                setMapCenter({ lat: customerLat, lng: customerLng });
               }}
               className="px-2.5 py-1.5 bg-[#171717] text-white rounded-xl text-[10px] font-bold shadow-md flex items-center gap-1 cursor-pointer"
             >

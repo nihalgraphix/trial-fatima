@@ -12,7 +12,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { InteractiveGoogleTileMap } from '../common/GoogleMapsWrapper';
 import { StoreLocationConfigCard } from '../admin/StoreLocationConfigCard';
 
 export const ContactPage: React.FC = () => {
@@ -24,15 +24,16 @@ export const ContactPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [showLocationEditor, setShowLocationEditor] = useState(false);
+  const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'hybrid'>('roadmap');
 
-  const storeLat = Number(storeSettings?.storeLat) || 8.4806;
-  const storeLng = Number(storeSettings?.storeLng) || 76.9261;
+  const storeLat = Number(storeSettings?.storeLat) || 9.9312;
+  const storeLng = Number(storeSettings?.storeLng) || 76.2673;
   const storeHubName =
-    storeSettings?.storeHubName || `${storeSettings?.storeName || 'Fathima Stores'} Hub`;
+    storeSettings?.storeHubName || `${storeSettings?.storeName || 'Fathima Stores'} Hub (MG Road, Kochi)`;
   const storeAddress =
     storeSettings?.storeAddress ||
     storeSettings?.address ||
-    'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O, Thiruvananthapuram, Kerala 695008';
+    'Commercial Complex, MG Road, Kochi, Kerala 682011';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +73,7 @@ export const ContactPage: React.FC = () => {
             <p className="text-sm text-[#6B6B6B] mt-2 leading-relaxed">
               Have questions about an order, institutional supplies, or delivery coverage from{' '}
               <span className="font-semibold text-[#171717]">{storeHubName}</span>? Send us a
-              message or visit our store hub.
+              message or visit our store hub in Kochi.
             </p>
           </div>
 
@@ -104,7 +105,7 @@ export const ContactPage: React.FC = () => {
                   Store Information
                 </h3>
                 <span className="text-[10px] font-bold bg-[#EFF4E6] text-[#71883F] px-2 py-0.5 rounded-full">
-                  Active Hub
+                  Kochi Main Hub
                 </span>
               </div>
 
@@ -172,34 +173,31 @@ export const ContactPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Dynamic Google Map Preview */}
+            {/* Interactive Google Map Preview */}
             <div className="bg-white border border-[#E8E8E3] rounded-2xl overflow-hidden shadow-2xs">
-              <div className="h-64 w-full bg-[#EFF4E6]/40 relative">
-                <Map
-                  id="contact-page-store-map"
-                  mapId="DEMO_MAP_ID"
-                  defaultCenter={{ lat: storeLat, lng: storeLng }}
+              <div className="h-72 w-full bg-[#EFF4E6]/40 relative">
+                <InteractiveGoogleTileMap
                   center={{ lat: storeLat, lng: storeLng }}
-                  defaultZoom={16}
-                  gestureHandling="greedy"
-                  disableDefaultUI={false}
-                  internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-                  className="w-full h-full"
+                  zoom={15}
+                  mapTypeId={mapTypeId}
+                  markers={[
+                    {
+                      id: 'contact-store-hub',
+                      lat: storeLat,
+                      lng: storeLng,
+                      label: storeHubName,
+                      color: '#71883F',
+                      isPulse: true,
+                    },
+                  ]}
+                />
+                <button
+                  type="button"
+                  onClick={() => setMapTypeId((prev) => (prev === 'roadmap' ? 'hybrid' : 'roadmap'))}
+                  className="absolute bottom-3 left-3 z-30 px-2.5 py-1.5 bg-white/95 hover:bg-white border border-[#E8E8E3] rounded-lg text-[11px] font-bold text-[#171717] shadow-md cursor-pointer"
                 >
-                  <AdvancedMarker
-                    position={{ lat: storeLat, lng: storeLng }}
-                    title={storeHubName}
-                  >
-                    <div className="flex flex-col items-center">
-                      <div className="px-2.5 py-1 bg-[#171717] text-white text-[10px] font-bold rounded-full shadow-md mb-1 border border-white/20 whitespace-nowrap">
-                        {storeHubName}
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-[#71883F] text-white flex items-center justify-center shadow-lg border-2 border-white">
-                        <MapPin className="w-4 h-4" />
-                      </div>
-                    </div>
-                  </AdvancedMarker>
-                </Map>
+                  {mapTypeId === 'roadmap' ? 'Satellite View' : 'Street Map'}
+                </button>
               </div>
               <div className="p-3 bg-white border-t border-[#E8E8E3] flex items-center justify-between text-xs">
                 <span className="font-semibold text-[#171717] truncate pr-2">{storeHubName}</span>

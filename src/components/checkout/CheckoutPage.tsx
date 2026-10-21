@@ -48,13 +48,13 @@ export const CheckoutPage: React.FC = () => {
   const [house, setHouse] = useState(defaultAddress?.house || '');
   const [street, setStreet] = useState(defaultAddress?.street || '');
   const [area, setArea] = useState(defaultAddress?.area || '');
-  const [city, setCity] = useState(defaultAddress?.city || storeSettings?.storeCity || 'Trivandrum');
-  const [district, setDistrict] = useState(defaultAddress?.district || storeSettings?.storeCity || 'Trivandrum');
+  const [city, setCity] = useState(defaultAddress?.city || storeSettings?.storeCity || 'Kochi');
+  const [district, setDistrict] = useState(defaultAddress?.district || storeSettings?.storeCity || 'Ernakulam');
   const [state, setState] = useState(defaultAddress?.state || storeSettings?.storeState || 'Kerala');
-  const [pinCode, setPinCode] = useState(defaultAddress?.pinCode || storeSettings?.storePinCode || '695001');
+  const [pinCode, setPinCode] = useState(defaultAddress?.pinCode || storeSettings?.storePinCode || '682011');
 
-  const storeLat = storeSettings?.storeLat ?? 8.5241;
-  const storeLng = storeSettings?.storeLng ?? 76.9366;
+  const storeLat = storeSettings?.storeLat ?? 9.9312;
+  const storeLng = storeSettings?.storeLng ?? 76.2673;
   const storeHubName = storeSettings?.storeHubName || `${storeSettings?.storeName || 'Fathima Stores'} Hub`;
 
   const [pinnedLat, setPinnedLat] = useState<number>(defaultAddress?.lat || storeLat);
@@ -77,10 +77,10 @@ export const CheckoutPage: React.FC = () => {
         setHouse((prev) => prev || firstAddr.house || '');
         setStreet((prev) => prev || firstAddr.street || '');
         setArea((prev) => prev || firstAddr.area || '');
-        setCity(firstAddr.city || storeSettings?.storeCity || 'Trivandrum');
-        setDistrict(firstAddr.district || storeSettings?.storeCity || 'Trivandrum');
+        setCity(firstAddr.city || storeSettings?.storeCity || 'Kochi');
+        setDistrict(firstAddr.district || storeSettings?.storeCity || 'Ernakulam');
         setState(firstAddr.state || storeSettings?.storeState || 'Kerala');
-        setPinCode(firstAddr.pinCode || storeSettings?.storePinCode || '695001');
+        setPinCode(firstAddr.pinCode || storeSettings?.storePinCode || '682011');
         if (firstAddr.lat && firstAddr.lng) {
           setPinnedLat(firstAddr.lat);
           setPinnedLng(firstAddr.lng);

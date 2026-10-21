@@ -247,6 +247,17 @@ export interface InventoryAdjustment {
   notes?: string;
 }
 
+export interface UserPermissionDoc {
+  id: string;
+  userId: string;
+  email: string;
+  role: 'customer' | 'admin' | 'delivery';
+  deliveryPortalAccess: boolean;
+  isDriver: boolean;
+  accessLevels: ('customer' | 'delivery_portal' | 'admin')[];
+  updatedAt?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -254,6 +265,8 @@ export interface User {
   phone: string;
   role: 'customer' | 'admin' | 'delivery';
   isDriver?: boolean;
+  deliveryPortalAccess?: boolean;
+  permissionDocId?: string;
   addresses: ShippingAddress[];
   createdAt: string;
   avatar?: string;
@@ -263,6 +276,7 @@ export interface User {
   city?: string;
   state?: string;
 }
+
 
 export interface HeroSlide {
   id: string;

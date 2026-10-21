@@ -87,6 +87,8 @@ export const AdminDashboard: React.FC = () => {
     isAdmin,
     currentUser,
     allUsers,
+    userPermissions,
+    deliveryPersonnel,
     setActivePage,
     logoutUser,
     switchRole,
@@ -132,6 +134,7 @@ export const AdminDashboard: React.FC = () => {
     toggleCustomerVIP,
     grantCustomerAdmin,
     grantCustomerDriver,
+    revokeCustomerDeliveryPortalAccess,
     deleteCustomer,
     removeSelectedCategoryButton,
     showToast,
@@ -365,9 +368,9 @@ export const AdminDashboard: React.FC = () => {
     house: '',
     street: '',
     area: '',
-    city: 'Trivandrum',
+    city: 'Kochi',
     state: 'Kerala',
-    pinCode: '695001',
+    pinCode: '682011',
     productId: '',
     quantity: 1,
     paymentMethod: 'UPI - Google Pay' as PaymentMethod,
@@ -422,13 +425,13 @@ export const AdminDashboard: React.FC = () => {
     tagline: storeSettings?.tagline || 'Quality Stationery & Everyday Office Essentials',
     contactEmail: storeSettings?.contactEmail || 'care@fathimastores.com',
     contactPhone: storeSettings?.contactPhone || '+91 98450 12345',
-    address: storeSettings?.address || 'Commercial Complex, MG Road, Trivandrum, Kerala 695001',
+    address: storeSettings?.address || 'Commercial Complex, MG Road, Kochi, Kerala 682011',
     currency: storeSettings?.currency || '₹',
     freeDeliveryThreshold: storeSettings?.freeDeliveryThreshold ?? 500,
     standardDeliveryFee: storeSettings?.standardDeliveryFee ?? 40,
     gstNumber: storeSettings?.gstNumber || '32AABCF1234F1Z8',
     upiId: storeSettings?.upiId || 'fathimastores@oksbi',
-    upiMerchantName: storeSettings?.upiMerchantName || 'FATHIMA STORES TRIVANDRUM',
+    upiMerchantName: storeSettings?.upiMerchantName || 'FATHIMA STORES KOCHI',
     enableGPay: storeSettings?.enableGPay ?? true,
     enablePhonePe: storeSettings?.enablePhonePe ?? true,
     enablePaytm: storeSettings?.enablePaytm ?? true,
@@ -677,11 +680,24 @@ export const AdminDashboard: React.FC = () => {
     });
   }, [products, prodCategoryFilter, prodStockFilter, adminSearch, currentThreshold]);
 
-  // Customers comprehensive list (Aggregates registered users from Firestore, current store manager, and orders)
+  // Customers & User Management comprehensive list (Aggregates registered users, Firestore permission docs, delivery personnel, store manager, and orders)
   const customersList = useMemo<AdminCustomerRecord[]>(() => {
     const map = new Map<string, AdminCustomerRecord>();
-    const removedEmails = new Set((storeSettings.removedCustomerEmails || []).map((e) => e.toLowerCase()));
+    const removedEmails = new Set((storeSettings.removedCustomerEmails || []).map((e) => e.toLowerCase().trim()));
     const removedIds = new Set(storeSettings.removedCustomerIds || []);
+    const removedDriverEmails = new Set(
+      (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const removedDriverIds = new Set(storeSettings.removedDriverIds || []);
+
+    const getDeterministicPermDocId = (email?: string, userId?: string) => {
+      const emailClean = (email || '').trim().toLowerCase();
+      if (emailClean && emailClean.includes('@')) {
+        return `perm_${emailClean.replace(/[^a-z0-9]/g, '_')}`;
+      }
+      const idClean = (userId || '').trim();
+      return idClean ? `perm_${idClean.replace(/[^a-zA-Z0-9_-]/g, '_')}` : undefined;
+    };
 
     // 1. Ensure logged-in Store Manager account is always present in Admin Panel unless deleted
     if (currentUser?.email) {
@@ -695,7 +711,10 @@ export const AdminDashboard: React.FC = () => {
           phone: currentUser.phone || defAddr?.phone || '+91 98450 12345',
           photoURL: currentUser.photoURL,
           role: 'admin',
-          city: currentUser.city || defAddr?.city || 'Trivandrum',
+          isDriver: Boolean(currentUser.isDriver || currentUser.deliveryPortalAccess),
+          deliveryPortalAccess: Boolean(currentUser.isDriver || currentUser.deliveryPortalAccess),
+          permissionDocId: currentUser.permissionDocId,
+          city: currentUser.city || defAddr?.city || 'Kochi',
           state: currentUser.state || defAddr?.state || 'Kerala',
           bio: currentUser.bio || 'Store Manager & Administrator',
           addresses: currentUser.addresses || [],
@@ -711,12 +730,13 @@ export const AdminDashboard: React.FC = () => {
       }
     }
 
-    // 2. Add registered users
+    // 2. Add registered users from Firestore `users` collection
     (allUsers || []).forEach((u) => {
-      const emailKey = (u.email || '').toLowerCase().trim();
+      const emailKey = (u.email || '').toLowerCase().trim() || u.id;
       if (!emailKey) return;
       if (removedEmails.has(emailKey) || (u.id && removedIds.has(u.id))) return;
       const defAddr = u.addresses?.find((a) => a.isDefault) || u.addresses?.[0];
+      const hasDriverAccess = Boolean(u.isDriver || u.deliveryPortalAccess || u.role === 'delivery');
       map.set(emailKey, {
         id: u.id,
         name: u.name || 'Registered Customer',
@@ -724,7 +744,9 @@ export const AdminDashboard: React.FC = () => {
         phone: u.phone || defAddr?.phone || '',
         photoURL: u.photoURL,
         role: u.role || 'customer',
-        isDriver: Boolean(u.isDriver || u.role === 'delivery'),
+        isDriver: hasDriverAccess,
+        deliveryPortalAccess: hasDriverAccess,
+        permissionDocId: u.permissionDocId || (hasDriverAccess ? getDeterministicPermDocId(u.email, u.id) : undefined),
         city: u.city || defAddr?.city || '',
         state: u.state || defAddr?.state || '',
         bio: u.bio,
@@ -740,9 +762,52 @@ export const AdminDashboard: React.FC = () => {
       });
     });
 
+    // 2.5. Merge active Delivery Personnel & Firestore Permission Documents so all 'delivery portal' access accounts are linked
+    (deliveryPersonnel || []).forEach((dp) => {
+      const emailKey = (dp.email || '').toLowerCase().trim() || dp.userId || dp.id;
+      if (!emailKey) return;
+      if (
+        removedEmails.has(emailKey) ||
+        removedDriverEmails.has(emailKey) ||
+        (dp.id && (removedIds.has(dp.id) || removedDriverIds.has(dp.id))) ||
+        (dp.userId && (removedIds.has(dp.userId) || removedDriverIds.has(dp.userId)))
+      ) {
+        return;
+      }
+      const existing = map.get(emailKey);
+      const permDocId = getDeterministicPermDocId(dp.email, dp.userId || dp.id);
+      if (existing) {
+        existing.isDriver = true;
+        existing.deliveryPortalAccess = true;
+        existing.permissionDocId = existing.permissionDocId || permDocId;
+        if (!existing.phone && dp.phone) existing.phone = dp.phone;
+      } else {
+        map.set(emailKey, {
+          id: dp.userId || dp.id,
+          name: dp.name || 'Delivery Driver',
+          email: dp.email || '',
+          phone: dp.phone || '',
+          role: 'delivery',
+          isDriver: true,
+          deliveryPortalAccess: true,
+          permissionDocId: permDocId,
+          city: dp.currentLocation || 'Kochi',
+          state: 'Kerala',
+          addresses: [],
+          createdAt: new Date().toISOString(),
+          totalSpent: 0,
+          ordersCount: 0,
+          orders: [],
+          isRegistered: true,
+          status: 'Regular',
+        });
+      }
+    });
+
     // 3. Associate / add customers from orders
     orders.forEach((o) => {
       const emailKey = (o.email || '').toLowerCase().trim();
+      if (!emailKey) return;
       if (removedEmails.has(emailKey) || (o.userId && removedIds.has(o.userId))) return;
       const existing: AdminCustomerRecord = map.get(emailKey) || {
         id: o.userId || `cust-${Math.abs(emailKey.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0))}`,
@@ -794,11 +859,6 @@ export const AdminDashboard: React.FC = () => {
     const driverEmailSet = new Set((storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim()));
     const driverIdSet = new Set(storeSettings.customDriverIds || []);
 
-    const removedDriverEmails = new Set(
-      (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
-    );
-    const removedDriverIds = new Set(storeSettings.removedDriverIds || []);
-
     map.forEach((cust, emailKey) => {
       if (adminSet.has(emailKey)) {
         cust.role = 'admin';
@@ -807,11 +867,37 @@ export const AdminDashboard: React.FC = () => {
       if (vipSet.has(emailKey)) {
         cust.status = 'VIP';
       }
+
+      // Link to user's Firestore permission document (`user_permissions/{permissionId}`)
+      const matchedPerm = (userPermissions || []).find(
+        (p) =>
+          (cust.permissionDocId && p.id === cust.permissionDocId) ||
+          (cust.id && (p.userId === cust.id || p.id === cust.id)) ||
+          (emailKey && p.email?.toLowerCase().trim() === emailKey)
+      );
+
       if (removedDriverEmails.has(emailKey) || (cust.id && removedDriverIds.has(cust.id))) {
         cust.isDriver = false;
+        cust.deliveryPortalAccess = false;
+        cust.permissionDocId = undefined;
         if (cust.role === 'delivery') cust.role = 'customer';
+      } else if (matchedPerm) {
+        const hasPortalPerm = Boolean(
+          matchedPerm.deliveryPortalAccess ||
+            matchedPerm.isDriver ||
+            matchedPerm.role === 'delivery' ||
+            matchedPerm.accessLevels?.includes('delivery_portal')
+        );
+        cust.isDriver = hasPortalPerm;
+        cust.deliveryPortalAccess = hasPortalPerm;
+        cust.permissionDocId = hasPortalPerm ? matchedPerm.id : undefined;
+        if (!hasPortalPerm && cust.role === 'delivery') {
+          cust.role = 'customer';
+        }
       } else if (driverEmailSet.has(emailKey) || (cust.id && driverIdSet.has(cust.id)) || cust.role === 'delivery') {
         cust.isDriver = true;
+        cust.deliveryPortalAccess = true;
+        cust.permissionDocId = cust.permissionDocId || getDeterministicPermDocId(cust.email || emailKey, cust.id);
       }
     });
 
@@ -822,6 +908,8 @@ export const AdminDashboard: React.FC = () => {
     });
   }, [
     allUsers,
+    userPermissions,
+    deliveryPersonnel,
     orders,
     currentUser,
     storeSettings.customVipEmails,
@@ -1100,10 +1188,10 @@ export const AdminDashboard: React.FC = () => {
         house: manualOrderForm.house || 'Shop Walk-in',
         street: manualOrderForm.street || 'Main Road',
         area: manualOrderForm.area || 'Central Market',
-        city: manualOrderForm.city || 'Trivandrum',
-        district: 'Trivandrum',
+        city: manualOrderForm.city || 'Kochi',
+        district: 'Ernakulam',
         state: manualOrderForm.state || 'Kerala',
-        pinCode: manualOrderForm.pinCode || '695001',
+        pinCode: manualOrderForm.pinCode || '682011',
         isDefault: true,
       },
       paymentMethod: manualOrderForm.paymentMethod,
@@ -3888,8 +3976,11 @@ export const AdminDashboard: React.FC = () => {
                                       {cust.isDriver && (
                                         <>
                                           <span>•</span>
-                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold uppercase text-[9px]">
-                                            <Truck className="w-2.5 h-2.5" /> Driver
+                                          <span
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold uppercase text-[9px]"
+                                            title={`Linked Firestore Permission Doc: ${cust.permissionDocId || 'user_permissions'}`}
+                                          >
+                                            <Truck className="w-2.5 h-2.5" /> Delivery Portal
                                           </span>
                                         </>
                                       )}
@@ -3967,13 +4058,27 @@ export const AdminDashboard: React.FC = () => {
                                   </button>
 
                                   <button
-                                    onClick={() => grantCustomerDriver(cust.email || cust.id, !cust.isDriver)}
+                                    onClick={async () => {
+                                      if (cust.isDriver) {
+                                        await revokeCustomerDeliveryPortalAccess(cust.email || cust.id, cust.id);
+                                      } else {
+                                        await grantCustomerDriver(cust.email || cust.id, true, {
+                                          userId: cust.id,
+                                          name: cust.name,
+                                          phone: cust.phone,
+                                        });
+                                      }
+                                    }}
                                     className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                                       cust.isDriver
-                                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-rose-100 hover:text-rose-900 hover:border-rose-300'
                                         : 'bg-white text-neutral-600 hover:text-emerald-700 border-[#E8E8E3] hover:border-emerald-300'
                                     }`}
-                                    title={cust.isDriver ? 'Authorized Driver (Click to revoke Driver Portal access)' : 'Make Driver (Grant Driver Portal access)'}
+                                    title={
+                                      cust.isDriver
+                                        ? `Delete Delivery Portal Access & Firestore Permission Doc (${cust.permissionDocId || 'user_permissions'})`
+                                        : 'Make Driver (Create Delivery Portal Permission Document)'
+                                    }
                                   >
                                     <Truck className="w-3.5 h-3.5" />
                                     <span className="hidden xl:inline">{cust.isDriver ? 'Driver ✓' : 'Make Driver'}</span>
@@ -8604,7 +8709,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* CUSTOMER ACCOUNT DELETE CONFIRMATION MODAL */}
+      {/* CUSTOMER ACCOUNT & DELIVERY PORTAL PERMISSION DELETE CONFIRMATION MODAL */}
       {customerToDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E8E8E3] space-y-4">
@@ -8613,14 +8718,45 @@ export const AdminDashboard: React.FC = () => {
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-[#171717]">Delete User Account</h3>
-                <p className="text-xs text-[#6B6B6B]">Remove customer user record from store.</p>
+                <h3 className="font-bold text-base text-[#171717]">Delete User & Access Permissions</h3>
+                <p className="text-xs text-[#6B6B6B]">
+                  Linked to Firestore user &amp; permission document records.
+                </p>
               </div>
             </div>
 
             <p className="text-xs text-neutral-600 leading-relaxed">
-              Are you sure you want to delete user account <strong>"{customerToDelete.name}"</strong> ({customerToDelete.email})? This action removes their account profile, custom role permissions, and stored data.
+              Are you sure you want to delete user account <strong>"{customerToDelete.name}"</strong> ({customerToDelete.email || customerToDelete.id})? This action removes their account profile, custom role permissions, and linked Firestore permission document.
             </p>
+
+            {customerToDelete.isDriver && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5" /> Active Delivery Portal Access Detected
+                  </span>
+                  <span className="font-mono text-[10px] bg-white px-2 py-0.5 rounded border border-amber-200 text-amber-800">
+                    {customerToDelete.permissionDocId || 'user_permissions'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  You can delete only their <strong>Delivery Portal</strong> permission document to revoke driver access while keeping their customer account, or delete the entire user account.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await revokeCustomerDeliveryPortalAccess(
+                      customerToDelete.email || customerToDelete.id,
+                      customerToDelete.id
+                    );
+                    setCustomerToDelete(null);
+                  }}
+                  className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Truck className="w-3.5 h-3.5" /> Delete Delivery Portal Access Only
+                </button>
+              </div>
+            )}
 
             <div className="pt-2 flex items-center justify-end gap-2.5">
               <button
@@ -8633,12 +8769,18 @@ export const AdminDashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={async () => {
-                  await deleteCustomer(customerToDelete.id || customerToDelete.email);
+                  if (customerToDelete.isDriver) {
+                    await revokeCustomerDeliveryPortalAccess(
+                      customerToDelete.email || customerToDelete.id,
+                      customerToDelete.id
+                    );
+                  }
+                  await deleteCustomer(customerToDelete.email || customerToDelete.id);
                   setCustomerToDelete(null);
                 }}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Yes, Delete User
+                <Trash2 className="w-3.5 h-3.5" /> Yes, Delete User &amp; Permissions
               </button>
             </div>
           </div>

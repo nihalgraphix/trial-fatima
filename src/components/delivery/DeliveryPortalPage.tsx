@@ -14,7 +14,6 @@ import {
   Settings,
   Box,
   BadgeCheck,
-  PlusCircle,
 } from 'lucide-react';
 import { DeliveryTrackingMap } from './DeliveryTrackingMap';
 
@@ -36,7 +35,6 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     updateDeliveryLocation,
     updateDeliveryPersonnel,
     assignDeliveryPerson,
-    seedSampleDispatchOrders,
     setActivePage,
     showToast,
   } = useStore();
@@ -55,7 +53,7 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     currentDeliveryPerson?.phone || currentUser?.phone || ''
   );
   const [currentLocationText, setCurrentLocationText] = useState(
-    currentDeliveryPerson?.currentLocation || storeSettings?.storeCity || 'Trivandrum'
+    currentDeliveryPerson?.currentLocation || storeSettings?.storeCity || 'Kochi'
   );
 
   // Sync local form when currentDeliveryPerson updates
@@ -246,10 +244,10 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
 
       if (nextStatus === 'Out for Delivery') {
         await updateDeliveryLocation(order.id, {
-          lat: storeSettings.storeLat || 8.5241,
-          lng: storeSettings.storeLng || 76.9366,
+          lat: storeSettings.storeLat || 9.9312,
+          lng: storeSettings.storeLng || 76.2673,
           address: `Dispatched from ${storeSettings.storeName || 'Fathima Stores'}, ${
-            storeSettings.storeAddress || 'Trivandrum'
+            storeSettings.storeAddress || 'Kochi'
           }`,
         });
       }
@@ -280,8 +278,8 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
           setSharingGpsOrderId(null);
         },
         async () => {
-          const lat = Number(((storeSettings.storeLat || 8.5241) + (Math.random() - 0.5) * 0.01).toFixed(6));
-          const lng = Number(((storeSettings.storeLng || 76.9366) + (Math.random() - 0.5) * 0.01).toFixed(6));
+          const lat = Number(((storeSettings.storeLat || 9.9312) + (Math.random() - 0.5) * 0.01).toFixed(6));
+          const lng = Number(((storeSettings.storeLng || 76.2673) + (Math.random() - 0.5) * 0.01).toFixed(6));
           await updateDeliveryLocation(order.id, {
             lat,
             lng,
@@ -302,9 +300,9 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     if (!currentDeliveryPerson) return;
     updateDeliveryPersonnel(currentDeliveryPerson.id, {
       vehicleType,
-      vehicleNumber: vehicleNumber.trim() || 'KL-01-DRV',
+      vehicleNumber: vehicleNumber.trim() || 'KL-07-DRV',
       phone: driverPhone.trim() || currentUser.phone,
-      currentLocation: currentLocationText.trim() || storeSettings.storeCity || 'Trivandrum',
+      currentLocation: currentLocationText.trim() || storeSettings.storeCity || 'Kochi',
     });
   };
 
@@ -312,14 +310,14 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     if (storeSettings.googleMapsLink && storeSettings.googleMapsLink.startsWith('http')) {
       return storeSettings.googleMapsLink;
     }
-    const lat = storeSettings.storeLat || 8.5241;
-    const lng = storeSettings.storeLng || 76.9366;
+    const lat = storeSettings.storeLat || 9.9312;
+    const lng = storeSettings.storeLng || 76.2673;
     return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   };
 
   const getCustomerDirectionsUrl = (order: Order) => {
-    const storeLat = storeSettings.storeLat || 8.5241;
-    const storeLng = storeSettings.storeLng || 76.9366;
+    const storeLat = storeSettings.storeLat || 9.9312;
+    const storeLng = storeSettings.storeLng || 76.2673;
     const addr = order.shippingAddress;
     if (addr?.lat && addr?.lng) {
       return `https://www.google.com/maps/dir/?api=1&origin=${storeLat},${storeLng}&destination=${addr.lat},${addr.lng}&travelmode=driving`;
@@ -373,8 +371,8 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                   {currentUser.name} — Driver Dispatch Console
                 </h1>
                 <p className="text-xs text-white/75 mt-0.5">
-                  {currentDeliveryPerson?.vehicleType || 'Bike'} ({currentDeliveryPerson?.vehicleNumber || 'KL-01-DRV'}) · Hub:{' '}
-                  {storeSettings.storeName || 'Fathima Stores'} ({storeSettings.storeCity || 'Trivandrum'})
+                  {currentDeliveryPerson?.vehicleType || 'Bike'} ({currentDeliveryPerson?.vehicleNumber || 'KL-07-DRV'}) · Hub:{' '}
+                  {storeSettings.storeName || 'Fathima Stores'} ({storeSettings.storeCity || 'Kochi'})
                 </p>
               </div>
             </div>
@@ -575,11 +573,11 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                 <div>
                   <h3 className="text-base font-extrabold text-[#171717]">No Active Deliveries Assigned Right Now</h3>
                   <p className="text-xs text-[#6B6B6B] max-w-md mx-auto mt-1">
-                    You have no active orders queued. You can claim available store orders waiting at the hub, or generate sample delivery orders for testing.
+                    You have no active orders queued. You can claim available store orders waiting at the hub.
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                  {availableHubOrders.length > 0 && (
+                {availableHubOrders.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                     <button
                       type="button"
                       onClick={() => setActiveTab('available')}
@@ -588,15 +586,8 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                       <Box className="w-4 h-4" />
                       <span>View & Claim Available Orders ({availableHubOrders.length})</span>
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={seedSampleDispatchOrders}
-                    className="px-4 py-2.5 bg-[#F7F8F3] hover:bg-neutral-200 text-[#171717] text-xs font-bold rounded-xl border border-[#E8E8E3] transition-colors cursor-pointer"
-                  >
-                    <span>Generate Sample Delivery Orders</span>
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             ) : (
               myActiveOrders.map((order) => {
@@ -835,15 +826,6 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                   Pickup packaged stationery orders from {storeSettings.storeHubName || storeSettings.storeName || 'Fathima Stores'} and claim for your delivery trip
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={seedSampleDispatchOrders}
-                className="px-3.5 py-1.5 bg-[#EFF4E6] hover:bg-[#71883F] text-[#71883F] hover:text-white rounded-xl text-xs font-bold transition-colors cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>Restock Sample Orders</span>
-              </button>
             </div>
 
             {availableHubOrders.length === 0 ? (
@@ -853,15 +835,8 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                 </div>
                 <h4 className="text-sm font-bold text-[#171717]">All Store Orders Dispatched!</h4>
                 <p className="text-xs text-[#6B6B6B] max-w-sm mx-auto">
-                  There are no unassigned orders waiting at the hub right now. Generate sample orders to test route claims.
+                  There are no unassigned orders waiting at the hub right now.
                 </p>
-                <button
-                  type="button"
-                  onClick={seedSampleDispatchOrders}
-                  className="mt-2 px-4 py-2 bg-[#71883F] text-white text-xs font-bold rounded-xl shadow-2xs"
-                >
-                  Generate 6 Ready Orders
-                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1003,7 +978,7 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                     type="text"
                     value={vehicleNumber}
                     onChange={(e) => setVehicleNumber(e.target.value)}
-                    placeholder="e.g. KL-01-AB-1234"
+                    placeholder="e.g. KL-07-AB-1234"
                     className="w-full px-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F]"
                   />
                 </div>
@@ -1027,7 +1002,7 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
                     type="text"
                     value={currentLocationText}
                     onChange={(e) => setCurrentLocationText(e.target.value)}
-                    placeholder="e.g. College Road, Trivandrum"
+                    placeholder="e.g. MG Road, Kochi"
                     className="w-full px-3 py-2.5 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl outline-none focus:border-[#71883F]"
                   />
                 </div>

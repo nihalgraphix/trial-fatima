@@ -27,6 +27,7 @@ import {
   CustomerMessage,
   EmailAlertRecord,
   OnlinePaymentDetails,
+  UserPermissionDoc,
 } from '../types';
 import { auth, db, googleProvider, signInWithPopup } from '../firebase';
 import { 
@@ -134,444 +135,9 @@ export function sanitizeFirestoreData<T>(obj: T): T {
   return clean as T;
 }
 
-export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
-  {
-    id: 'hero-slide-1',
-    badge: 'Exclusive Launch 2026',
-    title: 'Premium Office & School Stationery Essentials',
-    subtitle: 'Discover handcrafted notebooks, luxury pens, ergonomic desk organizers & eco-friendly paper stationery.',
-    buttonText: 'Shop Collection',
-    buttonLink: 'shop',
-    secondaryButtonText: 'Browse Categories',
-    secondaryButtonLink: 'categories',
-    image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=1600&q=80',
-    bgTone: '#F7F8F3',
-    overlay: 'gradient',
-    overlayOpacity: 70,
-    active: true,
-    order: 1,
-  },
-  {
-    id: 'hero-slide-2',
-    badge: 'Special Craft Offer',
-    title: 'Art & Design Craft Supplies Up To 40% OFF',
-    subtitle: 'High-grade art sketchbooks, fountain pen inks, geometry sets & premium watercolor pads.',
-    buttonText: 'Explore Art Supplies',
-    buttonLink: 'shop',
-    secondaryButtonText: 'View Offers',
-    secondaryButtonLink: 'shop',
-    image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=1600&q=80',
-    bgTone: '#EFF4E6',
-    overlay: 'gradient',
-    overlayOpacity: 65,
-    active: true,
-    order: 2,
-  },
-  {
-    id: 'hero-slide-3',
-    badge: 'Express Doorstep Delivery',
-    title: 'Fast & Reliable Local Delivery For All Orders',
-    subtitle: 'Free delivery on orders above ₹499 with real-time GPS tracking and live courier updates.',
-    buttonText: 'Track Your Order',
-    buttonLink: 'track-order',
-    secondaryButtonText: 'Contact Support',
-    secondaryButtonLink: 'contact',
-    image: 'https://images.unsplash.com/photo-1507842229458-574349320eef?auto=format&fit=crop&w=1600&q=80',
-    bgTone: '#F7F8F3',
-    overlay: 'dark',
-    overlayOpacity: 75,
-    active: true,
-    order: 3,
-  },
-];
-const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
-  {
-    id: 'dp-1',
-    name: 'Rahul Nair',
-    email: 'rahul.nair@fathimastore.in',
-    phone: '+91 98471 22011',
-    vehicleType: 'Bike',
-    vehicleNumber: 'KL-01-CA-4421',
-    status: 'available',
-    rating: 4.9,
-    totalDeliveries: 342,
-    failedDeliveries: 5,
-    avgCompletionMinutes: 21,
-    onTimeRatePct: 96,
-    satisfactionReviewsCount: 128,
-    currentLat: 8.5241,
-    currentLng: 76.9366,
-    lastUpdatedLocation: 'MG Road Hub, Trivandrum',
-  },
-  {
-    id: 'dp-2',
-    name: 'Sreejith V',
-    email: 'sreejith.v@fathimastore.in',
-    phone: '+91 94472 33109',
-    vehicleType: 'Scooter',
-    vehicleNumber: 'KL-01-CB-8910',
-    status: 'available',
-    rating: 4.8,
-    totalDeliveries: 289,
-    failedDeliveries: 7,
-    avgCompletionMinutes: 24,
-    onTimeRatePct: 93,
-    satisfactionReviewsCount: 104,
-    currentLat: 8.5285,
-    currentLng: 76.942,
-    lastUpdatedLocation: 'Pattom Junction, Trivandrum',
-  },
-  {
-    id: 'dp-3',
-    name: 'Muhammed Fayiz',
-    email: 'fayiz.m@fathimastore.in',
-    phone: '+91 98950 77812',
-    vehicleType: 'Bike',
-    vehicleNumber: 'KL-01-CD-1123',
-    status: 'available',
-    rating: 4.9,
-    totalDeliveries: 410,
-    failedDeliveries: 4,
-    avgCompletionMinutes: 19,
-    onTimeRatePct: 98,
-    satisfactionReviewsCount: 162,
-    currentLat: 8.5581,
-    currentLng: 76.8816,
-    lastUpdatedLocation: 'Kazhakkoottam / Technopark',
-  },
-  {
-    id: 'dp-4',
-    name: 'Anoop Krishnan',
-    email: 'anoop.k@fathimastore.in',
-    phone: '+91 97461 55432',
-    vehicleType: 'Van',
-    vehicleNumber: 'KL-01-CE-6701',
-    status: 'available',
-    rating: 4.7,
-    totalDeliveries: 195,
-    failedDeliveries: 8,
-    avgCompletionMinutes: 28,
-    onTimeRatePct: 89,
-    satisfactionReviewsCount: 74,
-    currentLat: 8.5262,
-    currentLng: 76.9615,
-    lastUpdatedLocation: 'Kowdiar Avenue, Trivandrum',
-  },
-];
-
-export const DEFAULT_DISPATCH_ORDERS: Order[] = [
-  {
-    id: 'ORD-DISPATCH-101',
-    customerName: 'Ananya Pillai',
-    email: 'ananya.pillai@example.com',
-    phone: '+91 94471 23456',
-    date: new Date(Date.now() - 3600000).toISOString(),
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    orderStatus: 'Confirmed',
-    deliveryMethod: 'Fast Express Doorstep Delivery (Same Day)',
-    paymentMethod: 'Online',
-    paymentStatus: 'Paid',
-    paymentVerified: true,
-    subtotal: 540,
-    discount: 0,
-    deliveryCharge: 0,
-    total: 540,
-    finalTotal: 540,
-    estimatedDelivery: 'Today within 45 mins',
-    trackingNumber: 'TRK-FS-101',
-    items: [
-      {
-        productId: 'prod-classmate-pulse-spiral-notebook',
-        name: 'Classmate Pulse 6-Subject Spiral Notebook (300 Pages)',
-        price: 180,
-        quantity: 2,
-        image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
-      },
-      {
-        productId: 'prod-pilot-g2-gel-pen',
-        name: 'Pilot G2 Retractable Gel Pen 0.7mm (Pack of 3)',
-        price: 180,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400&auto=format&fit=crop&q=80',
-      },
-    ],
-    shippingAddress: {
-      fullName: 'Ananya Pillai',
-      phone: '+91 94471 23456',
-      email: 'ananya.pillai@example.com',
-      house: 'TC 14/1102, Palm Grove Villa',
-      street: 'Pattom Palace Road, Near Kendriya Vidyalaya',
-      area: 'Pattom',
-      city: 'Trivandrum',
-      district: 'Trivandrum',
-      state: 'Kerala',
-      pinCode: '695004',
-      lat: 8.5241,
-      lng: 76.9366,
-      isDefault: true,
-    },
-    deliveryNotes: 'Call before arriving at the gate. Ring the doorbell on 1st floor.',
-    priority: 'high',
-  },
-  {
-    id: 'ORD-DISPATCH-102',
-    customerName: 'Vishnu Raj (Tech Delivery)',
-    email: 'vishnu.raj@technopark.org',
-    phone: '+91 98950 87654',
-    date: new Date(Date.now() - 7200000).toISOString(),
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    orderStatus: 'Processing',
-    deliveryMethod: 'Standard Delivery (1-2 Days)',
-    paymentMethod: 'COD',
-    paymentStatus: 'Pending',
-    subtotal: 420,
-    discount: 0,
-    deliveryCharge: 0,
-    total: 420,
-    finalTotal: 420,
-    estimatedDelivery: 'Today within 1 hour',
-    trackingNumber: 'TRK-FS-102',
-    items: [
-      {
-        productId: 'prod-staedtler-geometry-box',
-        name: 'Staedtler Noris Mathematical Compass Instruments Box',
-        price: 260,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=400&auto=format&fit=crop&q=80',
-      },
-      {
-        productId: 'prod-faber-castell-highlighters',
-        name: 'Faber-Castell Textliner Highlighters Pastel 5-Colors',
-        price: 160,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1585776245991-cf89dd7fc73a?w=400&auto=format&fit=crop&q=80',
-      },
-    ],
-    shippingAddress: {
-      fullName: 'Vishnu Raj',
-      phone: '+91 98950 87654',
-      email: 'vishnu.raj@technopark.org',
-      house: 'Tower 3, Level 4, Tech Innovation Hub',
-      street: 'Technopark Campus Phase 1 Main Gate Road',
-      area: 'Kazhakkoottam',
-      city: 'Trivandrum',
-      district: 'Trivandrum',
-      state: 'Kerala',
-      pinCode: '695581',
-      lat: 8.5581,
-      lng: 76.8816,
-      isDefault: true,
-    },
-    deliveryNotes: 'Drop at Security Reception desk if unavailable.',
-  },
-  {
-    id: 'ORD-DISPATCH-103',
-    customerName: 'Dr. Lakshmi Menon',
-    email: 'lakshmi.menon@keralauniv.edu',
-    phone: '+91 97455 11223',
-    date: new Date(Date.now() - 10800000).toISOString(),
-    createdAt: new Date(Date.now() - 10800000).toISOString(),
-    orderStatus: 'Confirmed',
-    deliveryMethod: 'Fast Express Doorstep Delivery (Same Day)',
-    paymentMethod: 'Online',
-    paymentStatus: 'Paid',
-    paymentVerified: true,
-    subtotal: 950,
-    discount: 0,
-    deliveryCharge: 0,
-    total: 950,
-    finalTotal: 950,
-    estimatedDelivery: 'Today within 45 mins',
-    trackingNumber: 'TRK-FS-103',
-    items: [
-      {
-        productId: 'prod-parker-vector-fountain-pen',
-        name: 'Parker Vector Matte Black Fountain Pen with Quink Ink',
-        price: 550,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400&auto=format&fit=crop&q=80',
-      },
-      {
-        productId: 'prod-jk-cedar-bond-paper',
-        name: 'JK Cedar Bond 90 GSM Executive Letterhead Paper (Ream)',
-        price: 400,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80',
-      },
-    ],
-    shippingAddress: {
-      fullName: 'Dr. Lakshmi Menon',
-      phone: '+91 97455 11223',
-      email: 'lakshmi.menon@keralauniv.edu',
-      house: 'TC 3/420, Golf Links Avenue',
-      street: 'Vellayambalam - Kowdiar Palace Road',
-      area: 'Kowdiar',
-      city: 'Trivandrum',
-      district: 'Trivandrum',
-      state: 'Kerala',
-      pinCode: '695003',
-      lat: 8.5262,
-      lng: 76.9615,
-      isDefault: true,
-    },
-    deliveryNotes: 'Near Tennis Club. Blue residential gate.',
-  },
-  {
-    id: 'ORD-DISPATCH-104',
-    customerName: 'Karthik Nair (Secretariat)',
-    email: 'karthik.nair@statue.in',
-    phone: '+91 99951 33445',
-    date: new Date(Date.now() - 14400000).toISOString(),
-    createdAt: new Date(Date.now() - 14400000).toISOString(),
-    orderStatus: 'Confirmed',
-    deliveryMethod: 'Standard Delivery (1-2 Days)',
-    paymentMethod: 'Online',
-    paymentStatus: 'Paid',
-    paymentVerified: true,
-    subtotal: 680,
-    discount: 0,
-    deliveryCharge: 0,
-    total: 680,
-    finalTotal: 680,
-    estimatedDelivery: 'Today within 1 hour',
-    trackingNumber: 'TRK-FS-104',
-    items: [
-      {
-        productId: 'prod-doms-brush-pens',
-        name: 'Doms Artist Brush Pen Set (24 Pastel & Metallic Shades)',
-        price: 360,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1585776245991-cf89dd7fc73a?w=400&auto=format&fit=crop&q=80',
-      },
-      {
-        productId: 'prod-brustro-sketchbook',
-        name: 'Brustro Spiral Bound Heavyweight Wiro Sketchbook (A4)',
-        price: 320,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
-      },
-    ],
-    shippingAddress: {
-      fullName: 'Karthik Nair',
-      phone: '+91 99951 33445',
-      email: 'karthik.nair@statue.in',
-      house: 'Office Block 2, Opposite Secretariat North Gate',
-      street: 'Mahatma Gandhi Road, Statue Junction',
-      area: 'Palayam',
-      city: 'Trivandrum',
-      district: 'Trivandrum',
-      state: 'Kerala',
-      pinCode: '695001',
-      lat: 8.4988,
-      lng: 76.9492,
-      isDefault: true,
-    },
-    deliveryNotes: 'Deliver to ground floor office reception.',
-  },
-  {
-    id: 'ORD-DISPATCH-105',
-    customerName: 'Meera Suresh (Medical College)',
-    email: 'meera.s@medcollege.tvm',
-    phone: '+91 98470 55667',
-    date: new Date(Date.now() - 18000000).toISOString(),
-    createdAt: new Date(Date.now() - 18000000).toISOString(),
-    orderStatus: 'Processing',
-    deliveryMethod: 'Fast Express Doorstep Delivery (Same Day)',
-    paymentMethod: 'COD',
-    paymentStatus: 'Pending',
-    subtotal: 1390,
-    discount: 0,
-    deliveryCharge: 0,
-    total: 1390,
-    finalTotal: 1390,
-    estimatedDelivery: 'Today within 45 mins',
-    trackingNumber: 'TRK-FS-105',
-    items: [
-      {
-        productId: 'prod-casio-fx991cw',
-        name: 'Casio FX-991CW ClassWiz Scientific Calculator (Non-Programmable)',
-        price: 1190,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=400&auto=format&fit=crop&q=80',
-      },
-      {
-        productId: 'prod-cello-technotip-pens',
-        name: 'Cello Technotip Ball Pens 0.6mm (Box of 10 Blue)',
-        price: 200,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400&auto=format&fit=crop&q=80',
-      },
-    ],
-    shippingAddress: {
-      fullName: 'Meera Suresh',
-      phone: '+91 98470 55667',
-      email: 'meera.s@medcollege.tvm',
-      house: 'Doctors Quarters #12, Ulloor Lane',
-      street: 'Medical College - Ulloor Bypass Road',
-      area: 'Medical College PO',
-      city: 'Trivandrum',
-      district: 'Trivandrum',
-      state: 'Kerala',
-      pinCode: '695011',
-      lat: 8.5246,
-      lng: 76.9282,
-      isDefault: true,
-    },
-    deliveryNotes: 'Keep exact change for COD ₹1390 or accept Google Pay at doorstep.',
-  },
-  {
-    id: 'ORD-DISPATCH-106',
-    customerName: 'Arun Thomas (Bakery Jn)',
-    email: 'arun.thomas@vazhuthacaud.com',
-    phone: '+91 94002 88990',
-    date: new Date(Date.now() - 21600000).toISOString(),
-    createdAt: new Date(Date.now() - 21600000).toISOString(),
-    orderStatus: 'Confirmed',
-    deliveryMethod: 'Standard Delivery (1-2 Days)',
-    paymentMethod: 'Online',
-    paymentStatus: 'Paid',
-    paymentVerified: true,
-    subtotal: 510,
-    discount: 0,
-    deliveryCharge: 0,
-    total: 510,
-    finalTotal: 510,
-    estimatedDelivery: 'Today within 1 hour',
-    trackingNumber: 'TRK-FS-106',
-    items: [
-      {
-        productId: 'prod-kangaroo-stapler-set',
-        name: 'Kangaro DS-45L Heavy Duty Metal Stapler + 2000 Pins',
-        price: 290,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80',
-      },
-      {
-        productId: 'prod-solo-expanding-file',
-        name: 'Solo 12-Pocket Expanding Document File Organizer (FC Size)',
-        price: 220,
-        quantity: 1,
-        image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
-      },
-    ],
-    shippingAddress: {
-      fullName: 'Arun Thomas',
-      phone: '+91 94002 88990',
-      email: 'arun.thomas@vazhuthacaud.com',
-      house: 'Flat 3B, Silver Heights Complex',
-      street: 'CV Raman Pillai Road, Near Women\'s College',
-      area: 'Vazhuthacaud',
-      city: 'Trivandrum',
-      district: 'Trivandrum',
-      state: 'Kerala',
-      pinCode: '695014',
-      lat: 8.5012,
-      lng: 76.9598,
-      isDefault: true,
-    },
-    deliveryNotes: 'Take lift to 3rd floor. Call on arrival.',
-  },
-];
+export const DEFAULT_HERO_SLIDES: HeroSlide[] = [];
+const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [];
+export const DEFAULT_DISPATCH_ORDERS: Order[] = [];
 
 interface Toast {
 
@@ -744,6 +310,7 @@ interface StoreContextType {
   currentUser: User | null;
   allUsers: User[];
   users: User[];
+  userPermissions: UserPermissionDoc[];
   isAdmin: boolean;
   isDriver: boolean;
   isAuthLoading: boolean;
@@ -765,9 +332,11 @@ interface StoreContextType {
       vehicleNumber?: string;
       name?: string;
       phone?: string;
+      userId?: string;
     }
   ) => Promise<void>;
-  deleteCustomer: (customerEmailOrId: string) => Promise<void>;
+  revokeCustomerDeliveryPortalAccess: (customerEmailOrId: string, explicitUserId?: string) => Promise<void>;
+  deleteCustomer: (customerEmailOrId: string, explicitUserId?: string) => Promise<void>;
   showForceSignInModal: boolean;
   setShowForceSignInModal: (show: boolean) => void;
   addSavedAddress: (address: ShippingAddress) => Promise<void>;
@@ -914,33 +483,63 @@ export const safeStorageSet = (key: string, value: any): boolean => {
 };
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const parsePageFromLocation = (): ActivePage | null => {
+    try {
+      const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim();
+      const hash = rawHash.split('?')[0].replace(/\/+$/, '').toLowerCase();
+      const rawPath = (window.location.pathname || '').replace(/^\/+|\/+$/g, '').trim().toLowerCase();
+      const token = hash || rawPath;
+
+      if (token === 'admin' || token === 'admin-dashboard' || token === 'dashboard') return 'admin';
+      if (token === 'admin/login' || token === 'admin-login') return 'admin-login';
+      if (token === 'shop' || token === 'products') return 'shop';
+      if (token === 'categories') return 'categories';
+      if (token === 'cart') return 'cart';
+      if (token === 'checkout') return 'checkout';
+      if (token === 'order-success') return 'order-success';
+      if (token === 'account') return 'account';
+      if (token === 'profile') return 'profile';
+      if (token === 'wishlist') return 'wishlist';
+      if (token === 'about' || token === 'about-us') return 'about';
+      if (token === 'contact' || token === 'contact-us' || token === 'contactus') return 'contact';
+      if (token === 'login') return 'login';
+      if (token === 'register') return 'register';
+      if (token === 'delivery-portal' || token === 'delivery') return 'delivery-portal';
+      if (token === 'order-tracking' || token === 'track-order' || token === 'track') return 'order-tracking';
+      if (token === 'product-details') return 'product-details';
+      if (token === 'home') return 'home';
+    } catch {}
+    return null;
+  };
+
   // Navigation State with Hash & LocalStorage Persistence so Refreshing Never Loses Active Page
   const [activePage, setActivePageState] = useState<ActivePage>(() => {
+    const fromUrl = parsePageFromLocation();
+    if (fromUrl) return fromUrl;
     try {
-      const rawHash = window.location.hash.replace('#', '').trim();
-      const hash = rawHash.split('?')[0];
-      if (hash === 'admin') return 'admin';
-      if (hash === 'admin/login' || hash === 'admin-login') return 'admin-login';
-      if (hash === 'shop') return 'shop';
-      if (hash === 'categories') return 'categories';
-      if (hash === 'cart') return 'cart';
-      if (hash === 'checkout') return 'checkout';
-      if (hash === 'order-success') return 'order-success';
-      if (hash === 'account') return 'account';
-      if (hash === 'profile') return 'profile';
-      if (hash === 'wishlist') return 'wishlist';
-      if (hash === 'about') return 'about';
-      if (hash === 'contact') return 'contact';
-      if (hash === 'login') return 'login';
-      if (hash === 'register') return 'register';
-      if (hash === 'delivery-portal' || hash === 'delivery') return 'delivery-portal';
-      if (hash === 'order-tracking' || hash === 'track-order' || hash === 'track') return 'order-tracking';
-      if (hash === 'product-details') return 'product-details';
       const savedPage = sessionStorage.getItem('fs_active_page') as ActivePage | null;
       if (savedPage) return savedPage;
     } catch {}
     return 'home';
   });
+
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const next = parsePageFromLocation();
+      if (next) {
+        setActivePageState(next);
+        try {
+          sessionStorage.setItem('fs_active_page', next);
+        } catch {}
+      }
+    };
+    window.addEventListener('hashchange', syncFromUrl);
+    window.addEventListener('popstate', syncFromUrl);
+    return () => {
+      window.removeEventListener('hashchange', syncFromUrl);
+      window.removeEventListener('popstate', syncFromUrl);
+    };
+  }, []);
 
   const setActivePage = React.useCallback((page: ActivePage) => {
     setActivePageState(page);
@@ -1012,12 +611,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const defaultDemoIds = new Set(['ORD-84920', 'ORD-83104', 'ORD-79211']);
-          const clean = parsed.filter((o: any) => o && o.id && !defaultDemoIds.has(o.id));
-          if (clean.length > 0) return clean;
+          const clean = parsed.filter(
+            (o: any) =>
+              o &&
+              o.id &&
+              !defaultDemoIds.has(o.id) &&
+              !String(o.id).startsWith('ORD-DISPATCH-')
+          );
+          return clean;
         }
       }
     } catch (e) {}
-    return DEFAULT_DISPATCH_ORDERS;
+    return [];
   });
   const [coupons, setCoupons] = useState<Coupon[]>(() => INITIAL_COUPONS);
   const [reviews, setReviews] = useState<Review[]>(() => INITIAL_REVIEWS);
@@ -1170,8 +775,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!isMounted) return;
       if (firebaseUser) {
         const emailNorm = (firebaseUser.email || '').toLowerCase().trim();
+        let hasAdminOverride = false;
+        try {
+          hasAdminOverride = localStorage.getItem('fs_admin_override') === 'true';
+        } catch {}
         const isMasterAdmin =
-          emailNorm === 'nihal.graphix@gmail.com' || emailNorm.includes('admin');
+          hasAdminOverride ||
+          emailNorm === 'nihal.graphix@gmail.com' ||
+          emailNorm.includes('admin');
 
         try {
           // Check both UID doc and email-keyed doc in Firestore
@@ -1403,7 +1014,45 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     'order'
   );
 
-  // Admin-only collections: strictly listened to when currentUser is admin
+  const [userPermissions, setUserPermissions] = useState<UserPermissionDoc[]>([]);
+
+  // Real-time sync for users and user_permissions so permission document deletions immediately revoke access
+  useEffect(() => {
+    const unsubUsers = onSnapshot(
+      collection(db, 'users'),
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({
+          ...d.data(),
+          id: d.id,
+          addresses: Array.isArray(d.data().addresses) ? d.data().addresses : [],
+        })) as User[];
+        setAllUsers(list);
+      },
+      (err) => {
+        console.warn('Users collection listener error:', err);
+      }
+    );
+
+    const unsubPermissions = onSnapshot(
+      collection(db, 'user_permissions'),
+      (snapshot) => {
+        const perms = snapshot.docs.map((d) => ({
+          ...d.data(),
+          id: d.id,
+        })) as UserPermissionDoc[];
+        setUserPermissions(perms);
+      },
+      (err) => {
+        console.warn('User permissions listener error:', err);
+      }
+    );
+
+    return () => {
+      unsubUsers();
+      unsubPermissions();
+    };
+  }, []);
+
   useEffect(() => {
     if (currentUser?.role !== 'admin') {
       return;
@@ -1437,21 +1086,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (err) => handleFirestoreError(err, OperationType.GET, 'inventory_adjustments')
     );
 
-    const unsubUsers = onSnapshot(
-      collection(db, 'users'),
-      (snapshot) => {
-        const list = snapshot.docs.map((d) => ({
-          ...d.data(),
-          id: d.id,
-          addresses: Array.isArray(d.data().addresses) ? d.data().addresses : [],
-        })) as User[];
-        setAllUsers(list);
-      },
-      (err) => {
-        console.warn('Users collection listener error:', err);
-      }
-    );
-
     const unsubEmailAlerts = onSnapshot(
       collection(db, 'email_alerts'),
       (snapshot) => {
@@ -1467,7 +1101,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => {
       unsubExpenses();
       unsubInventory();
-      unsubUsers();
       unsubEmailAlerts();
     };
   }, [currentUser?.role]);
@@ -1605,12 +1238,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return getOrderTime(b) - getOrderTime(a);
           });
 
-          const defaultDemoIds = new Set(['ORD-84920', 'ORD-83104', 'ORD-79211']);
-          const cleanOrders = firestoreOrders.filter((o) => !defaultDemoIds.has(o.id));
-          const effectiveOrders = cleanOrders.length > 0 ? cleanOrders : DEFAULT_DISPATCH_ORDERS;
-          setOrders(effectiveOrders);
+          const isSampleOrder = (id: string) =>
+            ['ORD-84920', 'ORD-83104', 'ORD-79211'].includes(id) ||
+            String(id).startsWith('ORD-DISPATCH-');
+
+          // Delete any lingering sample orders from Firestore automatically
+          firestoreOrders.forEach((o) => {
+            if (isSampleOrder(o.id)) {
+              deleteDoc(doc(db, 'orders', o.id)).catch(() => {});
+            }
+          });
+
+          const cleanOrders = firestoreOrders.filter((o) => !isSampleOrder(o.id));
+          setOrders(cleanOrders);
           try {
-            localStorage.setItem('fs_saved_orders', JSON.stringify(effectiveOrders));
+            localStorage.setItem('fs_saved_orders', JSON.stringify(cleanOrders));
           } catch {}
         },
         (err) => {
@@ -1631,20 +1273,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     tagline: 'Quality Stationery & Everyday Office Essentials',
     contactEmail: 'care@fathimastores.com',
     contactPhone: '+91 98450 12345',
-    address: 'Commercial Complex, MG Road, Trivandrum, Kerala 695001',
-    storeHubName: 'Fathima Stores Main Hub (MG Road, Trivandrum)',
-    storeLat: 8.5241,
-    storeLng: 76.9366,
-    storeCity: 'Trivandrum',
+    address: 'Commercial Complex, MG Road, Kochi, Kerala 682011',
+    storeHubName: 'Fathima Stores Main Hub (MG Road, Kochi)',
+    storeLat: 9.9312,
+    storeLng: 76.2673,
+    storeCity: 'Kochi',
     storeState: 'Kerala',
-    storePinCode: '695001',
+    storePinCode: '682011',
     deliveryRadiusKm: 25,
     currency: '₹',
     freeDeliveryThreshold: 500,
     standardDeliveryFee: 40,
     gstNumber: '32AABCF1234F1Z8',
     upiId: 'fathimastores@oksbi',
-    upiMerchantName: 'FATHIMA STORES TRIVANDRUM',
+    upiMerchantName: 'FATHIMA STORES KOCHI',
     enableOnlinePayments: true,
     enableGPay: true,
     enablePhonePe: true,
@@ -1672,7 +1314,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     heroButtonText: 'Shop Now',
     heroButtonTarget: 'shop',
     heroTrustText: '1,000+ Students & Professionals trust us for daily essentials',
-    heroSlides: DEFAULT_HERO_SLIDES,
+    heroSlides: [],
     heroSliderAutoplay: true,
     heroSliderInterval: 4000,
     showHeroSection: true,
@@ -1723,7 +1365,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     logoType: 'text',
     logoUrl: '',
     logoHeight: 36,
-    isDemoDataSeeded: false,
+    isDemoDataSeeded: true,
+  };
+
+  // Helper to migrate legacy Trivandrum store settings to Kochi
+  const normalizeKochiSettings = (raw: Partial<StoreSettings>): StoreSettings => {
+    const merged = { ...DEFAULT_STORE_SETTINGS, ...raw };
+    const isOldTrivandrum =
+      (merged.storeCity || '').toLowerCase().includes('trivandrum') ||
+      (merged.storeCity || '').toLowerCase().includes('thiruvananthapuram') ||
+      (merged.address || '').toLowerCase().includes('trivandrum') ||
+      (merged.storeHubName || '').toLowerCase().includes('trivandrum') ||
+      (typeof merged.storeLat === 'number' && Math.abs(merged.storeLat - 8.5241) < 0.08);
+
+    if (isOldTrivandrum) {
+      merged.storeCity = 'Kochi';
+      merged.storeState = 'Kerala';
+      merged.storePinCode = '682011';
+      merged.storeLat = 9.9312;
+      merged.storeLng = 76.2673;
+      merged.address = 'Commercial Complex, MG Road, Kochi, Kerala 682011';
+      merged.storeAddress = 'Commercial Complex, MG Road, Kochi, Kerala 682011';
+      merged.storeHubName = 'Fathima Stores Main Hub (MG Road, Kochi)';
+      merged.upiMerchantName = 'FATHIMA STORES KOCHI';
+    }
+    return merged;
   };
 
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
@@ -1732,7 +1398,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') {
-          return { ...DEFAULT_STORE_SETTINGS, ...parsed };
+          return normalizeKochiSettings(parsed);
         }
       }
     } catch {}
@@ -1744,13 +1410,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const settingsDoc = doc(db, 'settings', 'global');
     const unsubscribe = onSnapshot(settingsDoc, (snapshot) => {
       if (snapshot.exists()) {
-        const merged = { ...DEFAULT_STORE_SETTINGS, ...(snapshot.data() as StoreSettings) };
+        const rawData = snapshot.data() as StoreSettings;
+        const merged = normalizeKochiSettings(rawData);
         setStoreSettings(merged);
         try {
           localStorage.setItem('fs_saved_store_settings', JSON.stringify(merged));
         } catch {}
+        // If Firestore still had Trivandrum, persist the Kochi migration
+        if (
+          (rawData.storeCity || '').toLowerCase().includes('trivandrum') ||
+          (typeof rawData.storeLat === 'number' && Math.abs(rawData.storeLat - 8.5241) < 0.08)
+        ) {
+          setDoc(
+            settingsDoc,
+            sanitizeFirestoreData({
+              storeCity: 'Kochi',
+              storeState: 'Kerala',
+              storePinCode: '682011',
+              storeLat: 9.9312,
+              storeLng: 76.2673,
+              address: 'Commercial Complex, MG Road, Kochi, Kerala 682011',
+              storeAddress: 'Commercial Complex, MG Road, Kochi, Kerala 682011',
+              storeHubName: 'Fathima Stores Main Hub (MG Road, Kochi)',
+              upiMerchantName: 'FATHIMA STORES KOCHI',
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true }
+          ).catch(() => {});
+        }
       } else if (currentUser?.role === 'admin') {
-        // Seed initial settings only if admin
         setDoc(settingsDoc, sanitizeFirestoreData({
           ...storeSettings,
           createdAt: serverTimestamp(),
@@ -1868,29 +1556,117 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Delivery Driver Portal Auth & Helpers
   // Compute whether the currently logged-in user has been authorized as a Driver by Admin
+  // Linked strictly to the user's Firestore permission document (user_permissions / users) and storeSettings overrides
   const isDriver = React.useMemo(() => {
     if (!currentUser) return false;
     const emailNorm = (currentUser.email || '').trim().toLowerCase();
+    const removedCustomerEmails = new Set(
+      (storeSettings.removedCustomerEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const removedCustomerIds = new Set(storeSettings.removedCustomerIds || []);
+    if (
+      (emailNorm && removedCustomerEmails.has(emailNorm)) ||
+      (currentUser.id && removedCustomerIds.has(currentUser.id))
+    ) {
+      return false;
+    }
+
     const removedEmails = new Set(
       (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
     );
     const removedIds = new Set(storeSettings.removedDriverIds || []);
-    if (removedEmails.has(emailNorm) || (currentUser.id && removedIds.has(currentUser.id))) {
+    if (
+      (emailNorm && removedEmails.has(emailNorm)) ||
+      (currentUser.id && removedIds.has(currentUser.id))
+    ) {
       return false;
     }
+
+    // Check explicit Firestore permission document (user_permissions/{id})
+    const matchedPermDocs = userPermissions.filter(
+      (p) =>
+        (currentUser.id && (p.userId === currentUser.id || p.id === currentUser.id)) ||
+        (emailNorm && p.email?.toLowerCase().trim() === emailNorm)
+    );
+    if (matchedPermDocs.length > 0) {
+      return matchedPermDocs.some(
+        (p) =>
+          p.deliveryPortalAccess === true ||
+          p.isDriver === true ||
+          p.role === 'delivery' ||
+          (Array.isArray(p.accessLevels) && p.accessLevels.includes('delivery_portal'))
+      );
+    }
+
+    // Check live Firestore user document in allUsers if loaded
+    const matchedLiveUsers = allUsers.filter(
+      (u) =>
+        (currentUser.id && u.id === currentUser.id) ||
+        (emailNorm && u.email?.toLowerCase().trim() === emailNorm)
+    );
     const driverEmails = new Set(
       (storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim())
     );
     const driverIds = new Set(storeSettings.customDriverIds || []);
-    if (currentUser.role === 'delivery') return true;
-    if (currentUser.isDriver === true) return true;
+
     if (emailNorm && driverEmails.has(emailNorm)) return true;
     if (currentUser.id && driverIds.has(currentUser.id)) return true;
+
+    if (matchedLiveUsers.length > 0) {
+      return matchedLiveUsers.some(
+        (u) => u.deliveryPortalAccess === true || u.isDriver === true || u.role === 'delivery'
+      );
+    }
+
+    if (currentUser.deliveryPortalAccess === true || currentUser.isDriver === true || currentUser.role === 'delivery') {
+      return true;
+    }
     return false;
-  }, [currentUser, storeSettings.customDriverEmails, storeSettings.customDriverIds, storeSettings.removedDriverEmails, storeSettings.removedDriverIds]);
+  }, [
+    currentUser,
+    userPermissions,
+    allUsers,
+    storeSettings.customDriverEmails,
+    storeSettings.customDriverIds,
+    storeSettings.removedDriverEmails,
+    storeSettings.removedDriverIds,
+    storeSettings.removedCustomerEmails,
+    storeSettings.removedCustomerIds,
+  ]);
+
+  // Real-time synchronization: if currentUser's delivery portal permission document is deleted or revoked in Firestore,
+  // immediately strip delivery portal access from currentUser state & localStorage to prevent unauthorized access
+  useEffect(() => {
+    if (!currentUser) return;
+    const emailNorm = (currentUser.email || '').trim().toLowerCase();
+    const hadLocalDriverFlag =
+      currentUser.isDriver === true ||
+      currentUser.deliveryPortalAccess === true ||
+      currentUser.role === 'delivery';
+
+    if (hadLocalDriverFlag && !isDriver && currentUser.role !== 'admin') {
+      setCurrentUser((prev) => {
+        if (!prev) return null;
+        const downgraded: User = {
+          ...prev,
+          isDriver: false,
+          deliveryPortalAccess: false,
+          role: 'customer',
+        };
+        try {
+          localStorage.setItem('fs_active_user', JSON.stringify(downgraded));
+          localStorage.setItem('fs_v5_user', JSON.stringify(downgraded));
+          localStorage.removeItem('fs_active_driver_id');
+        } catch {}
+        return downgraded;
+      });
+      setCurrentDeliveryPersonId(null);
+    }
+  }, [currentUser, isDriver]);
 
   const effectiveDeliveryPersonnel = React.useMemo(() => {
-    const rawList = deliveryPersonnel.length > 0 ? [...deliveryPersonnel] : [...DEFAULT_DELIVERY_PERSONNEL];
+    const sampleDriverIds = new Set(['dp-1', 'dp-2', 'dp-3', 'dp-4']);
+    const rawList = deliveryPersonnel.filter((dp) => !sampleDriverIds.has(dp.id));
     const removedEmails = new Set(
       (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
     );
@@ -1920,13 +1696,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           email: currentUser.email || '',
           phone: currentUser.phone || '+91 98450 12345',
           vehicleType: 'Bike',
-          vehicleNumber: 'KL-01-DR-2026',
+          vehicleNumber: 'KL-07-DR-2026',
           status: 'available',
           rating: 5.0,
           totalDeliveries: 0,
-          currentLat: storeSettings.storeLat || 8.5241,
-          currentLng: storeSettings.storeLng || 76.9366,
-          lastUpdatedLocation: storeSettings.storeHubName || 'Store Dispatch Hub',
+          currentLat: storeSettings.storeLat || 9.9312,
+          currentLng: storeSettings.storeLng || 76.2673,
+          lastUpdatedLocation: storeSettings.storeHubName || 'Store Dispatch Hub (Kochi)',
           avatar: currentUser.photoURL || currentUser.avatar,
         });
       }
@@ -2232,18 +2008,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       completedAt: nowIso,
       status: record.status,
       pickupAddress:
-        storeSettings.address || 'Fathima Stores Main Hub, MG Road, Trivandrum, Kerala 695001',
+        storeSettings.address || 'Fathima Stores Main Hub, MG Road, Kochi, Kerala 682011',
       dropAddress: matchedOrder?.shippingAddress || {
         fullName: matchedOrder?.customerName || 'Verified Store Customer',
         phone: matchedOrder?.phone || '+91 98450 00000',
         email: matchedOrder?.email || 'customer@fathimastores.com',
         house: 'Doorstep Delivery',
-        street: 'Main Street',
-        area: 'Trivandrum City',
-        city: 'Trivandrum',
-        district: 'Thiruvananthapuram',
+        street: 'MG Road',
+        area: 'Kochi City',
+        city: 'Kochi',
+        district: 'Ernakulam',
         state: 'Kerala',
-        pinCode: '695001',
+        pinCode: '682011',
       },
       estimatedMinutes: estMins,
       ...(compMins !== undefined ? { actualCompletionMinutes: compMins } : {}),
@@ -2298,7 +2074,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       deliveryPersonPhone: worker.phone,
       assignedAt: new Date().toISOString(),
       status: 'Assigned',
-      pickupAddress: storeSettings.address || 'Fathima Stores Main Hub, MG Road, Trivandrum, Kerala 695001',
+      pickupAddress: storeSettings.address || 'Fathima Stores Main Hub, MG Road, Kochi, Kerala 682011',
       dropAddress: order.shippingAddress,
       estimatedMinutes: 25,
       ...(notes ? { deliveryNotes: notes } : {}),
@@ -3017,10 +2793,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         house: 'Store Walk-in',
         street: 'Main Road',
         area: 'Central Market',
-        city: storeSettings.storeCity || 'Trivandrum',
-        district: storeSettings.storeCity || 'Trivandrum',
+        city: storeSettings.storeCity || 'Kochi',
+        district: storeSettings.storeCity || 'Ernakulam',
         state: storeSettings.storeState || 'Kerala',
-        pinCode: storeSettings.storePinCode || '695001',
+        pinCode: storeSettings.storePinCode || '682011',
       },
       deliveryMethod: orderData.deliveryMethod || 'Standard Delivery',
       paymentMethod: orderData.paymentMethod || 'Online',
@@ -3522,20 +3298,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const seedSampleDispatchOrders = async () => {
-    setOrders((prev) => {
-      const existingIds = new Set(prev.map((o) => o.id));
-      const freshOrders = DEFAULT_DISPATCH_ORDERS.filter((o) => !existingIds.has(o.id));
-      const combined = [...freshOrders, ...prev];
-      try {
-        localStorage.setItem('fs_saved_orders', JSON.stringify(combined));
-      } catch {}
-      return combined;
-    });
-
-    for (const ord of DEFAULT_DISPATCH_ORDERS) {
-      setDoc(doc(db, 'orders', ord.id), sanitizeFirestoreData(ord)).catch(() => {});
-    }
-    showToast('6 Ready-for-Delivery Orders generated in Dispatch Console!', 'success');
+    // Sample order generation disabled as requested by user
   };
 
   // Expenses CRUD
@@ -4229,7 +3992,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       createdAt: new Date().toISOString().split('T')[0],
       addresses: [],
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-      city: 'Trivandrum',
+      city: 'Kochi',
       state: 'Kerala',
       bio: 'Stationery and writing enthusiast',
     };
@@ -4365,12 +4128,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       localStorage.removeItem('fs_active_user');
       localStorage.removeItem('fs_v5_user');
       localStorage.removeItem('fs_active_driver_id');
+      localStorage.removeItem('fs_admin_override');
       setCurrentUser(null);
       await signOut(auth).catch(() => {});
       showToast('Logged out successfully', 'info');
     } catch (error) {
       localStorage.removeItem('fs_active_user');
       localStorage.removeItem('fs_v5_user');
+      localStorage.removeItem('fs_admin_override');
       setCurrentUser(null);
       showToast('Logged out', 'info');
     }
@@ -4482,6 +4247,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const getUserPermissionDocId = (email?: string, userId?: string): string => {
+    const emailClean = (email || '').trim().toLowerCase();
+    if (emailClean && emailClean.includes('@')) {
+      return `perm_${emailClean.replace(/[^a-z0-9]/g, '_')}`;
+    }
+    const idClean = (userId || '').trim();
+    return idClean ? `perm_${idClean.replace(/[^a-zA-Z0-9_-]/g, '_')}` : createUniqueId('perm');
+  };
+
   const grantCustomerDriver = async (
     customerEmailOrId: string,
     grant: boolean,
@@ -4490,28 +4264,81 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       vehicleNumber?: string;
       name?: string;
       phone?: string;
+      userId?: string;
     }
   ) => {
     try {
       const cleanInput = (customerEmailOrId || '').trim();
+      const explicitUid = (vehicleDetails?.userId || '').trim();
       const emailNorm = cleanInput.toLowerCase();
 
-      // Find user doc in allUsers
-      const userDoc = allUsers.find(
-        (u) => u.id === cleanInput || (u.email && u.email.toLowerCase().trim() === emailNorm)
+      // Find all matching user docs in allUsers
+      const matchingUsers = allUsers.filter(
+        (u) =>
+          u.id === cleanInput ||
+          (explicitUid && u.id === explicitUid) ||
+          (u.email && u.email.toLowerCase().trim() === emailNorm)
       );
+      const userDoc = matchingUsers[0];
 
       // Also find in deliveryPersonnel or DEFAULT_DELIVERY_PERSONNEL
       const matchedDp = [...deliveryPersonnel, ...DEFAULT_DELIVERY_PERSONNEL].find(
         (dp) =>
           dp.id === cleanInput ||
           dp.userId === cleanInput ||
+          (explicitUid && (dp.id === explicitUid || dp.userId === explicitUid)) ||
           (dp.email && dp.email.toLowerCase().trim() === emailNorm)
       );
 
-      const targetEmail = (userDoc?.email || (emailNorm.includes('@') ? emailNorm : matchedDp?.email || '')).toLowerCase().trim();
-      const targetUserId = userDoc?.id || (cleanInput.startsWith('dp-') ? matchedDp?.userId : cleanInput);
-      const dpId = matchedDp?.id || `dp-${(targetUserId || targetEmail || cleanInput).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const targetEmail = (
+        userDoc?.email ||
+        (emailNorm.includes('@') ? emailNorm : matchedDp?.email || '')
+      )
+        .toLowerCase()
+        .trim();
+      const targetUserId =
+        explicitUid ||
+        userDoc?.id ||
+        (cleanInput.startsWith('dp-') ? matchedDp?.userId : cleanInput);
+      const emailDocId = targetEmail && targetEmail.includes('@') ? targetEmail.replace(/[@.]/g, '_') : '';
+      const permDocId = getUserPermissionDocId(targetEmail, targetUserId || cleanInput);
+      const dpId =
+        matchedDp?.id ||
+        `dp-${(targetUserId || targetEmail || cleanInput).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+      // Candidate permission document IDs in Firestore to link/delete
+      const candidatePermDocIds = Array.from(
+        new Set(
+          [
+            permDocId,
+            targetUserId ? `perm_${targetUserId.replace(/[^a-zA-Z0-9_-]/g, '_')}` : '',
+            emailDocId ? `perm_${emailDocId}` : '',
+            targetUserId,
+            emailDocId,
+            cleanInput,
+            ...userPermissions
+              .filter(
+                (p) =>
+                  p.id === permDocId ||
+                  (targetUserId && (p.userId === targetUserId || p.id === targetUserId)) ||
+                  (targetEmail && p.email?.toLowerCase().trim() === targetEmail)
+              )
+              .map((p) => p.id),
+          ].filter(Boolean)
+        )
+      );
+
+      // Candidate user document IDs in Firestore
+      const candidateUserDocIds = Array.from(
+        new Set(
+          [
+            targetUserId,
+            emailDocId,
+            cleanInput && !cleanInput.includes('@') ? cleanInput : '',
+            ...matchingUsers.map((u) => u.id),
+          ].filter(Boolean)
+        )
+      );
 
       const currentDriverEmails = new Set(
         (storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim())
@@ -4527,24 +4354,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           currentDriverEmails.add(targetEmail);
           removedDriverEmails.delete(targetEmail);
         }
-        if (targetUserId) {
-          currentDriverIds.add(targetUserId);
-          removedDriverIds.delete(targetUserId);
-        }
+        candidateUserDocIds.forEach((id) => {
+          currentDriverIds.add(id);
+          removedDriverIds.delete(id);
+        });
         if (dpId) {
           currentDriverIds.add(dpId);
           removedDriverIds.delete(dpId);
         }
       } else {
-        // Revoking driver access - permanently remove from all driver sets
+        // Revoking / deleting delivery portal access - permanently remove from all driver sets
         if (targetEmail) {
           currentDriverEmails.delete(targetEmail);
           removedDriverEmails.add(targetEmail);
         }
-        if (targetUserId) {
-          currentDriverIds.delete(targetUserId);
-          removedDriverIds.add(targetUserId);
-        }
+        candidateUserDocIds.forEach((id) => {
+          currentDriverIds.delete(id);
+          removedDriverIds.add(id);
+        });
         if (cleanInput) {
           currentDriverIds.delete(cleanInput);
           removedDriverIds.add(cleanInput);
@@ -4577,31 +4404,58 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         removedDriverIds: Array.from(removedDriverIds),
       });
 
-      // Update user document in Firestore & allUsers state
-      if (!grant) {
-        // Find all matching users in allUsers
-        const matches = allUsers.filter(
-          (u) =>
-            u.id === cleanInput ||
-            u.id === targetUserId ||
-            u.id === dpId ||
-            (targetEmail && u.email?.toLowerCase().trim() === targetEmail)
+      // 1. Update / Delete linked Firestore permission document(s) in `user_permissions`
+      if (grant) {
+        const permDoc: UserPermissionDoc = {
+          id: permDocId,
+          userId: targetUserId || emailDocId || cleanInput,
+          email: targetEmail,
+          role: userDoc?.role === 'admin' ? 'admin' : 'delivery',
+          deliveryPortalAccess: true,
+          isDriver: true,
+          accessLevels:
+            userDoc?.role === 'admin'
+              ? ['customer', 'delivery_portal', 'admin']
+              : ['customer', 'delivery_portal'],
+          updatedAt: new Date().toISOString(),
+        };
+        setUserPermissions((prev) => [
+          permDoc,
+          ...prev.filter((p) => !candidatePermDocIds.includes(p.id)),
+        ]);
+        await setDoc(
+          doc(db, 'user_permissions', permDocId),
+          sanitizeFirestoreData({
+            ...permDoc,
+            updatedAt: serverTimestamp(),
+          }),
+          { merge: true }
+        ).catch(() => {});
+      } else {
+        // Delete the user's delivery portal permission document(s) from Firestore
+        setUserPermissions((prev) =>
+          prev.filter(
+            (p) =>
+              !candidatePermDocIds.includes(p.id) &&
+              (!targetUserId || p.userId !== targetUserId) &&
+              (!targetEmail || p.email?.toLowerCase().trim() !== targetEmail)
+          )
         );
+        for (const pId of candidatePermDocIds) {
+          await deleteDoc(doc(db, 'user_permissions', pId)).catch(() => {});
+        }
+      }
 
-        for (const mu of matches) {
-          const nextRole = mu.role === 'admin' ? 'admin' : 'customer';
-          await updateDoc(doc(db, 'users', mu.id), {
+      // 2. Update linked user document(s) in `users` collection & allUsers state
+      if (!grant) {
+        for (const uId of candidateUserDocIds) {
+          const existingUser = allUsers.find((u) => u.id === uId);
+          const nextRole = existingUser?.role === 'admin' ? 'admin' : 'customer';
+          await updateDoc(doc(db, 'users', uId), {
             role: nextRole,
             isDriver: false,
-            updatedAt: serverTimestamp(),
-          }).catch(() => {});
-        }
-
-        if (targetEmail && targetEmail.includes('@')) {
-          const emailDocId = targetEmail.replace(/[@.]/g, '_');
-          await updateDoc(doc(db, 'users', emailDocId), {
-            role: 'customer',
-            isDriver: false,
+            deliveryPortalAccess: false,
+            permissionDocId: null,
             updatedAt: serverTimestamp(),
           }).catch(() => {});
         }
@@ -4609,47 +4463,85 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setAllUsers((prev) =>
           prev.map((u) => {
             const isMatch =
-              u.id === cleanInput ||
-              u.id === targetUserId ||
+              candidateUserDocIds.includes(u.id) ||
               u.id === dpId ||
               (targetEmail && u.email?.toLowerCase().trim() === targetEmail);
             return isMatch
-              ? { ...u, role: u.role === 'admin' ? 'admin' : 'customer', isDriver: false }
+              ? {
+                  ...u,
+                  role: u.role === 'admin' ? 'admin' : 'customer',
+                  isDriver: false,
+                  deliveryPortalAccess: false,
+                  permissionDocId: undefined,
+                }
               : u;
           })
         );
-      } else if (userDoc) {
-        const nextRole = userDoc.role === 'admin' ? 'admin' : 'delivery';
-        await updateDoc(doc(db, 'users', userDoc.id), {
-          role: nextRole,
-          isDriver: true,
-          updatedAt: serverTimestamp(),
-        }).catch(() => {});
-        setAllUsers((prev) =>
-          prev.map((u) => (u.id === userDoc.id ? { ...u, role: nextRole, isDriver: true } : u))
-        );
-      } else if (targetEmail && targetEmail.includes('@')) {
-        const emailDocId = targetEmail.replace(/[@.]/g, '_');
-        await setDoc(
-          doc(db, 'users', emailDocId),
-          sanitizeFirestoreData({
-            id: emailDocId,
-            email: targetEmail,
-            name: vehicleDetails?.name || targetEmail.split('@')[0],
-            phone: vehicleDetails?.phone || '+91 98450 12345',
-            role: 'delivery',
-            isDriver: true,
-            updatedAt: serverTimestamp(),
-          }),
-          { merge: true }
-        ).catch(() => {});
+      } else {
+        if (candidateUserDocIds.length > 0) {
+          for (const uId of candidateUserDocIds) {
+            const existingUser = allUsers.find((u) => u.id === uId);
+            const nextRole = existingUser?.role === 'admin' ? 'admin' : 'delivery';
+            await setDoc(
+              doc(db, 'users', uId),
+              sanitizeFirestoreData({
+                id: uId,
+                ...(targetEmail ? { email: targetEmail } : {}),
+                ...(vehicleDetails?.name || existingUser?.name
+                  ? { name: vehicleDetails?.name || existingUser?.name }
+                  : {}),
+                ...(vehicleDetails?.phone || existingUser?.phone
+                  ? { phone: vehicleDetails?.phone || existingUser?.phone }
+                  : {}),
+                role: nextRole,
+                isDriver: true,
+                deliveryPortalAccess: true,
+                permissionDocId: permDocId,
+                updatedAt: serverTimestamp(),
+              }),
+              { merge: true }
+            ).catch(() => {});
+          }
+          setAllUsers((prev) =>
+            prev.map((u) => {
+              const isMatch =
+                candidateUserDocIds.includes(u.id) ||
+                (targetEmail && u.email?.toLowerCase().trim() === targetEmail);
+              const nextRole = u.role === 'admin' ? 'admin' : 'delivery';
+              return isMatch
+                ? {
+                    ...u,
+                    role: nextRole,
+                    isDriver: true,
+                    deliveryPortalAccess: true,
+                    permissionDocId: permDocId,
+                  }
+                : u;
+            })
+          );
+        } else if (targetEmail && targetEmail.includes('@')) {
+          await setDoc(
+            doc(db, 'users', emailDocId),
+            sanitizeFirestoreData({
+              id: emailDocId,
+              email: targetEmail,
+              name: vehicleDetails?.name || targetEmail.split('@')[0],
+              phone: vehicleDetails?.phone || '+91 98450 12345',
+              role: 'delivery',
+              isDriver: true,
+              deliveryPortalAccess: true,
+              permissionDocId: permDocId,
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true }
+          ).catch(() => {});
+        }
       }
 
-      // Sync currentUser if Admin is modifying their own or active user's driver access
+      // 3. Sync currentUser if Admin is modifying their own or active user's driver access
       if (
         currentUser &&
-        (currentUser.id === targetUserId ||
-          currentUser.id === cleanInput ||
+        (candidateUserDocIds.includes(currentUser.id) ||
           currentUser.id === dpId ||
           (targetEmail && currentUser.email?.toLowerCase().trim() === targetEmail))
       ) {
@@ -4658,7 +4550,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const updated: User = {
             ...prev,
             isDriver: grant,
-            role: grant ? (prev.role === 'admin' ? 'admin' : 'delivery') : prev.role === 'admin' ? 'admin' : 'customer',
+            deliveryPortalAccess: grant,
+            permissionDocId: grant ? permDocId : undefined,
+            role: grant
+              ? prev.role === 'admin'
+                ? 'admin'
+                : 'delivery'
+              : prev.role === 'admin'
+              ? 'admin'
+              : 'customer',
           };
           try {
             localStorage.setItem('fs_active_user', JSON.stringify(updated));
@@ -4674,7 +4574,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // Create or remove DeliveryPersonnel entry in delivery_personnel collection
+      // 4. Create or delete DeliveryPersonnel entry in delivery_personnel collection
       if (grant) {
         const existingDp = deliveryPersonnel.find(
           (dp) =>
@@ -4686,17 +4586,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const driverProfile: DeliveryPersonnel = {
           id: finalDpId,
           userId: targetUserId,
-          name: vehicleDetails?.name || userDoc?.name || existingDp?.name || targetEmail.split('@')[0] || 'Store Driver',
+          name:
+            vehicleDetails?.name ||
+            userDoc?.name ||
+            existingDp?.name ||
+            targetEmail.split('@')[0] ||
+            'Store Driver',
           email: targetEmail || userDoc?.email || existingDp?.email || '',
-          phone: vehicleDetails?.phone || userDoc?.phone || existingDp?.phone || '+91 98450 12345',
+          phone:
+            vehicleDetails?.phone ||
+            userDoc?.phone ||
+            existingDp?.phone ||
+            '+91 98450 12345',
           vehicleType: vehicleDetails?.vehicleType || existingDp?.vehicleType || 'Bike',
-          vehicleNumber: vehicleDetails?.vehicleNumber || existingDp?.vehicleNumber || 'KL-01-DR-2026',
+          vehicleNumber:
+            vehicleDetails?.vehicleNumber || existingDp?.vehicleNumber || 'KL-07-DR-2026',
           status: 'available',
           rating: existingDp?.rating || 5.0,
           totalDeliveries: existingDp?.totalDeliveries || 0,
-          currentLat: storeSettings.storeLat || 8.5241,
-          currentLng: storeSettings.storeLng || 76.9366,
-          lastUpdatedLocation: storeSettings.storeHubName || 'Store Dispatch Hub',
+          currentLat: storeSettings.storeLat || 9.9312,
+          currentLng: storeSettings.storeLng || 76.2673,
+          lastUpdatedLocation: storeSettings.storeHubName || 'Store Dispatch Hub (Kochi)',
           avatar: userDoc?.photoURL || userDoc?.avatar || existingDp?.avatar,
         };
         setDeliveryPersonnel((prev) => [
@@ -4707,6 +4617,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           doc(db, 'delivery_personnel', finalDpId),
           sanitizeFirestoreData({
             ...driverProfile,
+            permissionDocId: permDocId,
             updatedAt: serverTimestamp(),
           }),
           { merge: true }
@@ -4721,29 +4632,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           message: `You have been appointed as an official Delivery Driver for ${storeSettings.storeName || 'Fathima Stores'}. You can now access the Driver Portal from your Account Center!`,
         });
       } else {
-        // Remove from delivery personnel
+        // Delete all matching driver records from delivery_personnel collection
+        const dpDocsToDelete = Array.from(
+          new Set(
+            [
+              dpId,
+              matchedDp?.id,
+              targetUserId ? `dp-${targetUserId}` : '',
+              emailDocId ? `dp-${emailDocId}` : '',
+              ...deliveryPersonnel
+                .filter(
+                  (d) =>
+                    d.id === dpId ||
+                    d.id === cleanInput ||
+                    (targetEmail && d.email?.toLowerCase().trim() === targetEmail) ||
+                    (targetUserId && d.userId === targetUserId)
+                )
+                .map((d) => d.id),
+            ].filter(Boolean) as string[]
+          )
+        );
         setDeliveryPersonnel((prev) =>
           prev.filter(
             (d) =>
-              d.id !== dpId &&
+              !dpDocsToDelete.includes(d.id) &&
               d.id !== cleanInput &&
-              d.id !== matchedDp?.id &&
               (!targetEmail || d.email.toLowerCase().trim() !== targetEmail) &&
               (!targetUserId || d.userId !== targetUserId)
           )
         );
-        if (matchedDp?.id) {
-          await deleteDoc(doc(db, 'delivery_personnel', matchedDp.id)).catch(() => {});
-        }
-        if (dpId && dpId !== matchedDp?.id) {
-          await deleteDoc(doc(db, 'delivery_personnel', dpId)).catch(() => {});
+        for (const delDpId of dpDocsToDelete) {
+          await deleteDoc(doc(db, 'delivery_personnel', delDpId)).catch(() => {});
         }
       }
 
       showToast(
         grant
-          ? `Driver Portal access granted to ${userDoc?.name || targetEmail || cleanInput}!`
-          : `Driver Portal access revoked for ${userDoc?.name || targetEmail || cleanInput}.`,
+          ? `Delivery Portal access granted & linked to Firestore permission doc (${permDocId}).`
+          : `Delivery Portal access deleted from Firestore permission document (${permDocId}).`,
         'success'
       );
     } catch (err) {
@@ -4752,50 +4678,174 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const deleteCustomer = async (customerEmailOrId: string) => {
+  const revokeCustomerDeliveryPortalAccess = async (
+    customerEmailOrId: string,
+    explicitUserId?: string
+  ) => {
+    await grantCustomerDriver(customerEmailOrId, false, { userId: explicitUserId });
+  };
+
+  const deleteCustomer = async (customerEmailOrId: string, explicitUserId?: string) => {
     try {
-      const emailNorm = (customerEmailOrId || '').trim().toLowerCase();
-      const userDoc = allUsers.find(
-        (u) => u.id === customerEmailOrId || (u.email && u.email.toLowerCase() === emailNorm)
+      const cleanInput = (customerEmailOrId || '').trim();
+      const emailNorm = cleanInput.toLowerCase();
+      const matchingUsers = allUsers.filter(
+        (u) =>
+          u.id === cleanInput ||
+          (explicitUserId && u.id === explicitUserId) ||
+          (u.email && u.email.toLowerCase().trim() === emailNorm)
+      );
+      const userDoc = matchingUsers[0];
+
+      const targetEmail = (userDoc?.email || (emailNorm.includes('@') ? emailNorm : '')).toLowerCase().trim();
+      const targetId = explicitUserId || userDoc?.id || cleanInput;
+      const emailDocId = targetEmail && targetEmail.includes('@') ? targetEmail.replace(/[@.]/g, '_') : '';
+      const permDocId = getUserPermissionDocId(targetEmail, targetId);
+
+      // 1. First revoke & delete all Delivery Portal permissions & driver documents in Firestore
+      const candidatePermDocIds = Array.from(
+        new Set(
+          [
+            permDocId,
+            targetId ? `perm_${targetId.replace(/[^a-zA-Z0-9_-]/g, '_')}` : '',
+            emailDocId ? `perm_${emailDocId}` : '',
+            targetId,
+            emailDocId,
+            cleanInput,
+            ...userPermissions
+              .filter(
+                (p) =>
+                  p.id === permDocId ||
+                  (targetId && (p.userId === targetId || p.id === targetId)) ||
+                  (targetEmail && p.email?.toLowerCase().trim() === targetEmail)
+              )
+              .map((p) => p.id),
+          ].filter(Boolean)
+        )
       );
 
-      const targetId = userDoc ? userDoc.id : customerEmailOrId;
-
-      // 1. Delete user doc from Firestore
-      if (targetId) {
-        try {
-          await deleteDoc(doc(db, 'users', targetId));
-        } catch (err) {
-          console.warn('Notice deleting user doc from Firestore:', err);
-        }
+      setUserPermissions((prev) =>
+        prev.filter(
+          (p) =>
+            !candidatePermDocIds.includes(p.id) &&
+            (!targetId || p.userId !== targetId) &&
+            (!targetEmail || p.email?.toLowerCase().trim() !== targetEmail)
+        )
+      );
+      for (const pId of candidatePermDocIds) {
+        await deleteDoc(doc(db, 'user_permissions', pId)).catch(() => {});
       }
 
-      // 2. Persist in storeSettings.removedCustomerEmails & removedCustomerIds
-      const removedEmails = new Set((storeSettings.removedCustomerEmails || []).map((e) => e.toLowerCase()));
-      const removedIds = new Set(storeSettings.removedCustomerIds || []);
-      if (emailNorm) removedEmails.add(emailNorm);
-      if (targetId) removedIds.add(targetId);
+      // 2. Delete all matching DeliveryPersonnel documents from Firestore
+      const dpDocsToDelete = Array.from(
+        new Set(
+          [
+            targetId ? `dp-${targetId.replace(/[^a-zA-Z0-9_-]/g, '_')}` : '',
+            emailDocId ? `dp-${emailDocId}` : '',
+            ...deliveryPersonnel
+              .filter(
+                (d) =>
+                  d.id === cleanInput ||
+                  (targetId && (d.id === targetId || d.userId === targetId)) ||
+                  (targetEmail && d.email?.toLowerCase().trim() === targetEmail)
+              )
+              .map((d) => d.id),
+          ].filter(Boolean)
+        )
+      );
+      setDeliveryPersonnel((prev) =>
+        prev.filter(
+          (d) =>
+            !dpDocsToDelete.includes(d.id) &&
+            (!targetId || (d.id !== targetId && d.userId !== targetId)) &&
+            (!targetEmail || d.email?.toLowerCase().trim() !== targetEmail)
+        )
+      );
+      for (const delDpId of dpDocsToDelete) {
+        await deleteDoc(doc(db, 'delivery_personnel', delDpId)).catch(() => {});
+      }
 
-      // 3. Remove email from customAdminEmails & customVipEmails
-      const currentAdmins = (storeSettings.customAdminEmails || []).filter((e) => e.toLowerCase() !== emailNorm);
-      const currentVips = (storeSettings.customVipEmails || []).filter((e) => e.toLowerCase() !== emailNorm);
+      // 3. Delete all matching user documents from `users` collection in Firestore
+      const candidateUserDocIds = Array.from(
+        new Set(
+          [
+            targetId,
+            emailDocId,
+            cleanInput && !cleanInput.includes('@') ? cleanInput : '',
+            ...matchingUsers.map((u) => u.id),
+          ].filter(Boolean)
+        )
+      );
+      for (const uId of candidateUserDocIds) {
+        await deleteDoc(doc(db, 'users', uId)).catch((err) => {
+          console.warn('Notice deleting user doc from Firestore:', err);
+        });
+      }
+
+      // 4. Persist removals across customer, admin, VIP, AND driver access lists in storeSettings
+      const removedEmails = new Set((storeSettings.removedCustomerEmails || []).map((e) => e.toLowerCase().trim()));
+      const removedIds = new Set(storeSettings.removedCustomerIds || []);
+      const removedDriverEmails = new Set((storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim()));
+      const removedDriverIds = new Set(storeSettings.removedDriverIds || []);
+
+      if (targetEmail) {
+        removedEmails.add(targetEmail);
+        removedDriverEmails.add(targetEmail);
+      }
+      if (emailNorm && emailNorm.includes('@')) {
+        removedEmails.add(emailNorm);
+        removedDriverEmails.add(emailNorm);
+      }
+      candidateUserDocIds.forEach((id) => {
+        removedIds.add(id);
+        removedDriverIds.add(id);
+      });
+      dpDocsToDelete.forEach((id) => {
+        removedDriverIds.add(id);
+      });
+
+      const currentAdmins = (storeSettings.customAdminEmails || []).filter(
+        (e) => e.toLowerCase().trim() !== targetEmail && e.toLowerCase().trim() !== emailNorm
+      );
+      const currentVips = (storeSettings.customVipEmails || []).filter(
+        (e) => e.toLowerCase().trim() !== targetEmail && e.toLowerCase().trim() !== emailNorm
+      );
+      const currentDriverEmails = (storeSettings.customDriverEmails || []).filter(
+        (e) => e.toLowerCase().trim() !== targetEmail && e.toLowerCase().trim() !== emailNorm
+      );
+      const currentDriverIds = (storeSettings.customDriverIds || []).filter(
+        (id) => !candidateUserDocIds.includes(id) && !dpDocsToDelete.includes(id)
+      );
 
       await updateStoreSettings({
         removedCustomerEmails: Array.from(removedEmails),
         removedCustomerIds: Array.from(removedIds),
+        removedDriverEmails: Array.from(removedDriverEmails),
+        removedDriverIds: Array.from(removedDriverIds),
         customAdminEmails: currentAdmins,
         customVipEmails: currentVips,
+        customDriverEmails: currentDriverEmails,
+        customDriverIds: currentDriverIds,
       });
 
-      // 4. Remove from local allUsers list and local storage cache
-      setAllUsers((prev) => prev.filter((u) => u.id !== targetId && u.email?.toLowerCase() !== emailNorm));
-      
-      // 5. Force clear local orders cache to trigger re-fetch/re-calc without deleted user
+      // 5. Remove from local allUsers list and local storage cache
+      setAllUsers((prev) =>
+        prev.filter(
+          (u) =>
+            !candidateUserDocIds.includes(u.id) &&
+            (!targetEmail || u.email?.toLowerCase().trim() !== targetEmail)
+        )
+      );
+
+      // 6. Force clear local orders cache to trigger re-fetch/re-calc without deleted user
       try {
         localStorage.removeItem('fs_saved_orders');
       } catch {}
 
-      showToast('User account permanently deleted from store records.', 'success');
+      showToast(
+        'User account & all linked Firestore permissions (including Delivery Portal access) permanently deleted.',
+        'success'
+      );
     } catch (err) {
       console.error('Failed to delete user account:', err);
       showToast('Could not delete user account', 'error');
@@ -5118,7 +5168,28 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         updateCoupon,
         deleteCoupon,
 
-        orders,
+        orders:
+          currentUser?.role === 'admin' ||
+          isDriver ||
+          activePage === 'admin' ||
+          activePage === 'delivery-portal' ||
+          Boolean(
+            currentUser?.email &&
+              (storeSettings.customAdminEmails || [])
+                .map((e) => e.toLowerCase().trim())
+                .includes(currentUser.email.toLowerCase().trim())
+          )
+            ? orders
+            : orders.filter((o) => {
+                if (selectedOrderId && o.id === selectedOrderId) return true;
+                if (!currentUser) return false;
+                const uEmail = (currentUser.email || '').toLowerCase().trim();
+                const oEmail = (o.email || o.shippingAddress?.email || '').toLowerCase().trim();
+                return (
+                  (currentUser.id && o.userId === currentUser.id) ||
+                  (uEmail && oEmail === uEmail)
+                );
+              }),
         allOrders: orders,
         placeOrder,
         createDirectOrder,
@@ -5170,8 +5241,16 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         currentUser,
         allUsers,
         users: allUsers,
+        userPermissions,
         isAdmin:
           currentUser?.role === 'admin' ||
+          (() => {
+            try {
+              return Boolean(currentUser && localStorage.getItem('fs_admin_override') === 'true');
+            } catch {
+              return false;
+            }
+          })() ||
           Boolean(
             currentUser?.email &&
               (storeSettings.customAdminEmails || [])
@@ -5191,6 +5270,7 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         toggleCustomerVIP,
         grantCustomerAdmin,
         grantCustomerDriver,
+        revokeCustomerDeliveryPortalAccess,
         deleteCustomer,
         showForceSignInModal,
         setShowForceSignInModal,

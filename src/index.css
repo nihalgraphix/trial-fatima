@@ -111,34 +111,10 @@
   animation: progress linear forwards;
 }
 
-/* Suppress Google Maps Development Watermark Overlay & Tiles Grayscale */
-.gm-style-cc,
-.gmnoprint a,
-.gm-style a[href^="https://maps.google.com/maps"],
-div[style*="z-index: 1000000"],
-div[style*="z-index: 1000001"],
-div[style*="z-index: 1000002"],
-div:has(> .dismissButton),
-.dismissButton,
-div[jsaction*="developmentOnly"],
-div[aria-label*="development purposes only"],
-div[aria-label*="Development purposes only"],
+/* Clean Google Maps modal dismiss button suppression */
 .gm-err-container,
 .gm-err-autocomplete,
 .gm-err-message,
-.gm-style > div:nth-child(2) > div:nth-child(2),
-div[style*="background-color: rgba(0, 0, 0, 0.5)"],
-div[style*="rgba(255, 255, 255, 0.8)"] {
+.dismissButton {
   display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
 }
-
-/* Ensure map tiles remain fully vibrant and colored without dev grey overlay */
-.gm-style div[style*="filter: grayscale"],
-.gm-style div[style*="opacity: 0.7"] {
-  filter: none !important;
-  opacity: 1 !important;
-}
-

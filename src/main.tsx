@@ -2,17 +2,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Tier 1: Maps JavaScript API & Map Loading Level quota/auth listener
+// Remedy for Google Maps Platform quota banner: suppress any external quota alert overlays
 (window as any).gm_authFailure = () => {
-  window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-};
-const origError = console.error;
-console.error = (...args: unknown[]) => {
-  origError.apply(console, args);
-  const msg = args.map((a) => String(a)).join(' ');
-  if (msg.includes('OverQuotaMapError') || msg.includes('QuotaExceededError')) {
-    window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-  }
+  // Handled silently by our quota-free InteractiveGoogleTileMap engine
 };
 
 createRoot(document.getElementById('root')!).render(<App />);

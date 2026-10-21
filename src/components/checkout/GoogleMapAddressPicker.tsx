@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Map, AdvancedMarker, Pin, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import {
   MapPin,
   Navigation,
@@ -10,11 +10,9 @@ import {
   Compass,
   Layers,
   ExternalLink,
-  Plus,
-  Minus,
 } from 'lucide-react';
 import { ShippingAddress } from '../../types';
-import { useGoogleMapsStatus, MapErrorBoundary } from '../common/GoogleMapsWrapper';
+import { useGoogleMapsStatus, InteractiveGoogleTileMap } from '../common/GoogleMapsWrapper';
 
 interface Props {
   onAddressSelect: (
@@ -27,75 +25,75 @@ interface Props {
 const PRESET_LOCATIONS = [
   {
     id: 'loc-1',
-    name: 'MG Road & Secretariat Hub',
-    area: 'Statue, Palayam',
+    name: 'MG Road & Maharaja Metro Hub',
+    area: 'MG Road, Shenoys',
     street: 'Mahatma Gandhi Road',
-    city: 'Trivandrum',
-    district: 'Trivandrum',
+    city: 'Kochi',
+    district: 'Ernakulam',
     state: 'Kerala',
-    pinCode: '695001',
-    lat: 8.4988,
-    lng: 76.9492,
+    pinCode: '682011',
+    lat: 9.9312,
+    lng: 76.2673,
   },
   {
     id: 'loc-2',
-    name: 'Technopark Campus Phase I-III',
-    area: 'Kazhakkoottam',
-    street: 'NH 66 Bypass Service Road',
-    city: 'Trivandrum',
-    district: 'Trivandrum',
+    name: 'Kakkanad Infopark Campus',
+    area: 'Kakkanad',
+    street: 'Infopark Expressway, Civil Station',
+    city: 'Kochi',
+    district: 'Ernakulam',
     state: 'Kerala',
-    pinCode: '695581',
-    lat: 8.5581,
-    lng: 76.8816,
+    pinCode: '682030',
+    lat: 10.0159,
+    lng: 76.3419,
   },
   {
     id: 'loc-3',
-    name: 'Pattom Royal Junction',
-    area: 'Pattom',
-    street: 'MC Road, Near LIC HQ',
-    city: 'Trivandrum',
-    district: 'Trivandrum',
+    name: 'Edappally Toll & Lulu Mall',
+    area: 'Edappally',
+    street: 'NH 66 Bypass Junction',
+    city: 'Kochi',
+    district: 'Ernakulam',
     state: 'Kerala',
-    pinCode: '695004',
-    lat: 8.5241,
-    lng: 76.9366,
+    pinCode: '682024',
+    lat: 10.0261,
+    lng: 76.3125,
   },
   {
     id: 'loc-4',
-    name: 'Kowdiar Palace Avenue',
-    area: 'Kowdiar',
-    street: 'Vellayambalam - Kowdiar Road',
-    city: 'Trivandrum',
-    district: 'Trivandrum',
+    name: 'Kaloor International Stadium',
+    area: 'Kaloor',
+    street: 'Banerji Road, Kaloor Junction',
+    city: 'Kochi',
+    district: 'Ernakulam',
     state: 'Kerala',
-    pinCode: '695003',
-    lat: 8.5262,
-    lng: 76.9615,
+    pinCode: '682017',
+    lat: 9.9936,
+    lng: 76.2921,
   },
   {
     id: 'loc-5',
-    name: 'Medical College & Ulloor',
-    area: 'Medical College PO',
-    street: 'Medical College Ulloor Road',
-    city: 'Trivandrum',
-    district: 'Trivandrum',
+    name: 'Vyttila Mobility Hub',
+    area: 'Vyttila',
+    street: 'SA Road - Vyttila Bypass',
+    city: 'Kochi',
+    district: 'Ernakulam',
     state: 'Kerala',
-    pinCode: '695011',
-    lat: 8.5246,
-    lng: 76.9282,
+    pinCode: '682019',
+    lat: 9.9658,
+    lng: 76.3182,
   },
   {
     id: 'loc-6',
-    name: 'Vazhuthacaud & Bakery Jn',
-    area: 'Vazhuthacaud',
-    street: 'CV Raman Pillai Road',
-    city: 'Trivandrum',
-    district: 'Trivandrum',
+    name: 'Panampilly Nagar & Marine Drive',
+    area: 'Panampilly Nagar',
+    street: 'Panampilly Main Avenue',
+    city: 'Kochi',
+    district: 'Ernakulam',
     state: 'Kerala',
-    pinCode: '695014',
-    lat: 8.5012,
-    lng: 76.9598,
+    pinCode: '682036',
+    lat: 9.9616,
+    lng: 76.2966,
   },
 ];
 
@@ -234,15 +232,15 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
 
   const [searchQuery, setSearchQuery] = useState('');
   const [pinnedCoords, setPinnedCoords] = useState<{ lat: number; lng: number }>({
-    lat: initialAddress?.lat || 8.5241,
-    lng: initialAddress?.lng || 76.9366,
+    lat: initialAddress?.lat || 9.9312,
+    lng: initialAddress?.lng || 76.2673,
   });
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [pinnedLabel, setPinnedLabel] = useState<string>(
     initialAddress?.area
-      ? `${initialAddress.area}, ${initialAddress.city || 'Trivandrum'}`
-      : 'Pattom, Trivandrum (695004)'
+      ? `${initialAddress.area}, ${initialAddress.city || 'Kochi'}`
+      : 'MG Road, Kochi (682011)'
   );
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'hybrid'>('roadmap');
   const [suggestions, setSuggestions] = useState<
@@ -270,12 +268,12 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
           const street =
             addr.road || addr.pedestrian || addr.suburb || addr.neighbourhood || 'MG Road';
           const area =
-            addr.suburb || addr.neighbourhood || addr.residential || addr.city_district || 'Central Area';
+            addr.suburb || addr.neighbourhood || addr.residential || addr.city_district || 'MG Road';
           const city =
-            addr.city || addr.town || addr.village || addr.state_district || 'Trivandrum';
-          const district = addr.state_district || addr.county || city;
+            addr.city || addr.town || addr.village || addr.state_district || 'Kochi';
+          const district = addr.state_district || addr.county || 'Ernakulam';
           const state = addr.state || 'Kerala';
-          const pinCode = addr.postcode || '695001';
+          const pinCode = addr.postcode || '682011';
           const label = data?.display_name
             ? data.display_name.split(',').slice(0, 3).join(', ')
             : `${area}, ${city} (${pinCode})`;
@@ -403,10 +401,10 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
 
           let street = '';
           let area = '';
-          let city = 'Trivandrum';
-          let district = 'Trivandrum';
+          let city = 'Kochi';
+          let district = 'Ernakulam';
           let state = 'Kerala';
-          let pinCode = '695001';
+          let pinCode = '682011';
           let house = '';
 
           place.addressComponents?.forEach((comp: any) => {
@@ -452,8 +450,8 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
       if (suggestion.rawNominatim) {
         const nom = suggestion.rawNominatim;
         const addr = nom.address || {};
-        const lat = parseFloat(nom.lat) || 8.5241;
-        const lng = parseFloat(nom.lon) || 76.9366;
+        const lat = parseFloat(nom.lat) || 9.9312;
+        const lng = parseFloat(nom.lon) || 76.2673;
         setPinnedCoords({ lat, lng });
         setSelectedPresetId(null);
         if (map) {
@@ -465,10 +463,10 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
         const area =
           addr.suburb || addr.neighbourhood || addr.residential || addr.city_district || suggestion.mainText;
         const city =
-          addr.city || addr.town || addr.village || addr.state_district || 'Trivandrum';
-        const district = addr.state_district || addr.county || city;
+          addr.city || addr.town || addr.village || addr.state_district || 'Kochi';
+        const district = addr.state_district || addr.county || 'Ernakulam';
         const state = addr.state || 'Kerala';
-        const pinCode = addr.postcode || '695001';
+        const pinCode = addr.postcode || '682011';
 
         setPinnedLabel(`${suggestion.mainText}, ${city} (${pinCode})`);
         setSearchQuery('');
@@ -644,53 +642,23 @@ export const GoogleMapAddressPicker: React.FC<Props> = ({ onAddressSelect, initi
 
       {/* Interactive Map Canvas */}
       <div className="relative w-full h-64 sm:h-72 rounded-xl overflow-hidden border border-[#E8E8E3] bg-[#E5E9E0] shadow-inner">
-        {mapsHealthy ? (
-          <MapErrorBoundary
-            fallback={
-              <InteractiveOsmPinMap
-                pinnedCoords={pinnedCoords}
-                mapTypeId={mapTypeId}
-                onPinMove={handlePinMove}
-              />
-            }
-          >
-            <Map
-              id="checkout-delivery-map"
-              mapId="DEMO_MAP_ID"
-              mapTypeId={mapTypeId}
-              defaultCenter={pinnedCoords}
-              defaultZoom={15}
-              gestureHandling="greedy"
-              disableDefaultUI={false}
-              internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-              className="w-full h-full"
-              onClick={(ev) => {
-                const latLng = ev.detail?.latLng;
-                if (latLng) {
-                  handlePinMove(latLng.lat, latLng.lng);
-                }
-              }}
-            >
-              <AdvancedMarker position={pinnedCoords}>
-                <div className="flex flex-col items-center">
-                  <div className="bg-[#171717] text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-lg mb-1 whitespace-nowrap flex items-center gap-1 border border-[#71883F]">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span>Deliver Here</span>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-[#71883F] border-2 border-white shadow-lg flex items-center justify-center text-white">
-                    <MapPin className="w-4 h-4" />
-                  </div>
-                </div>
-              </AdvancedMarker>
-            </Map>
-          </MapErrorBoundary>
-        ) : (
-          <InteractiveOsmPinMap
-            pinnedCoords={pinnedCoords}
-            mapTypeId={mapTypeId}
-            onPinMove={handlePinMove}
-          />
-        )}
+        <InteractiveGoogleTileMap
+          center={pinnedCoords}
+          zoom={15}
+          mapTypeId={mapTypeId}
+          onPinMove={handlePinMove}
+          className="w-full h-full"
+          markers={[
+            {
+              id: 'delivery-pin',
+              lat: pinnedCoords.lat,
+              lng: pinnedCoords.lng,
+              title: 'Deliver Here',
+              label: 'PIN',
+              color: '#71883F',
+            },
+          ]}
+        />
 
         {/* Map Top Left Coordinate Pill */}
         <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-xs border border-[#E8E8E3] rounded-lg px-2.5 py-1.5 shadow-sm flex items-center gap-2 pointer-events-none">

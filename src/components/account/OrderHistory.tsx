@@ -82,9 +82,9 @@ export const OrderHistory: React.FC = () => {
   const routesLib = useMapsLibrary('routes');
 
   const storeHubCoords = {
-    lat: storeSettings?.storeLat ?? 8.5241,
-    lng: storeSettings?.storeLng ?? 76.9366,
-    name: storeSettings?.storeHubName || `${storeSettings?.storeName || 'Fathima Stores'} Hub`,
+    lat: storeSettings?.storeLat ?? 9.9312,
+    lng: storeSettings?.storeLng ?? 76.2673,
+    name: storeSettings?.storeHubName || `${storeSettings?.storeName || 'Fathima Stores'} Hub (Kochi)`,
   };
 
   if (!currentUser) return null;

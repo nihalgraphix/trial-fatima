@@ -1,29 +1,21 @@
 // Docs: https://developers.google.com/maps/documentation/javascript/routes?utm_campaign=gmp_mcp_codeassist_v1_aistudio
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { InteractiveGoogleTileMap } from '../common/GoogleMapsWrapper';
 import {
   Route as RouteIcon,
   Navigation,
   Truck,
   MapPin,
-  Clock,
   Sparkles,
   CheckCircle2,
   Loader2,
   Layers,
-  Car,
-  Bike,
-  LocateFixed,
-  ArrowRight,
-  RotateCcw,
-  UserCheck,
-  Phone,
   Split,
-  PlusCircle,
   RefreshCw,
-  SlidersHorizontal,
+  UserCheck,
 } from 'lucide-react';
-import { useStore, DEFAULT_DISPATCH_ORDERS } from '../../context/StoreContext';
+import { useStore } from '../../context/StoreContext';
 import { Order } from '../../types';
 
 export interface OptimizedStop {
@@ -64,22 +56,20 @@ const ROUTE_PALETTE = [
 
 export const AdminRouteOptimizer: React.FC = () => {
   const {
-    orders,
     allOrders,
     deliveryPersonnel,
     assignDeliveryPerson,
     updateOrderStatus,
     showToast,
     storeSettings,
-    seedSampleDispatchOrders,
   } = useStore();
 
   const STORE_HUB = {
-    lat: storeSettings?.storeLat ?? 8.5241,
-    lng: storeSettings?.storeLng ?? 76.9366,
+    lat: storeSettings?.storeLat ?? 9.9312,
+    lng: storeSettings?.storeLng ?? 76.2673,
     name:
       storeSettings?.storeHubName ||
-      `${storeSettings?.storeName || 'Fathima Stores'} Hub (${storeSettings?.storeCity || 'Trivandrum'})`,
+      `${storeSettings?.storeName || 'Fathima Stores'} Hub (${storeSettings?.storeCity || 'Kochi'})`,
   };
 
   const map = useMap('admin-multi-stop-optimizer-map');
@@ -93,34 +83,26 @@ export const AdminRouteOptimizer: React.FC = () => {
 
   // Candidate orders eligible for multi-stop delivery optimization
   const candidateOrders = useMemo<Order[]>(() => {
-    const poolMap = new globalThis.Map<string, Order>();
-    (orders || []).forEach((o) => poolMap.set(o.id, o));
-    (allOrders || []).forEach((o) => {
-      if (!poolMap.has(o.id)) poolMap.set(o.id, o);
-    });
-
-    // Ensure candidate orders always contain ready dispatch items
-    if (poolMap.size === 0 || !Array.from(poolMap.values()).some((o) => o.orderStatus !== 'Delivered')) {
-      DEFAULT_DISPATCH_ORDERS.forEach((d) => {
-        if (!poolMap.has(d.id)) poolMap.set(d.id, d);
-      });
-    }
-
-    const list = Array.from(poolMap.values()).filter(
+    return (allOrders || []).filter(
       (o) => !o.isArchived && o.orderStatus !== 'Cancelled'
     );
-    return list.length > 0 ? list : DEFAULT_DISPATCH_ORDERS;
-  }, [orders, allOrders]);
+  }, [allOrders]);
 
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>(() => {
-    const activeOnes = candidateOrders
-      .filter((o) => o.orderStatus !== 'Delivered')
-      .slice(0, 8)
-      .map((o) => o.id);
-    return activeOnes.length > 0
-      ? activeOnes
-      : candidateOrders.slice(0, 6).map((o) => o.id);
-  });
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedOrderIds((prev) => {
+      const validPrev = prev.filter((id) => candidateOrders.some((o) => o.id === id));
+      if (validPrev.length > 0) return validPrev;
+      const activeOnes = candidateOrders
+        .filter((o) => o.orderStatus !== 'Delivered')
+        .slice(0, 8)
+        .map((o) => o.id);
+      return activeOnes.length > 0
+        ? activeOnes
+        : candidateOrders.slice(0, 6).map((o) => o.id);
+    });
+  }, [candidateOrders]);
 
   const [travelMode, setTravelMode] = useState<'DRIVING' | 'TWO_WHEELER'>('TWO_WHEELER');
   const [returnToHub, setReturnToHub] = useState<boolean>(false);
@@ -340,10 +322,10 @@ export const AdminRouteOptimizer: React.FC = () => {
     });
 
     const zoneNames = [
-      'North & Central Commercial Hub',
-      'West Coast & Technopark Corridor',
-      'East & Kowdiar Residential Enclave',
-      'South Bypass & Suburban Delivery Ring',
+      'MG Road & Ernakulam Central Hub',
+      'Kakkanad & Infopark Corridor',
+      'Edappally & Kaloor Commercial Belt',
+      'Vyttila & Fort Kochi Delivery Ring',
     ];
 
     const newFormedRoutes: FormedRouteCluster[] = clusters.map((clusterStops, rIdx) => {
@@ -559,17 +541,6 @@ export const AdminRouteOptimizer: React.FC = () => {
               ))}
             </div>
           )}
-
-          {/* Restock sample orders if needed */}
-          <button
-            type="button"
-            onClick={seedSampleDispatchOrders}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAFBF7] hover:bg-white text-[#171717] border border-[#E8E8E3] flex items-center gap-1.5 cursor-pointer"
-            title="Load 6 ready-to-deliver sample orders into the dispatch console"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-[#71883F]" />
-            <span>Generate Orders</span>
-          </button>
         </div>
       </div>
 
@@ -831,51 +802,55 @@ export const AdminRouteOptimizer: React.FC = () => {
         {/* Right 7 Cols: Multi-Stop Google Map & Fleet Action Bar */}
         <div className="lg:col-span-7 space-y-4">
           <div className="relative h-[480px] w-full rounded-2xl overflow-hidden border border-[#E8E8E3] shadow-inner bg-[#E5E9E0]">
-            <Map
-              id="admin-multi-stop-optimizer-map"
-              mapId="DEMO_MAP_ID"
+            <InteractiveGoogleTileMap
+              center={{ lat: activeOrigin.lat, lng: activeOrigin.lng }}
+              zoom={12}
               mapTypeId={mapTypeId}
-              defaultCenter={{ lat: STORE_HUB.lat, lng: STORE_HUB.lng }}
-              defaultZoom={12}
-              gestureHandling="greedy"
-              disableDefaultUI={false}
-              internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-            >
-              {/* Origin Marker */}
-              <AdvancedMarker
-                position={{ lat: activeOrigin.lat, lng: activeOrigin.lng }}
-                title="Dispatch Origin"
-              >
-                <div className="bg-[#71883F] text-white border-2 border-white px-3 py-1 rounded-full text-[10px] font-black shadow-lg flex items-center gap-1.5">
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>{useLiveStartGps ? 'Driver GPS Start' : 'Store Hub Origin'}</span>
-                </div>
-              </AdvancedMarker>
-
-              {/* Numbered Customer Stop Markers */}
-              {visibleStops.map((stop) => (
-                <AdvancedMarker
-                  key={stop.order.id}
-                  position={{ lat: stop.lat, lng: stop.lng }}
-                  title={`Stop #${stop.stopNumber}: ${stop.order.customerName}`}
-                >
-                  <div className="flex flex-col items-center">
-                    <div className="bg-white/95 border border-[#E8E8E3] px-2 py-0.5 rounded-md shadow-md text-[10px] font-bold text-[#171717] mb-1 whitespace-nowrap">
-                      <span className="font-black mr-1" style={{ color: stop.routeColor || '#71883F' }}>
-                        {stop.routeId ? `R${stop.routeId.replace('route-', '')}-#${stop.stopNumber}` : `#${stop.stopNumber}`}
-                      </span>
-                      {stop.order.customerName} ({stop.etaClockTime})
-                    </div>
-                    <div
-                      className="w-7 h-7 rounded-full text-white border-2 border-white font-black text-xs flex items-center justify-center shadow-lg"
-                      style={{ backgroundColor: stop.routeColor || '#171717' }}
-                    >
-                      {stop.stopNumber}
-                    </div>
-                  </div>
-                </AdvancedMarker>
-              ))}
-            </Map>
+              className="w-full h-full"
+              markers={[
+                {
+                  id: 'origin',
+                  lat: activeOrigin.lat,
+                  lng: activeOrigin.lng,
+                  title: useLiveStartGps ? 'Driver GPS Start' : 'Store Hub Origin',
+                  label: 'HUB',
+                  color: '#71883F',
+                },
+                ...visibleStops.map((stop) => ({
+                  id: stop.order.id,
+                  lat: stop.lat,
+                  lng: stop.lng,
+                  title: `${stop.order.customerName} (${stop.etaClockTime})`,
+                  label: `${stop.stopNumber}`,
+                  color: stop.routeColor || '#171717',
+                })),
+              ]}
+              polylines={
+                formationMode === 'multiple'
+                  ? formedRoutes
+                      .filter((r) => activeFilterRoute === 'all' || r.id === activeFilterRoute)
+                      .map((r) => ({
+                        path: [
+                          { lat: activeOrigin.lat, lng: activeOrigin.lng },
+                          ...r.stops.map((s) => ({ lat: s.lat, lng: s.lng })),
+                          ...(returnToHub ? [{ lat: STORE_HUB.lat, lng: STORE_HUB.lng }] : []),
+                        ],
+                        color: r.polylineHex,
+                      }))
+                  : singleOptimizedStops.length > 0
+                  ? [
+                      {
+                        path: [
+                          { lat: activeOrigin.lat, lng: activeOrigin.lng },
+                          ...singleOptimizedStops.map((s) => ({ lat: s.lat, lng: s.lng })),
+                          ...(returnToHub ? [{ lat: STORE_HUB.lat, lng: STORE_HUB.lng }] : []),
+                        ],
+                        color: '#10B981',
+                      },
+                    ]
+                  : []
+              }
+            />
 
             {isOptimizing && (
               <div className="absolute inset-0 bg-white/60 backdrop-blur-xs flex items-center justify-center z-10">

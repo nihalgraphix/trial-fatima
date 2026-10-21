@@ -190,7 +190,7 @@ export const ProfilePage: React.FC = () => {
                       type="text"
                       value={formData.city}
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      placeholder="Trivandrum"
+                      placeholder="Kochi"
                       className="w-full px-4 py-3 bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl text-sm text-[#171717] outline-none focus:border-[#71883F] transition-all"
                     />
                   </div>

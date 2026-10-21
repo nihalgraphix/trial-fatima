@@ -44,8 +44,7 @@ const MainContent: React.FC = () => {
     activePage,
     setActivePage,
     storeSettings,
-    isAuthLoading,
-    currentUser,
+    isAdmin,
     showForceSignInModal,
     setShowForceSignInModal,
     setSelectedOrderId,
@@ -57,11 +56,13 @@ const MainContent: React.FC = () => {
   useEffect(() => {
     const handleHash = () => {
       const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim();
-      if (!rawHash) {
+      const rawPath = (window.location.pathname || '').replace(/^\/+|\/+$/g, '').trim();
+      const sourceToken = rawHash || rawPath;
+      if (!sourceToken) {
         return;
       }
-      const [baseHash, queryString] = rawHash.split('?');
-      const cleanHash = baseHash.replace(/\/+$/, '').toLowerCase();
+      const [baseToken, queryString] = sourceToken.split('?');
+      const cleanHash = baseToken.replace(/\/+$/, '').toLowerCase();
 
       if (queryString) {
         const params = new URLSearchParams(queryString);
@@ -71,11 +72,11 @@ const MainContent: React.FC = () => {
         }
       }
 
-      if (cleanHash === 'admin') {
+      if (cleanHash === 'admin' || cleanHash === 'admin-dashboard' || cleanHash === 'dashboard') {
         setActivePage('admin');
       } else if (cleanHash === 'admin/login' || cleanHash === 'admin-login') {
         setActivePage('admin-login');
-      } else if (cleanHash === 'shop') {
+      } else if (cleanHash === 'shop' || cleanHash === 'products') {
         setActivePage('shop');
       } else if (cleanHash === 'categories') {
         setActivePage('categories');
@@ -95,9 +96,9 @@ const MainContent: React.FC = () => {
         setActivePage('delivery-portal');
       } else if (cleanHash === 'order-tracking' || cleanHash === 'track-order' || cleanHash === 'track') {
         setActivePage('order-tracking');
-      } else if (cleanHash === 'about') {
+      } else if (cleanHash === 'about' || cleanHash === 'about-us') {
         setActivePage('about');
-      } else if (cleanHash === 'contact') {
+      } else if (cleanHash === 'contact' || cleanHash === 'contact-us' || cleanHash === 'contactus') {
         setActivePage('contact');
       } else if (cleanHash === 'login') {
         setActivePage('login');
@@ -110,27 +111,26 @@ const MainContent: React.FC = () => {
 
     handleHash();
     window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
+    window.addEventListener('popstate', handleHash);
+    return () => {
+      window.removeEventListener('hashchange', handleHash);
+      window.removeEventListener('popstate', handleHash);
+    };
   }, [setActivePage, setSelectedOrderId]);
-
-  // Global loading state for auth
-  if (isAuthLoading && activePage !== 'home') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-[#71883F]/20 border-t-[#71883F] rounded-full animate-spin"></div>
-          <p className="text-xs font-bold text-[#6B6B6B]">Authenticating...</p>
-        </div>
-      </div>
-    );
-  }
 
   // Admin Views render full screen without consumer header/footer
   if (activePage === 'admin') {
     return (
       <>
-        <AdminDashboard />
+        {isAdmin ? <AdminDashboard /> : <AdminLoginPage />}
         <ToastContainer />
+        {unauthorizedDomainInfo && (
+          <UnauthorizedDomainModal
+            domain={unauthorizedDomainInfo.domain}
+            projectId={unauthorizedDomainInfo.projectId}
+            onClose={() => setUnauthorizedDomainInfo(null)}
+          />
+        )}
       </>
     );
   }
@@ -138,7 +138,7 @@ const MainContent: React.FC = () => {
   if (activePage === 'admin-login') {
     return (
       <>
-        <AdminLoginPage />
+        {isAdmin ? <AdminDashboard /> : <AdminLoginPage />}
         <ToastContainer />
         {unauthorizedDomainInfo && (
           <UnauthorizedDomainModal

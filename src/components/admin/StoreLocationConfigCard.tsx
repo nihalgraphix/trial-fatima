@@ -23,12 +23,12 @@ import {
   Layers,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
+import { InteractiveGoogleTileMap } from '../common/GoogleMapsWrapper';
 
 const STORE_ORIGIN = {
-  lat: 8.4806,
-  lng: 76.9261,
-  address:
-    'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O, Thiruvananthapuram, Kerala 695008',
+  lat: 9.9312,
+  lng: 76.2673,
+  address: 'Commercial Complex, MG Road, Kochi, Kerala 682011',
 };
 
 function calculateDistanceKm(
@@ -63,16 +63,16 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
   const placesLib = useMapsLibrary('places');
 
   const [storeAddress, setStoreAddress] = useState(
-    storeSettings.storeAddress || STORE_ORIGIN.address
+    storeSettings.storeAddress || storeSettings.address || STORE_ORIGIN.address
   );
   const [storeLandmark, setStoreLandmark] = useState(
-    storeSettings.storeLandmark || 'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O'
+    storeSettings.storeLandmark || 'MG Road, Near Maharajas Metro Station, Kochi'
   );
   const [storePincode, setStorePincode] = useState(
-    storeSettings.storePincode || '695008'
+    storeSettings.storePincode || storeSettings.storePinCode || '682011'
   );
   const [contactPhone, setContactPhone] = useState(
-    storeSettings.contactPhone || '+91 98450 12345 / 0471 2345678'
+    storeSettings.contactPhone || '+91 98450 12345 / 0484 2345678'
   );
   const [whatsappNumber, setWhatsappNumber] = useState(
     storeSettings.whatsappNumber || '919845012345'
@@ -552,13 +552,13 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
                 map.setZoom(16);
               }
               setStoreAddress(STORE_ORIGIN.address);
-              setStoreLandmark('T.C 45/862(2), Subash Nagar, Vallakkadavu P.O');
-              setStorePincode('695008');
+              setStoreLandmark('MG Road, Near Maharajas Metro Station, Kochi');
+              setStorePincode('682011');
             }}
             className="px-3 py-2.5 bg-white hover:bg-[#F7F8F3] text-[#6B6B6B] border border-[#E8E8E3] rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Compass className="w-3.5 h-3.5 text-[#71883F]" />
-            Reset to Default Hub
+            Reset to Kochi Main Hub
           </button>
 
           <button
@@ -586,57 +586,29 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
             isExpandedMap ? 'h-[660px] sm:h-[740px]' : 'h-[500px] sm:h-[580px]'
           } rounded-2xl overflow-hidden border-2 border-[#E8E8E3] bg-[#E5E3DF] shadow-inner transition-all`}
         >
-          <Map
-            id="admin-store-location-map"
-            mapId="DEMO_MAP_ID"
+          <InteractiveGoogleTileMap
+            center={{ lat, lng }}
+            zoom={16}
             mapTypeId={mapTypeId}
-            defaultCenter={{ lat, lng }}
-            defaultZoom={16}
-            gestureHandling="greedy"
-            disableDefaultUI={false}
-            internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-            className="w-full h-full"
-            onClick={(ev) => {
-              const clicked = ev.detail?.latLng;
-              if (clicked) {
-                const nextLat = Number(clicked.lat.toFixed(6));
-                const nextLng = Number(clicked.lng.toFixed(6));
-                setLat(nextLat);
-                setLng(nextLng);
-                reverseGeocodeCoordinates(nextLat, nextLng);
-              }
+            onMapClick={(nextLat, nextLng) => {
+              setLat(nextLat);
+              setLng(nextLng);
+              reverseGeocodeCoordinates(nextLat, nextLng);
             }}
-          >
-            <AdvancedMarker
-              position={{ lat, lng }}
-              draggable={true}
-              onDragEnd={(ev) => {
-                const pos = ev.latLng;
-                if (pos) {
-                  const nextLat = Number(pos.lat().toFixed(6));
-                  const nextLng = Number(pos.lng().toFixed(6));
-                  setLat(nextLat);
-                  setLng(nextLng);
-                  reverseGeocodeCoordinates(nextLat, nextLng);
-                }
-              }}
-              title="Fathima Stores Dispatch Hub (Drag or click map to move)"
-            >
-              <div className="flex flex-col items-center">
-                <div className="px-3 py-1 bg-[#171717] text-white text-[11px] font-extrabold rounded-full shadow-lg whitespace-nowrap mb-1 border border-white/20 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  {storeSettings.storeName || 'Fathima Stores'} Hub ({lat.toFixed(4)}, {lng.toFixed(4)})
-                </div>
-                <div className="w-10 h-10 rounded-full bg-[#71883F] border-3 border-white shadow-xl flex items-center justify-center text-white">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <div className="w-3 h-1.5 bg-black/35 rounded-full blur-[1px] mt-0.5" />
-              </div>
-            </AdvancedMarker>
-          </Map>
+            markers={[
+              {
+                id: 'admin-store-hub-pin',
+                lat,
+                lng,
+                label: `${storeSettings.storeName || 'Fathima Stores'} Hub (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+                color: '#71883F',
+                isPulse: true,
+              },
+            ]}
+          />
 
           {/* Top-Left Map Mode & Re-center Controls */}
-          <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-2 pointer-events-auto">
+          <div className="absolute top-3 left-3 z-30 flex flex-wrap items-center gap-2 pointer-events-auto">
             <button
               type="button"
               onClick={() =>
@@ -651,10 +623,8 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
             <button
               type="button"
               onClick={() => {
-                if (map) {
-                  map.panTo({ lat, lng });
-                  map.setZoom(16);
-                }
+                setLat((prev) => Number(prev));
+                setLng((prev) => Number(prev));
               }}
               className="px-3 py-2 bg-white/95 hover:bg-white border border-[#E8E8E3] rounded-xl text-xs font-bold text-[#171717] shadow-md flex items-center gap-1.5 cursor-pointer"
             >
@@ -664,7 +634,7 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
           </div>
 
           {/* Bottom Floating Live Coordinate Status Bar */}
-          <div className="absolute bottom-3 left-3 right-14 bg-white/95 backdrop-blur-md border border-[#E8E8E3] rounded-xl p-3 shadow-lg flex flex-wrap items-center justify-between gap-2 z-10 pointer-events-auto">
+          <div className="absolute bottom-3 left-3 right-14 bg-white/95 backdrop-blur-md border border-[#E8E8E3] rounded-xl p-3 shadow-lg flex flex-wrap items-center justify-between gap-2 z-30 pointer-events-auto">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-[#71883F] text-white flex items-center justify-center shrink-0">
                 <MapPin className="w-4 h-4" />
@@ -681,7 +651,7 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
 
             {distFromDefault > 0.05 && (
               <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                {distFromDefault} km from original Vallakkadavu hub
+                {distFromDefault} km from MG Road Kochi hub
               </span>
             )}
           </div>
@@ -691,44 +661,40 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
         <div className="flex flex-wrap items-center justify-between gap-2 bg-[#FAFBF7] border border-[#E8E8E3] rounded-xl p-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-wider mr-1">
-              Quick Jump Hubs:
+              Quick Jump Kochi Hubs:
             </span>
             {[
               {
-                label: 'Vallakkadavu (Main Hub)',
-                lat: 8.4806,
-                lng: 76.9261,
-                address:
-                  'T.C 45/862(2), Subash Nagar, Vallakkadavu P.O, Thiruvananthapuram, Kerala 695008',
-                landmark: 'Subash Nagar, Vallakkadavu P.O',
-                pincode: '695008',
+                label: 'MG Road, Kochi (Main Hub)',
+                lat: 9.9312,
+                lng: 76.2673,
+                address: 'Commercial Complex, MG Road, Kochi, Kerala 682011',
+                landmark: 'MG Road, Near Maharajas Metro Station',
+                pincode: '682011',
               },
               {
-                label: 'East Fort / Pazhavangadi',
-                lat: 8.4832,
-                lng: 76.9482,
-                address:
-                  'East Fort, Pazhavangadi, Thiruvananthapuram, Kerala 695023',
-                landmark: 'Near Padmanabhaswamy Temple, East Fort',
-                pincode: '695023',
+                label: 'Edappally / Lulu Mall',
+                lat: 10.0261,
+                lng: 76.3125,
+                address: 'NH 66 Bypass Junction, Edappally, Kochi, Kerala 682024',
+                landmark: 'Near Lulu International Shopping Mall, Edappally',
+                pincode: '682024',
               },
               {
-                label: 'Kazhakkoottam / Technopark',
-                lat: 8.5581,
-                lng: 76.8816,
-                address:
-                  'NH 66 Bypass, Kazhakkoottam, Thiruvananthapuram, Kerala 695582',
-                landmark: 'Opposite Technopark Phase 1 Gate',
-                pincode: '695582',
+                label: 'Kakkanad / Infopark',
+                lat: 10.0159,
+                lng: 76.3419,
+                address: 'Seaport-Airport Road, Kakkanad, Kochi, Kerala 682030',
+                landmark: 'Near Infopark Phase 1 Gate, Kakkanad',
+                pincode: '682030',
               },
               {
-                label: 'Pattom Junction',
-                lat: 8.5208,
-                lng: 76.9423,
-                address:
-                  'Pattom Palace P.O, Thiruvananthapuram, Kerala 695004',
-                landmark: 'Pattom Main Road Junction',
-                pincode: '695004',
+                label: 'Marine Drive / Broadway',
+                lat: 9.9772,
+                lng: 76.2773,
+                address: 'Shanmugham Road, Marine Drive, Kochi, Kerala 682031',
+                landmark: 'Near Marine Drive Walkway & Broadway Market',
+                pincode: '682031',
               },
             ].map((hub) => (
               <button
@@ -779,7 +745,7 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
                 type="text"
                 value={storeLandmark}
                 onChange={(e) => setStoreLandmark(e.target.value)}
-                placeholder="e.g., Subash Nagar, Vallakkadavu"
+                placeholder="e.g., MG Road, Near Maharajas Metro Station, Kochi"
                 className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
               />
             </div>
@@ -791,7 +757,7 @@ export const StoreLocationConfigCard: React.FC<StoreLocationConfigCardProps> = (
                 type="text"
                 value={storePincode}
                 onChange={(e) => setStorePincode(e.target.value)}
-                placeholder="695008"
+                placeholder="682011"
                 className="w-full px-3 py-2 bg-white border border-[#E8E8E3] rounded-xl text-xs text-[#171717] outline-none focus:border-[#71883F]"
               />
             </div>

@@ -32,6 +32,8 @@ export interface AdminCustomerRecord {
   photoURL?: string;
   role?: string;
   isDriver?: boolean;
+  deliveryPortalAccess?: boolean;
+  permissionDocId?: string;
   city?: string;
   state?: string;
   bio?: string;
@@ -61,8 +63,27 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
   onViewInvoice,
   onCreateOrder,
 }) => {
-  const { toggleCustomerVIP, grantCustomerAdmin, grantCustomerDriver, storeSettings, deleteCustomer } = useStore();
+  const {
+    toggleCustomerVIP,
+    grantCustomerAdmin,
+    grantCustomerDriver,
+    revokeCustomerDeliveryPortalAccess,
+    userPermissions,
+    storeSettings,
+    deleteCustomer,
+  } = useStore();
   const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'products' | 'profile'>('orders');
+
+  const linkedPermissionDoc = React.useMemo(() => {
+    const emailNorm = (customer.email || '').toLowerCase().trim();
+    return (userPermissions || []).find(
+      (p) =>
+        (customer.permissionDocId && p.id === customer.permissionDocId) ||
+        (customer.id && (p.userId === customer.id || p.id === customer.id)) ||
+        (emailNorm && p.email?.toLowerCase().trim() === emailNorm)
+    );
+  }, [customer, userPermissions]);
+
   const isCustomerDriver = React.useMemo(() => {
     const emailNorm = (customer.email || '').toLowerCase().trim();
     const removedEmails = new Set(
@@ -72,6 +93,14 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
     if (removedEmails.has(emailNorm) || (customer.id && removedIds.has(customer.id))) {
       return false;
     }
+    if (linkedPermissionDoc) {
+      return Boolean(
+        linkedPermissionDoc.deliveryPortalAccess ||
+          linkedPermissionDoc.isDriver ||
+          linkedPermissionDoc.role === 'delivery' ||
+          linkedPermissionDoc.accessLevels?.includes('delivery_portal')
+      );
+    }
     const driverEmailSet = new Set(
       (storeSettings?.customDriverEmails || []).map((e) => e.toLowerCase().trim())
     );
@@ -80,9 +109,17 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
       driverEmailSet.has(emailNorm) ||
       (customer.id && driverIdSet.has(customer.id)) ||
       customer.role === 'delivery' ||
-      Boolean(customer.isDriver)
+      Boolean(customer.isDriver) ||
+      Boolean(customer.deliveryPortalAccess)
     );
-  }, [customer, storeSettings?.customDriverEmails, storeSettings?.customDriverIds, storeSettings?.removedDriverEmails, storeSettings?.removedDriverIds]);
+  }, [
+    customer,
+    linkedPermissionDoc,
+    storeSettings?.customDriverEmails,
+    storeSettings?.customDriverIds,
+    storeSettings?.removedDriverEmails,
+    storeSettings?.removedDriverIds,
+  ]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -268,15 +305,34 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => grantCustomerDriver(customer.email || customer.id, !isCustomerDriver)}
+                  onClick={async () => {
+                    if (isCustomerDriver) {
+                      await revokeCustomerDeliveryPortalAccess(customer.email || customer.id, customer.id);
+                    } else {
+                      await grantCustomerDriver(customer.email || customer.id, true, {
+                        userId: customer.id,
+                        name: customer.name,
+                        phone: customer.phone,
+                      });
+                    }
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
                     isCustomerDriver
-                      ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200 border border-emerald-300'
+                      ? 'bg-emerald-100 text-emerald-900 hover:bg-rose-100 hover:text-rose-900 border border-emerald-300'
                       : 'bg-emerald-700 hover:bg-emerald-800 text-white'
                   }`}
+                  title={
+                    isCustomerDriver
+                      ? `Delete Delivery Portal Permission Doc (${linkedPermissionDoc?.id || customer.permissionDocId || 'user_permissions'})`
+                      : 'Grant Delivery Portal Access'
+                  }
                 >
                   <Truck className="w-3.5 h-3.5" />
-                  <span>{isCustomerDriver ? 'Revoke Driver Access' : 'Make Driver (Grant Driver Portal)'}</span>
+                  <span>
+                    {isCustomerDriver
+                      ? 'Delete Delivery Portal Access'
+                      : 'Make Driver (Grant Driver Portal)'}
+                  </span>
                 </button>
 
                 <button
@@ -298,7 +354,13 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
                     <button
                       type="button"
                       onClick={async () => {
-                        await deleteCustomer(customer.id || customer.email);
+                        if (isCustomerDriver) {
+                          await revokeCustomerDeliveryPortalAccess(
+                            customer.email || customer.id,
+                            customer.id
+                          );
+                        }
+                        await deleteCustomer(customer.email || customer.id);
                         onClose();
                       }}
                       className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-colors shadow-2xs cursor-pointer"
