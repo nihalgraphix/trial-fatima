@@ -794,6 +794,11 @@ export const AdminDashboard: React.FC = () => {
     const driverEmailSet = new Set((storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim()));
     const driverIdSet = new Set(storeSettings.customDriverIds || []);
 
+    const removedDriverEmails = new Set(
+      (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const removedDriverIds = new Set(storeSettings.removedDriverIds || []);
+
     map.forEach((cust, emailKey) => {
       if (adminSet.has(emailKey)) {
         cust.role = 'admin';
@@ -802,7 +807,10 @@ export const AdminDashboard: React.FC = () => {
       if (vipSet.has(emailKey)) {
         cust.status = 'VIP';
       }
-      if (driverEmailSet.has(emailKey) || driverIdSet.has(cust.id) || cust.role === 'delivery') {
+      if (removedDriverEmails.has(emailKey) || (cust.id && removedDriverIds.has(cust.id))) {
+        cust.isDriver = false;
+        if (cust.role === 'delivery') cust.role = 'customer';
+      } else if (driverEmailSet.has(emailKey) || (cust.id && driverIdSet.has(cust.id)) || cust.role === 'delivery') {
         cust.isDriver = true;
       }
     });
@@ -820,6 +828,8 @@ export const AdminDashboard: React.FC = () => {
     storeSettings.customAdminEmails,
     storeSettings.customDriverEmails,
     storeSettings.customDriverIds,
+    storeSettings.removedDriverEmails,
+    storeSettings.removedDriverIds,
     storeSettings.removedCustomerEmails,
     storeSettings.removedCustomerIds,
   ]);
@@ -7690,7 +7700,15 @@ export const AdminDashboard: React.FC = () => {
       {/* Customer Full Profile & Information Modal */}
       {viewingCustomer && (
         <AdminCustomerModal
-          customer={viewingCustomer}
+          customer={
+            customersList.find(
+              (c) =>
+                (c.email &&
+                  viewingCustomer.email &&
+                  c.email.toLowerCase() === viewingCustomer.email.toLowerCase()) ||
+                (c.id && c.id === viewingCustomer.id)
+            ) || viewingCustomer
+          }
           onClose={() => setViewingCustomer(null)}
           onViewOrder={(order) => {
             setViewingOrder(order);

@@ -19,6 +19,7 @@ import { IndianPaymentGatewayModal } from './IndianPaymentGatewayModal';
 export const OrderSuccessPage: React.FC = () => {
   const {
     orders,
+    allOrders,
     selectedOrderId,
     setSelectedOrderId,
     setActivePage,
@@ -28,7 +29,30 @@ export const OrderSuccessPage: React.FC = () => {
   const [showInvoice, setShowInvoice] = useState(false);
   const [showPayNowModal, setShowPayNowModal] = useState(false);
 
-  const order = orders.find((o) => o.id === selectedOrderId) || orders[0];
+  // Retrieve order with multiple fallbacks: selectedOrderId in orders, allOrders, or local cached orders
+  const order = React.useMemo(() => {
+    if (selectedOrderId) {
+      const match = (orders || []).find((o) => o.id === selectedOrderId) ||
+                    (allOrders || []).find((o) => o.id === selectedOrderId);
+      if (match) return match;
+    }
+    if (orders && orders.length > 0) return orders[0];
+    if (allOrders && allOrders.length > 0) return allOrders[0];
+    try {
+      const cached = localStorage.getItem('fs_saved_orders');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (selectedOrderId) {
+            const found = parsed.find((o: any) => o.id === selectedOrderId);
+            if (found) return found;
+          }
+          return parsed[0];
+        }
+      }
+    } catch {}
+    return null;
+  }, [orders, allOrders, selectedOrderId]);
 
   if (!order) {
     return (
@@ -209,7 +233,7 @@ export const OrderSuccessPage: React.FC = () => {
               </span>
             </div>
             <div className="space-y-3 divide-y divide-[#E8E8E3]">
-              {(order.items || []).map((item, idx) => {
+              {(order.items || []).map((item: any, idx: number) => {
                 const itemId = item.productId || item.product?.id || `item-${idx}`;
                 const itemName = item.name || item.product?.name || 'Stationery Item';
                 const itemPrice = item.price ?? item.product?.price ?? 0;
@@ -283,7 +307,7 @@ export const OrderSuccessPage: React.FC = () => {
       <IndianPaymentGatewayModal
         isOpen={showPayNowModal}
         onClose={() => setShowPayNowModal(false)}
-        amount={order.BalanceAmount ?? finalAmount}
+        amount={order.outstandingBalance ?? (order as any).BalanceAmount ?? finalAmount}
         customerName={order.customerName}
         customerPhone={order.phone}
         customerEmail={order.email}

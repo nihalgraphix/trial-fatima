@@ -63,13 +63,26 @@ export const AdminCustomerModal: React.FC<AdminCustomerModalProps> = ({
 }) => {
   const { toggleCustomerVIP, grantCustomerAdmin, grantCustomerDriver, storeSettings, deleteCustomer } = useStore();
   const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'products' | 'profile'>('orders');
-  const isCustomerDriver =
-    Boolean(customer.isDriver) ||
-    customer.role === 'delivery' ||
-    (storeSettings?.customDriverEmails || []).some(
-      (e) => e.toLowerCase().trim() === (customer.email || '').toLowerCase().trim()
-    ) ||
-    (storeSettings?.customDriverIds || []).includes(customer.id);
+  const isCustomerDriver = React.useMemo(() => {
+    const emailNorm = (customer.email || '').toLowerCase().trim();
+    const removedEmails = new Set(
+      (storeSettings?.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const removedIds = new Set(storeSettings?.removedDriverIds || []);
+    if (removedEmails.has(emailNorm) || (customer.id && removedIds.has(customer.id))) {
+      return false;
+    }
+    const driverEmailSet = new Set(
+      (storeSettings?.customDriverEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const driverIdSet = new Set(storeSettings?.customDriverIds || []);
+    return (
+      driverEmailSet.has(emailNorm) ||
+      (customer.id && driverIdSet.has(customer.id)) ||
+      customer.role === 'delivery' ||
+      Boolean(customer.isDriver)
+    );
+  }, [customer, storeSettings?.customDriverEmails, storeSettings?.customDriverIds, storeSettings?.removedDriverEmails, storeSettings?.removedDriverIds]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 

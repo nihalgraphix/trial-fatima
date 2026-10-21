@@ -48,54 +48,62 @@ const MainContent: React.FC = () => {
     currentUser,
     showForceSignInModal,
     setShowForceSignInModal,
+    setSelectedOrderId,
     unauthorizedDomainInfo,
     setUnauthorizedDomainInfo,
   } = useStore();
 
-  // Trigger Force Sign-In modal if user is not signed in
-  useEffect(() => {
-    if (!isAuthLoading && !currentUser && activePage !== 'admin' && activePage !== 'admin-login') {
-      setShowForceSignInModal(true);
-    }
-  }, [isAuthLoading, currentUser, activePage, setShowForceSignInModal]);
-
-  // Listen to browser hash or URL path
+  // Listen to browser hash or URL path with robust query string parsing
   useEffect(() => {
     const handleHash = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (hash === 'admin') {
+      const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim();
+      if (!rawHash) {
+        return;
+      }
+      const [baseHash, queryString] = rawHash.split('?');
+      const cleanHash = baseHash.replace(/\/+$/, '').toLowerCase();
+
+      if (queryString) {
+        const params = new URLSearchParams(queryString);
+        const orderIdParam = params.get('orderId') || params.get('id') || params.get('track');
+        if (orderIdParam) {
+          setSelectedOrderId(orderIdParam);
+        }
+      }
+
+      if (cleanHash === 'admin') {
         setActivePage('admin');
-      } else if (hash === 'admin/login' || hash === 'admin-login') {
+      } else if (cleanHash === 'admin/login' || cleanHash === 'admin-login') {
         setActivePage('admin-login');
-      } else if (hash === 'shop') {
+      } else if (cleanHash === 'shop') {
         setActivePage('shop');
-      } else if (hash === 'categories') {
+      } else if (cleanHash === 'categories') {
         setActivePage('categories');
-      } else if (hash === 'cart') {
+      } else if (cleanHash === 'cart') {
         setActivePage('cart');
-      } else if (hash === 'checkout') {
+      } else if (cleanHash === 'checkout') {
         setActivePage('checkout');
-      } else if (hash === 'order-success') {
+      } else if (cleanHash === 'order-success') {
         setActivePage('order-success');
-      } else if (hash === 'account') {
+      } else if (cleanHash === 'account') {
         setActivePage('account');
-      } else if (hash === 'profile') {
+      } else if (cleanHash === 'profile') {
         setActivePage('profile');
-      } else if (hash === 'wishlist') {
+      } else if (cleanHash === 'wishlist') {
         setActivePage('wishlist');
-      } else if (hash === 'delivery-portal') {
+      } else if (cleanHash === 'delivery-portal' || cleanHash === 'delivery') {
         setActivePage('delivery-portal');
-      } else if (hash === 'order-tracking' || hash === 'track-order' || hash === 'track') {
+      } else if (cleanHash === 'order-tracking' || cleanHash === 'track-order' || cleanHash === 'track') {
         setActivePage('order-tracking');
-      } else if (hash === 'about') {
+      } else if (cleanHash === 'about') {
         setActivePage('about');
-      } else if (hash === 'contact') {
+      } else if (cleanHash === 'contact') {
         setActivePage('contact');
-      } else if (hash === 'login') {
+      } else if (cleanHash === 'login') {
         setActivePage('login');
-      } else if (hash === 'register') {
+      } else if (cleanHash === 'register') {
         setActivePage('register');
-      } else if (hash === 'home') {
+      } else if (cleanHash === 'home') {
         setActivePage('home');
       }
     };
@@ -103,7 +111,7 @@ const MainContent: React.FC = () => {
     handleHash();
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
-  }, [setActivePage]);
+  }, [setActivePage, setSelectedOrderId]);
 
   // Global loading state for auth
   if (isAuthLoading && activePage !== 'home') {
@@ -219,7 +227,7 @@ const MainContent: React.FC = () => {
 
       {/* Global Modals & Drawers */}
       <ForceSignInModal
-        isOpen={showForceSignInModal || (!currentUser && (activePage === 'cart' || activePage === 'checkout'))}
+        isOpen={showForceSignInModal}
         onClose={() => setShowForceSignInModal(false)}
       />
       <CartDrawer />

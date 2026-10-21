@@ -192,6 +192,8 @@ export interface Order {
     address?: string;
     updatedAt?: string;
   };
+  deliveryNotes?: string;
+  priority?: string;
 }
 
 export interface Expense {
@@ -501,6 +503,8 @@ export interface StoreSettings {
   customAdminEmails?: string[];
   customDriverEmails?: string[];
   customDriverIds?: string[];
+  removedDriverEmails?: string[];
+  removedDriverIds?: string[];
   removedCustomerEmails?: string[];
   removedCustomerIds?: string[];
   removedCategoryIds?: string[];

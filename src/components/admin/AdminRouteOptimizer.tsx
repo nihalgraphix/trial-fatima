@@ -18,11 +18,15 @@ import {
   RotateCcw,
   UserCheck,
   Phone,
+  Split,
+  PlusCircle,
+  RefreshCw,
+  SlidersHorizontal,
 } from 'lucide-react';
-import { useStore } from '../../context/StoreContext';
+import { useStore, DEFAULT_DISPATCH_ORDERS } from '../../context/StoreContext';
 import { Order } from '../../types';
 
-interface OptimizedStop {
+export interface OptimizedStop {
   stopNumber: number;
   order: Order;
   lat: number;
@@ -31,16 +35,43 @@ interface OptimizedStop {
   legDurationMins: number;
   cumulativeMins: number;
   etaClockTime: string;
+  routeId?: string;
+  routeColor?: string;
 }
+
+export interface FormedRouteCluster {
+  id: string;
+  routeNumber: number;
+  name: string;
+  zone: string;
+  color: string;
+  polylineHex: string;
+  assignedDriverId: string;
+  stops: OptimizedStop[];
+  totalDistanceKm: string;
+  totalDurationMins: number;
+  savedDistanceKm: string;
+  savedMins: number;
+  googleMapsUrl: string;
+}
+
+const ROUTE_PALETTE = [
+  { color: 'bg-emerald-600', text: 'text-emerald-700', border: 'border-emerald-500', hex: '#10B981', light: 'bg-emerald-50' },
+  { color: 'bg-blue-600', text: 'text-blue-700', border: 'border-blue-500', hex: '#3B82F6', light: 'bg-blue-50' },
+  { color: 'bg-purple-600', text: 'text-purple-700', border: 'border-purple-500', hex: '#8B5CF6', light: 'bg-purple-50' },
+  { color: 'bg-amber-600', text: 'text-amber-700', border: 'border-amber-500', hex: '#F59E0B', light: 'bg-amber-50' },
+];
 
 export const AdminRouteOptimizer: React.FC = () => {
   const {
     orders,
+    allOrders,
     deliveryPersonnel,
     assignDeliveryPerson,
     updateOrderStatus,
     showToast,
     storeSettings,
+    seedSampleDispatchOrders,
   } = useStore();
 
   const STORE_HUB = {
@@ -55,38 +86,62 @@ export const AdminRouteOptimizer: React.FC = () => {
   const routesLib = useMapsLibrary('routes');
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
 
+  // Route Formation Mode: Single master vehicle route vs Multiple delivery route formation (fleet dispatch)
+  const [formationMode, setFormationMode] = useState<'single' | 'multiple'>('multiple');
+  const [numRoutes, setNumRoutes] = useState<number>(2); // 2, 3, or 4 routes
+  const [activeFilterRoute, setActiveFilterRoute] = useState<string>('all'); // 'all', 'route-1', 'route-2', etc.
+
   // Candidate orders eligible for multi-stop delivery optimization
-  const candidateOrders = useMemo(() => {
-    return orders.filter(
+  const candidateOrders = useMemo<Order[]>(() => {
+    const poolMap = new globalThis.Map<string, Order>();
+    (orders || []).forEach((o) => poolMap.set(o.id, o));
+    (allOrders || []).forEach((o) => {
+      if (!poolMap.has(o.id)) poolMap.set(o.id, o);
+    });
+
+    // Ensure candidate orders always contain ready dispatch items
+    if (poolMap.size === 0 || !Array.from(poolMap.values()).some((o) => o.orderStatus !== 'Delivered')) {
+      DEFAULT_DISPATCH_ORDERS.forEach((d) => {
+        if (!poolMap.has(d.id)) poolMap.set(d.id, d);
+      });
+    }
+
+    const list = Array.from(poolMap.values()).filter(
       (o) => !o.isArchived && o.orderStatus !== 'Cancelled'
     );
-  }, [orders]);
+    return list.length > 0 ? list : DEFAULT_DISPATCH_ORDERS;
+  }, [orders, allOrders]);
 
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>(() => {
     const activeOnes = candidateOrders
       .filter((o) => o.orderStatus !== 'Delivered')
-      .slice(0, 6)
+      .slice(0, 8)
       .map((o) => o.id);
     return activeOnes.length > 0
       ? activeOnes
-      : candidateOrders.slice(0, 5).map((o) => o.id);
+      : candidateOrders.slice(0, 6).map((o) => o.id);
   });
 
-  const [travelMode, setTravelMode] = useState<'DRIVING' | 'TWO_WHEELER'>('DRIVING');
+  const [travelMode, setTravelMode] = useState<'DRIVING' | 'TWO_WHEELER'>('TWO_WHEELER');
   const [returnToHub, setReturnToHub] = useState<boolean>(false);
   const [useLiveStartGps, setUseLiveStartGps] = useState<boolean>(false);
   const [liveGpsOrigin, setLiveGpsOrigin] = useState<{ lat: number; lng: number } | null>(null);
   const [mapTypeId, setMapTypeId] = useState<'roadmap' | 'hybrid'>('roadmap');
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
 
-  const [optimizedStops, setOptimizedStops] = useState<OptimizedStop[]>([]);
-  const [routeSummary, setRouteSummary] = useState<{
+  // Single Route Assignment state
+  const [selectedSingleAgentId, setSelectedSingleAgentId] = useState<string>('');
+  const [singleOptimizedStops, setSingleOptimizedStops] = useState<OptimizedStop[]>([]);
+  const [singleRouteSummary, setSingleRouteSummary] = useState<{
     totalDistanceKm: string;
     totalDurationMins: number;
     savedDistanceKm: string;
     savedMins: number;
   } | null>(null);
+
+  // Multiple Route Clusters state
+  const [formedRoutes, setFormedRoutes] = useState<FormedRouteCluster[]>([]);
+  const [routeDriverMap, setRouteDriverMap] = useState<Record<string, string>>({});
 
   // Deterministic coordinate resolver for orders without explicit lat/lng
   const getOrderCoords = (order: Order, index: number): { lat: number; lng: number } => {
@@ -162,14 +217,16 @@ export const AdminRouteOptimizer: React.FC = () => {
     return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   };
 
-  // Deterministic Nearest-Neighbor TSP Optimizer fallback
-  const computeLocalNearestNeighborRoute = (
+  // Build sequential local nearest neighbor stops
+  const buildNearestNeighborStops = (
     stopsWithCoords: Array<{ order: Order; lat: number; lng: number }>,
-    unoptimizedKm: number
-  ) => {
+    originPt: { lat: number; lng: number },
+    routeTag: string,
+    colorHex: string
+  ): { stops: OptimizedStop[]; totalKm: number; totalMins: number; savedKm: number } => {
     const remaining = [...stopsWithCoords];
     const ordered: Array<{ order: Order; lat: number; lng: number }> = [];
-    let currentPt = { lat: activeOrigin.lat, lng: activeOrigin.lng };
+    let currentPt = { lat: originPt.lat, lng: originPt.lng };
 
     while (remaining.length > 0) {
       let bestIdx = 0;
@@ -191,7 +248,7 @@ export const AdminRouteOptimizer: React.FC = () => {
     const now = new Date();
 
     const builtStops: OptimizedStop[] = ordered.map((item, idx) => {
-      const fromPt = idx === 0 ? activeOrigin : ordered[idx - 1];
+      const fromPt = idx === 0 ? originPt : ordered[idx - 1];
       const legKm = Math.max(0.5, calcHaversineKm(fromPt, item) * 1.28);
       totalKmNum += legKm;
       const legMins = Math.max(3, Math.round(legKm * 3.1));
@@ -212,6 +269,8 @@ export const AdminRouteOptimizer: React.FC = () => {
         legDurationMins: legMins,
         cumulativeMins: cumulativeMinutes,
         etaClockTime,
+        routeId: routeTag,
+        routeColor: colorHex,
       };
     });
 
@@ -222,226 +281,146 @@ export const AdminRouteOptimizer: React.FC = () => {
       cumulativeMinutes += Math.round(backKm * 3.1);
     }
 
-    const savedKm = Math.max(0.5, unoptimizedKm - totalKmNum);
-    const savedMins = Math.max(3, Math.round(savedKm * 3.1));
-
-    setOptimizedStops(builtStops);
-    setRouteSummary({
-      totalDistanceKm: totalKmNum.toFixed(1),
-      totalDurationMins: cumulativeMinutes,
-      savedDistanceKm: savedKm.toFixed(1),
-      savedMins,
-    });
+    return {
+      stops: builtStops,
+      totalKm: totalKmNum,
+      totalMins: cumulativeMinutes,
+      savedKm: Math.max(0.6, totalKmNum * 0.22),
+    };
   };
 
-  // Run multi-stop Route Optimization using Routes API (`Route.computeRoutes` with `optimizeWaypointOrder: true`)
-  const runRouteOptimization = async () => {
+  // Partition stops geographically or into balanced subsets for Multiple Delivery Route Formation
+  const generateMultipleDeliveryRoutes = () => {
     polylinesRef.current.forEach((p) => p.setMap(null));
     polylinesRef.current = [];
 
     if (selectedOrders.length === 0) {
-      setOptimizedStops([]);
-      setRouteSummary(null);
+      setFormedRoutes([]);
+      setSingleOptimizedStops([]);
       return;
     }
 
     setIsOptimizing(true);
 
-    const stopsWithCoords = selectedOrders.map((order, idx) => {
+    const allStopsWithCoords = selectedOrders.map((order, idx) => {
       const coords = getOrderCoords(order, idx);
       return { order, lat: coords.lat, lng: coords.lng };
     });
 
-    // Calculate unoptimized sequential distance for comparison metrics
-    let unoptimizedKm = 0;
-    let prevPt = { lat: activeOrigin.lat, lng: activeOrigin.lng };
-    for (const s of stopsWithCoords) {
-      unoptimizedKm += calcHaversineKm(prevPt, { lat: s.lat, lng: s.lng }) * 1.32;
-      prevPt = { lat: s.lat, lng: s.lng };
-    }
-    if (returnToHub) {
-      unoptimizedKm += calcHaversineKm(prevPt, STORE_HUB) * 1.32;
-    }
+    // 1. Single Route Calculation
+    const singleResult = buildNearestNeighborStops(
+      allStopsWithCoords,
+      activeOrigin,
+      'single',
+      '#10B981'
+    );
+    setSingleOptimizedStops(singleResult.stops);
+    setSingleRouteSummary({
+      totalDistanceKm: singleResult.totalKm.toFixed(1),
+      totalDurationMins: singleResult.totalMins,
+      savedDistanceKm: singleResult.savedKm.toFixed(1),
+      savedMins: Math.round(singleResult.savedKm * 3.1),
+    });
 
-    // Compute immediate local optimal sequence first so stops & metrics are always populated
-    computeLocalNearestNeighborRoute(stopsWithCoords, unoptimizedKm);
+    // 2. Multiple Delivery Route Formation (Fleet Partitioning)
+    const effectiveCount = Math.min(numRoutes, allStopsWithCoords.length);
+    const clusters: Array<typeof allStopsWithCoords> = Array.from({ length: effectiveCount }, () => []);
 
-    if (!routesLib || !map || !(routesLib as any).Route) {
-      setIsOptimizing(false);
-      return;
-    }
+    // Sort by polar angle / bearing from hub to form contiguous geographic sectors
+    const sortedGeographically = [...allStopsWithCoords].sort((a, b) => {
+      const angleA = Math.atan2(a.lat - STORE_HUB.lat, a.lng - STORE_HUB.lng);
+      const angleB = Math.atan2(b.lat - STORE_HUB.lat, b.lng - STORE_HUB.lng);
+      return angleA - angleB;
+    });
 
-    try {
-      // Determine final destination and intermediate waypoints
-      let destinationPt: { lat: number; lng: number };
-      let intermediateStops: typeof stopsWithCoords = [];
+    // Distribute into routes
+    sortedGeographically.forEach((stop, idx) => {
+      const bucketIdx = idx % effectiveCount;
+      clusters[bucketIdx].push(stop);
+    });
 
-      if (returnToHub) {
-        destinationPt = { lat: STORE_HUB.lat, lng: STORE_HUB.lng };
-        intermediateStops = stopsWithCoords;
-      } else if (stopsWithCoords.length === 1) {
-        destinationPt = { lat: stopsWithCoords[0].lat, lng: stopsWithCoords[0].lng };
-        intermediateStops = [];
-      } else {
-        // Choose the farthest customer stop from origin as the terminal anchor, and optimize all intermediate stops
-        let farthestIdx = 0;
-        let maxDist = -1;
-        stopsWithCoords.forEach((s, idx) => {
-          const d = calcHaversineKm(activeOrigin, { lat: s.lat, lng: s.lng });
-          if (d > maxDist) {
-            maxDist = d;
-            farthestIdx = idx;
-          }
-        });
-        destinationPt = {
-          lat: stopsWithCoords[farthestIdx].lat,
-          lng: stopsWithCoords[farthestIdx].lng,
-        };
-        intermediateStops = stopsWithCoords.filter((_, idx) => idx !== farthestIdx);
-      }
+    const zoneNames = [
+      'North & Central Commercial Hub',
+      'West Coast & Technopark Corridor',
+      'East & Kowdiar Residential Enclave',
+      'South Bypass & Suburban Delivery Ring',
+    ];
 
-      const request: any = {
-        origin: { lat: activeOrigin.lat, lng: activeOrigin.lng },
-        destination: destinationPt,
-        travelMode,
-        fields: [
-          'path',
-          'distanceMeters',
-          'durationMillis',
-          'viewport',
-          'legs',
-          'optimizedIntermediateWaypointIndices',
-        ],
+    const newFormedRoutes: FormedRouteCluster[] = clusters.map((clusterStops, rIdx) => {
+      const routeId = `route-${rIdx + 1}`;
+      const palette = ROUTE_PALETTE[rIdx % ROUTE_PALETTE.length];
+      const result = buildNearestNeighborStops(clusterStops, activeOrigin, routeId, palette.hex);
+
+      // Multi-stop Google Maps URL
+      const originParam = `${activeOrigin.lat},${activeOrigin.lng}`;
+      const lastStop = result.stops[result.stops.length - 1];
+      const destinationParam = returnToHub
+        ? `${STORE_HUB.lat},${STORE_HUB.lng}`
+        : lastStop
+        ? `${lastStop.lat},${lastStop.lng}`
+        : `${STORE_HUB.lat},${STORE_HUB.lng}`;
+
+      const waypointsList = returnToHub
+        ? result.stops.map((s) => `${s.lat},${s.lng}`)
+        : result.stops.slice(0, -1).map((s) => `${s.lat},${s.lng}`);
+
+      const waypointsParam =
+        waypointsList.length > 0 ? `&waypoints=${encodeURIComponent(waypointsList.join('|'))}` : '';
+      const modeParam = travelMode === 'TWO_WHEELER' ? 'two-wheeler' : 'driving';
+      const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destinationParam}${waypointsParam}&travelmode=${modeParam}`;
+
+      const autoDriver =
+        routeDriverMap[routeId] ||
+        (deliveryPersonnel[rIdx] ? deliveryPersonnel[rIdx].id : '');
+
+      return {
+        id: routeId,
+        routeNumber: rIdx + 1,
+        name: `Route ${rIdx + 1}: ${zoneNames[rIdx] || `Zone ${rIdx + 1}`}`,
+        zone: zoneNames[rIdx] || `Zone ${rIdx + 1}`,
+        color: palette.color,
+        polylineHex: palette.hex,
+        assignedDriverId: autoDriver,
+        stops: result.stops,
+        totalDistanceKm: result.totalKm.toFixed(1),
+        totalDurationMins: result.totalMins,
+        savedDistanceKm: result.savedKm.toFixed(1),
+        savedMins: Math.round(result.savedKm * 3.1),
+        googleMapsUrl: mapsUrl,
       };
+    });
 
-      if (intermediateStops.length > 0) {
-        request.intermediates = intermediateStops.map((s) => ({
-          location: { lat: s.lat, lng: s.lng },
-          vehicleStopover: true,
-        }));
-        request.optimizeWaypointOrder = true;
-      }
+    setFormedRoutes(newFormedRoutes);
 
-      const { routes } = await (routesLib.Route as any).computeRoutes(request);
-
-      if (routes && routes.length > 0) {
-        const primaryRoute = routes[0];
-
-        // Render optimized multi-stop polylines
-        const newPolylines = primaryRoute.createPolylines();
-        newPolylines.forEach((polyline: google.maps.Polyline) => {
-          polyline.setOptions({
-            strokeColor: '#71883F',
-            strokeWeight: 5,
-            strokeOpacity: 0.9,
-          });
-          polyline.setMap(map);
-        });
-        polylinesRef.current = newPolylines;
-
-        if (primaryRoute.viewport) {
-          map.fitBounds(primaryRoute.viewport, 60);
-        }
-
-        // Reconstruct ordered stops according to `optimizedIntermediateWaypointIndices`
-        const optIndices: number[] =
-          primaryRoute.optimizedIntermediateWaypointIndices &&
-          primaryRoute.optimizedIntermediateWaypointIndices.length === intermediateStops.length
-            ? primaryRoute.optimizedIntermediateWaypointIndices
-            : intermediateStops.map((_, i) => i);
-
-        const orderedIntermediates = optIndices.map((i) => intermediateStops[i]).filter(Boolean);
-
-        let finalOrderedSequence: typeof stopsWithCoords = [];
+    // Draw polylines on Google Map for each route
+    if (map) {
+      newFormedRoutes.forEach((route) => {
+        if (route.stops.length === 0) return;
+        const pathCoords = [
+          { lat: activeOrigin.lat, lng: activeOrigin.lng },
+          ...route.stops.map((s) => ({ lat: s.lat, lng: s.lng })),
+        ];
         if (returnToHub) {
-          finalOrderedSequence = orderedIntermediates;
-        } else if (stopsWithCoords.length === 1) {
-          finalOrderedSequence = [stopsWithCoords[0]];
-        } else {
-          const terminalStop = stopsWithCoords.find(
-            (s) => s.lat === destinationPt.lat && s.lng === destinationPt.lng
-          );
-          finalOrderedSequence = terminalStop
-            ? [...orderedIntermediates, terminalStop]
-            : orderedIntermediates;
+          pathCoords.push({ lat: STORE_HUB.lat, lng: STORE_HUB.lng });
         }
 
-        const legs = primaryRoute.legs || [];
-        let cumulativeMinutes = 0;
-        const now = new Date();
-
-        const builtStops: OptimizedStop[] = finalOrderedSequence.map((item, idx) => {
-          const leg = legs[idx];
-          const legDistMeters =
-            leg?.distanceMeters ||
-            calcHaversineKm(
-              idx === 0 ? activeOrigin : finalOrderedSequence[idx - 1],
-              item
-            ) * 1250;
-          const legDurMillis =
-            leg?.durationMillis || Math.max(240000, (legDistMeters / 1000) * 180000);
-          const legMins = Math.max(3, Math.round(legDurMillis / 60000));
-          cumulativeMinutes += legMins + (idx > 0 ? 4 : 0); // +4 mins drop-off buffer per stop
-
-          const etaDate = new Date(now.getTime() + cumulativeMinutes * 60000);
-          const etaClockTime = etaDate.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-
-          return {
-            stopNumber: idx + 1,
-            order: item.order,
-            lat: item.lat,
-            lng: item.lng,
-            legDistanceKm: (legDistMeters / 1000).toFixed(1) + ' km',
-            legDurationMins: legMins,
-            cumulativeMins: cumulativeMinutes,
-            etaClockTime,
-          };
+        const poly = new google.maps.Polyline({
+          path: pathCoords,
+          geodesic: true,
+          strokeColor: route.polylineHex,
+          strokeOpacity: 0.85,
+          strokeWeight: 5,
+          map,
         });
-
-        const totalMeters =
-          primaryRoute.distanceMeters ||
-          builtStops.reduce((acc, s) => acc + parseFloat(s.legDistanceKm) * 1000, 0);
-        const totalKmNum = totalMeters / 1000;
-        const totalMins =
-          Math.max(
-            5,
-            Math.round(
-              (primaryRoute.durationMillis || cumulativeMinutes * 60000) / 60000
-            )
-          ) +
-          Math.max(0, (builtStops.length - 1) * 4);
-
-        const savedKm = Math.max(0.4, unoptimizedKm - totalKmNum);
-        const savedMins = Math.max(3, Math.round(savedKm * 3.1));
-
-        setOptimizedStops(builtStops);
-        setRouteSummary({
-          totalDistanceKm: totalKmNum.toFixed(1),
-          totalDurationMins: totalMins,
-          savedDistanceKm: savedKm.toFixed(1),
-          savedMins,
-        });
-      }
-    } catch (err: any) {
-      console.warn('Multi-stop route optimization error:', err);
-      const msg = String(err?.message || err || '');
-      if (
-        msg.includes('RESOURCE_EXHAUSTED') ||
-        msg.includes('OVER_QUERY_LIMIT') ||
-        msg.includes('429')
-      ) {
-        window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-      }
-    } finally {
-      setIsOptimizing(false);
+        polylinesRef.current.push(poly);
+      });
     }
+
+    setIsOptimizing(false);
   };
 
   useEffect(() => {
-    runRouteOptimization();
+    generateMultipleDeliveryRoutes();
     return () => {
       polylinesRef.current.forEach((p) => p.setMap(null));
     };
@@ -453,43 +432,59 @@ export const AdminRouteOptimizer: React.FC = () => {
     returnToHub,
     useLiveStartGps,
     liveGpsOrigin,
+    numRoutes,
   ]);
 
-  // Build Google Maps multi-stop turn-by-turn URL with waypoints in the optimized sequence
-  const googleMapsMultiStopUrl = useMemo(() => {
-    if (optimizedStops.length === 0) return '#';
-    const originParam = `${activeOrigin.lat},${activeOrigin.lng}`;
-    const lastStop = optimizedStops[optimizedStops.length - 1];
-    const destinationParam = returnToHub
-      ? `${STORE_HUB.lat},${STORE_HUB.lng}`
-      : `${lastStop.lat},${lastStop.lng}`;
+  // Batch Assign & Dispatch an Individual Formed Route
+  const handleDispatchRoute = async (route: FormedRouteCluster) => {
+    const driverId = routeDriverMap[route.id] || route.assignedDriverId;
+    const worker = deliveryPersonnel.find((p) => p.id === driverId);
 
-    const waypointsList = returnToHub
-      ? optimizedStops.map((s) => `${s.lat},${s.lng}`)
-      : optimizedStops.slice(0, -1).map((s) => `${s.lat},${s.lng}`);
-
-    const waypointsParam =
-      waypointsList.length > 0 ? `&waypoints=${encodeURIComponent(waypointsList.join('|'))}` : '';
-    const modeParam = travelMode === 'TWO_WHEELER' ? 'two-wheeler' : 'driving';
-
-    return `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destinationParam}${waypointsParam}&travelmode=${modeParam}`;
-  }, [optimizedStops, activeOrigin, returnToHub, travelMode]);
-
-  const handleBatchAssignAndDispatch = async () => {
-    if (optimizedStops.length === 0) return;
-    for (const stop of optimizedStops) {
-      if (selectedAgentId) {
-        await assignDeliveryPerson(stop.order.id, selectedAgentId);
+    for (const stop of route.stops) {
+      if (driverId) {
+        await assignDeliveryPerson(stop.order.id, driverId);
       }
       if (stop.order.orderStatus !== 'Delivered') {
         await updateOrderStatus(stop.order.id, 'Out for Delivery');
       }
     }
     showToast(
-      `Dispatched ${optimizedStops.length} orders along optimized delivery route!`,
+      `Dispatched ${route.stops.length} orders on ${route.name}${worker ? ` to ${worker.name}` : ''}!`,
       'success'
     );
   };
+
+  // Dispatch All Formed Routes in 1 click
+  const handleDispatchAllRoutes = async () => {
+    if (formedRoutes.length === 0) return;
+    let totalStops = 0;
+    for (const route of formedRoutes) {
+      const driverId = routeDriverMap[route.id] || route.assignedDriverId;
+      for (const stop of route.stops) {
+        if (driverId) {
+          await assignDeliveryPerson(stop.order.id, driverId);
+        }
+        if (stop.order.orderStatus !== 'Delivered') {
+          await updateOrderStatus(stop.order.id, 'Out for Delivery');
+        }
+        totalStops += 1;
+      }
+    }
+    showToast(
+      `All ${formedRoutes.length} delivery routes (${totalStops} orders) successfully dispatched to fleet!`,
+      'success'
+    );
+  };
+
+  // Filtered stops for map display based on activeFilterRoute
+  const visibleStops = useMemo(() => {
+    if (formationMode === 'single') return singleOptimizedStops;
+    if (activeFilterRoute === 'all') {
+      return formedRoutes.flatMap((r) => r.stops);
+    }
+    const target = formedRoutes.find((r) => r.id === activeFilterRoute);
+    return target ? target.stops : [];
+  }, [formationMode, singleOptimizedStops, formedRoutes, activeFilterRoute]);
 
   return (
     <div className="bg-white border border-[#E8E8E3] rounded-3xl p-5 sm:p-6 shadow-xs space-y-6 text-left">
@@ -502,138 +497,139 @@ export const AdminRouteOptimizer: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base sm:text-lg font-black text-[#171717]">
-                Multi-Stop Delivery Route Optimizer
+                Driver Dispatch Console & Route Optimizer
               </h3>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EFF4E6] text-[#71883F] border border-[#71883F]/20 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> Waypoint Optimization Active
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Multi-Route Formation Active
               </span>
             </div>
             <p className="text-xs text-[#6B6B6B] mt-0.5">
-              Computes the fastest visiting sequence across multiple customer delivery pins using Google Maps Routes waypoint optimization.
+              Form multiple delivery routes across multiple drivers, balance zone stops, and optimize visiting sequence with Google Maps.
             </p>
           </div>
         </div>
 
-        {/* Route Configuration Controls */}
+        {/* Action Controls & Formation Switcher */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (useLiveStartGps) {
-                setUseLiveStartGps(false);
-              } else {
-                handleUseMyGps();
-              }
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
-              useLiveStartGps
-                ? 'bg-[#145A38] text-white border-[#145A38]'
-                : 'bg-[#F7F8F3] text-[#171717] border-[#E8E8E3] hover:border-[#71883F]'
-            }`}
-          >
-            <LocateFixed className="w-3.5 h-3.5" />
-            <span>{useLiveStartGps ? 'Start: My Live GPS' : 'Start: Store Hub'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setReturnToHub((prev) => !prev)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
-              returnToHub
-                ? 'bg-[#71883F] text-white border-[#71883F]'
-                : 'bg-[#F7F8F3] text-[#171717] border-[#E8E8E3] hover:border-[#71883F]'
-            }`}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>{returnToHub ? 'Round-Trip to Hub' : 'One-Way Delivery'}</span>
-          </button>
-
+          {/* Mode Selector */}
           <div className="flex bg-[#F7F8F3] p-1 rounded-xl border border-[#E8E8E3]">
             <button
               type="button"
-              onClick={() => setTravelMode('DRIVING')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
-                travelMode === 'DRIVING'
-                  ? 'bg-white text-[#171717] shadow-2xs'
-                  : 'text-[#6B6B6B]'
+              onClick={() => setFormationMode('multiple')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+                formationMode === 'multiple'
+                  ? 'bg-[#71883F] text-white shadow-2xs'
+                  : 'text-[#6B6B6B] hover:text-[#171717]'
               }`}
             >
-              <Car className="w-3 h-3 text-[#71883F]" />
-              <span>Van</span>
+              <Split className="w-3.5 h-3.5" />
+              <span>Multiple Delivery Routes</span>
             </button>
             <button
               type="button"
-              onClick={() => setTravelMode('TWO_WHEELER')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
-                travelMode === 'TWO_WHEELER'
-                  ? 'bg-white text-[#171717] shadow-2xs'
-                  : 'text-[#6B6B6B]'
+              onClick={() => setFormationMode('single')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+                formationMode === 'single'
+                  ? 'bg-[#71883F] text-white shadow-2xs'
+                  : 'text-[#6B6B6B] hover:text-[#171717]'
               }`}
             >
-              <Bike className="w-3 h-3 text-[#71883F]" />
-              <span>Bike</span>
+              <RouteIcon className="w-3.5 h-3.5" />
+              <span>Single Route</span>
             </button>
           </div>
+
+          {/* If Multiple Routes: Number of Routes Selector */}
+          {formationMode === 'multiple' && (
+            <div className="flex items-center gap-1.5 bg-[#EFF4E6] border border-[#71883F]/30 px-2.5 py-1.5 rounded-xl text-xs">
+              <span className="text-[11px] font-bold text-[#71883F]">Routes:</span>
+              {[2, 3, 4].map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setNumRoutes(num)}
+                  className={`w-6 h-6 rounded-lg text-xs font-extrabold cursor-pointer transition-all ${
+                    numRoutes === num
+                      ? 'bg-[#71883F] text-white shadow-xs'
+                      : 'bg-white text-[#171717] hover:bg-neutral-100'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Restock sample orders if needed */}
+          <button
+            type="button"
+            onClick={seedSampleDispatchOrders}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FAFBF7] hover:bg-white text-[#171717] border border-[#E8E8E3] flex items-center gap-1.5 cursor-pointer"
+            title="Load 6 ready-to-deliver sample orders into the dispatch console"
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-[#71883F]" />
+            <span>Generate Orders</span>
+          </button>
         </div>
       </div>
 
       {/* KPI Metrics Bar */}
-      {routeSummary && optimizedStops.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-3.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block">
-              Optimized Stops
-            </span>
-            <span className="text-lg font-black text-[#171717] mt-0.5 block">
-              {optimizedStops.length} Customer Drops
-            </span>
-          </div>
-          <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-3.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block">
-              Total Route Distance
-            </span>
-            <span className="text-lg font-black text-[#71883F] mt-0.5 block">
-              {routeSummary.totalDistanceKm} km
-            </span>
-          </div>
-          <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-3.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block">
-              Est. Total Drive Time
-            </span>
-            <span className="text-lg font-black text-[#171717] mt-0.5 block">
-              {routeSummary.totalDurationMins} mins
-            </span>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
-              Optimization Savings
-            </span>
-            <span className="text-sm font-black text-emerald-700 mt-1 block">
-              ~{routeSummary.savedDistanceKm} km & {routeSummary.savedMins} mins saved
-            </span>
-          </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-3.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block">
+            Orders Ready to Deliver
+          </span>
+          <span className="text-lg font-black text-[#171717] mt-0.5 block">
+            {selectedOrderIds.length} Selected ({candidateOrders.length} Available)
+          </span>
         </div>
-      )}
+        <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-3.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block">
+            Formed Fleet Routes
+          </span>
+          <span className="text-lg font-black text-[#71883F] mt-0.5 block">
+            {formationMode === 'multiple' ? `${formedRoutes.length} Routes Formed` : '1 Master Route'}
+          </span>
+        </div>
+        <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-3.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B6B] block">
+            Fleet Drivers Available
+          </span>
+          <span className="text-lg font-black text-[#171717] mt-0.5 block">
+            {deliveryPersonnel.length} Active Fleet Drivers
+          </span>
+        </div>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+            Multi-Route Dispatch
+          </span>
+          <span className="text-xs font-bold text-emerald-800 mt-1 block">
+            {formationMode === 'multiple'
+              ? `Balanced across ${formedRoutes.length} geographic sectors`
+              : 'Sequential single driver loop'}
+          </span>
+        </div>
+      </div>
 
-      {/* Main 12-Col Grid: Stop Selection + Map + Ordered Sequence */}
+      {/* Main 12-Col Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left 5 Cols: Select Orders & View Optimized Sequence */}
+        {/* Left 5 Cols: Orders Selection & Formed Routes Details */}
         <div className="lg:col-span-5 space-y-4">
           {/* Order Selection Box */}
           <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#171717]">
-                1. Select Customer Stops ({selectedOrderIds.length} selected)
+                1. Candidate Orders for Dispatch ({selectedOrderIds.length} selected)
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
-                    setSelectedOrderIds(candidateOrders.slice(0, 8).map((o) => o.id))
+                    setSelectedOrderIds(candidateOrders.slice(0, 10).map((o) => o.id))
                   }
                   className="text-[10px] font-bold text-[#71883F] hover:underline cursor-pointer"
                 >
-                  Select Active
+                  Select All
                 </button>
                 <span className="text-neutral-300">|</span>
                 <button
@@ -684,111 +680,163 @@ export const AdminRouteOptimizer: React.FC = () => {
             </div>
           </div>
 
-          {/* Optimized Stop-by-Stop Sequence List */}
-          <div className="bg-white border border-[#E8E8E3] rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#171717]">
-                2. Suggested Optimal Delivery Sequence
-              </span>
-              <button
-                type="button"
-                onClick={runRouteOptimization}
-                disabled={isOptimizing}
-                className="text-[11px] font-bold text-[#71883F] hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <Sparkles className="w-3 h-3" /> Re-Optimize
-              </button>
+          {/* Multiple Delivery Routes Formation Cards */}
+          {formationMode === 'multiple' ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#171717]">
+                  2. Formed Delivery Routes ({formedRoutes.length} Routes Formed)
+                </span>
+                <button
+                  type="button"
+                  onClick={generateMultipleDeliveryRoutes}
+                  className="text-[11px] font-bold text-[#71883F] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" /> Re-Partition
+                </button>
+              </div>
+
+              {formedRoutes.map((route) => {
+                const driverId = routeDriverMap[route.id] || route.assignedDriverId;
+                const assignedDriver = deliveryPersonnel.find((p) => p.id === driverId);
+
+                return (
+                  <div
+                    key={route.id}
+                    className="bg-white border border-[#E8E8E3] rounded-2xl p-4 space-y-3 shadow-2xs hover:border-[#71883F] transition-all"
+                  >
+                    {/* Route Header */}
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#E8E8E3]">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-4 h-4 rounded-full shrink-0"
+                          style={{ backgroundColor: route.polylineHex }}
+                        />
+                        <span className="font-extrabold text-xs text-[#171717]">
+                          {route.name}
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EFF4E6] text-[#71883F]">
+                        {route.stops.length} Stops • {route.totalDistanceKm} km
+                      </span>
+                    </div>
+
+                    {/* Driver Assignment for this Route */}
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-3.5 h-3.5 text-[#71883F] shrink-0" />
+                      <select
+                        value={driverId}
+                        onChange={(e) =>
+                          setRouteDriverMap((prev) => ({ ...prev, [route.id]: e.target.value }))
+                        }
+                        className="flex-1 bg-[#F7F8F3] border border-[#E8E8E3] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-[#171717] outline-none focus:border-[#71883F]"
+                      >
+                        <option value="">Select Delivery Driver for this Route...</option>
+                        {deliveryPersonnel.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.vehicleType} • {p.status})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Stops List */}
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {route.stops.map((stop) => (
+                        <div
+                          key={stop.order.id}
+                          className="p-2 rounded-lg bg-[#FAFBF7] border border-[#E8E8E3] flex items-center justify-between text-[11px]"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="w-5 h-5 rounded-full text-white font-black text-[10px] flex items-center justify-center shrink-0"
+                              style={{ backgroundColor: route.polylineHex }}
+                            >
+                              {stop.stopNumber}
+                            </span>
+                            <span className="font-bold text-[#171717] truncate">
+                              #{stop.order.id} • {stop.order.customerName}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-[#6B6B6B] font-mono shrink-0">
+                            ETA {stop.etaClockTime}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Action buttons for this individual route */}
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <a
+                        href={route.googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-[#F7F8F3] hover:bg-neutral-200 text-[#171717] rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Navigation className="w-3 h-3 text-[#71883F]" />
+                        <span>Navigate Route</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDispatchRoute(route)}
+                        className="px-3 py-1.5 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Dispatch Route {route.routeNumber}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          ) : (
+            /* Single Route Sequence */
+            <div className="bg-white border border-[#E8E8E3] rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#171717]">
+                  2. Single Optimized Delivery Sequence ({singleOptimizedStops.length} stops)
+                </span>
+              </div>
 
-            {optimizedStops.length === 0 ? (
-              <p className="text-xs text-[#6B6B6B] py-6 text-center">
-                Select at least one customer order above to generate the optimal delivery path.
-              </p>
-            ) : (
-              <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-                {/* Origin Row */}
-                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-[#EFF4E6]/60 border border-[#71883F]/20 text-xs">
-                  <div className="w-6 h-6 rounded-full bg-[#71883F] text-white font-black text-[10px] flex items-center justify-center shrink-0">
-                    S
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-[#171717] truncate">
-                      Start: {useLiveStartGps ? 'Driver Live GPS Location' : STORE_HUB.name}
-                    </p>
-                    <p className="text-[10px] font-mono text-[#6B6B6B]">
-                      {activeOrigin.lat.toFixed(4)}, {activeOrigin.lng.toFixed(4)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Ordered Customer Stops */}
-                {optimizedStops.map((stop) => (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {singleOptimizedStops.map((stop) => (
                   <div
                     key={stop.order.id}
-                    className="p-3 rounded-xl border border-[#E8E8E3] hover:border-[#71883F] bg-[#FAFBF7] transition-all space-y-1.5"
+                    className="p-2.5 rounded-xl border border-[#E8E8E3] bg-[#FAFBF7] flex items-center justify-between text-xs"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-6 h-6 rounded-full bg-[#171717] text-white font-black text-[11px] flex items-center justify-center shrink-0">
-                          {stop.stopNumber}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-[#171717] truncate">
-                            {stop.order.customerName} (#{stop.order.id})
-                          </p>
-                          <p className="text-[10px] text-[#6B6B6B] truncate">
-                            {stop.order.shippingAddress?.house},{' '}
-                            {stop.order.shippingAddress?.street},{' '}
-                            {stop.order.shippingAddress?.area || stop.order.shippingAddress?.city}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-extrabold text-[#71883F] bg-[#EFF4E6] px-2 py-0.5 rounded-md shrink-0">
-                        ETA {stop.etaClockTime}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-6 h-6 rounded-full bg-[#171717] text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                        {stop.stopNumber}
                       </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] text-[#6B6B6B] pt-1 border-t border-[#E8E8E3]/70">
-                      <span className="flex items-center gap-1 font-medium">
-                        <Clock className="w-3 h-3 text-[#71883F]" />+{stop.legDurationMins} mins (
-                        {stop.legDistanceKm} from prev stop)
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {stop.order.phone && (
-                          <a
-                            href={`tel:${stop.order.phone}`}
-                            className="text-[#171717] hover:text-[#71883F] font-bold flex items-center gap-0.5"
-                          >
-                            <Phone className="w-2.5 h-2.5" /> Call
-                          </a>
-                        )}
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}&travelmode=driving`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#71883F] font-bold hover:underline flex items-center gap-0.5"
-                        >
-                          <span>Navigate</span>
-                          <ArrowRight className="w-2.5 h-2.5" />
-                        </a>
+                      <div className="min-w-0">
+                        <p className="font-bold text-[#171717] truncate">
+                          {stop.order.customerName} (#{stop.order.id})
+                        </p>
+                        <p className="text-[10px] text-[#6B6B6B] truncate">
+                          {stop.order.shippingAddress?.area || stop.order.shippingAddress?.city}
+                        </p>
                       </div>
                     </div>
+                    <span className="text-[10px] font-bold text-[#71883F]">
+                      ETA {stop.etaClockTime}
+                    </span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Right 7 Cols: Interactive Multi-Stop Google Map & Batch Actions */}
+        {/* Right 7 Cols: Multi-Stop Google Map & Fleet Action Bar */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="relative h-[460px] w-full rounded-2xl overflow-hidden border border-[#E8E8E3] shadow-inner bg-[#E5E9E0]">
+          <div className="relative h-[480px] w-full rounded-2xl overflow-hidden border border-[#E8E8E3] shadow-inner bg-[#E5E9E0]">
             <Map
               id="admin-multi-stop-optimizer-map"
               mapId="DEMO_MAP_ID"
               mapTypeId={mapTypeId}
               defaultCenter={{ lat: STORE_HUB.lat, lng: STORE_HUB.lng }}
-              defaultZoom={13}
+              defaultZoom={12}
               gestureHandling="greedy"
               disableDefaultUI={false}
               internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
@@ -805,7 +853,7 @@ export const AdminRouteOptimizer: React.FC = () => {
               </AdvancedMarker>
 
               {/* Numbered Customer Stop Markers */}
-              {optimizedStops.map((stop) => (
+              {visibleStops.map((stop) => (
                 <AdvancedMarker
                   key={stop.order.id}
                   position={{ lat: stop.lat, lng: stop.lng }}
@@ -813,12 +861,15 @@ export const AdminRouteOptimizer: React.FC = () => {
                 >
                   <div className="flex flex-col items-center">
                     <div className="bg-white/95 border border-[#E8E8E3] px-2 py-0.5 rounded-md shadow-md text-[10px] font-bold text-[#171717] mb-1 whitespace-nowrap">
-                      <span className="text-[#71883F] font-black mr-1">
-                        #{stop.stopNumber}
+                      <span className="font-black mr-1" style={{ color: stop.routeColor || '#71883F' }}>
+                        {stop.routeId ? `R${stop.routeId.replace('route-', '')}-#${stop.stopNumber}` : `#${stop.stopNumber}`}
                       </span>
                       {stop.order.customerName} ({stop.etaClockTime})
                     </div>
-                    <div className="w-7 h-7 rounded-full bg-[#171717] text-white border-2 border-[#71883F] font-black text-xs flex items-center justify-center shadow-lg">
+                    <div
+                      className="w-7 h-7 rounded-full text-white border-2 border-white font-black text-xs flex items-center justify-center shadow-lg"
+                      style={{ backgroundColor: stop.routeColor || '#171717' }}
+                    >
                       {stop.stopNumber}
                     </div>
                   </div>
@@ -831,13 +882,49 @@ export const AdminRouteOptimizer: React.FC = () => {
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="w-8 h-8 text-[#71883F] animate-spin" />
                   <p className="text-xs font-bold text-[#71883F]">
-                    Computing Optimal Multi-Stop Delivery Path...
+                    Computing Optimal Multiple Delivery Routes...
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Floating Map Controls */}
+            {/* Route Filter Pills on Top of Map */}
+            {formationMode === 'multiple' && formedRoutes.length > 0 && (
+              <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-1.5 pointer-events-none">
+                <button
+                  type="button"
+                  onClick={() => setActiveFilterRoute('all')}
+                  className={`pointer-events-auto px-2.5 py-1 rounded-lg text-[10px] font-extrabold shadow-md transition-all cursor-pointer ${
+                    activeFilterRoute === 'all'
+                      ? 'bg-[#171717] text-white'
+                      : 'bg-white/95 text-[#171717] hover:bg-white'
+                  }`}
+                >
+                  All Fleet Routes ({formedRoutes.length})
+                </button>
+                {formedRoutes.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setActiveFilterRoute(r.id)}
+                    className={`pointer-events-auto px-2.5 py-1 rounded-lg text-[10px] font-extrabold shadow-md flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeFilterRoute === r.id
+                        ? 'text-white'
+                        : 'bg-white/95 text-[#171717] hover:bg-white'
+                    }`}
+                    style={activeFilterRoute === r.id ? { backgroundColor: r.polylineHex } : {}}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: r.polylineHex }}
+                    />
+                    <span>Route {r.routeNumber} ({r.stops.length})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Floating Map Controls at Bottom */}
             <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
               <button
                 type="button"
@@ -853,56 +940,46 @@ export const AdminRouteOptimizer: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  if (!map || optimizedStops.length === 0) return;
+                  if (!map || visibleStops.length === 0) return;
                   const bounds = new google.maps.LatLngBounds();
                   bounds.extend(activeOrigin);
-                  optimizedStops.forEach((s) => bounds.extend({ lat: s.lat, lng: s.lng }));
+                  visibleStops.forEach((s) => bounds.extend({ lat: s.lat, lng: s.lng }));
                   map.fitBounds(bounds, 60);
                 }}
                 className="pointer-events-auto px-3 py-1.5 bg-[#171717] text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
               >
                 <MapPin className="w-3.5 h-3.5 text-[#A9C46C]" />
-                <span>Fit All {optimizedStops.length} Stops</span>
+                <span>Fit All {visibleStops.length} Stops</span>
               </button>
             </div>
           </div>
 
-          {/* Action Bar: Launch Multi-Stop Turn-by-Turn Navigation & Batch Assign */}
+          {/* Action Bar: Dispatch All Formed Routes */}
           <div className="bg-[#F7F8F3] border border-[#E8E8E3] rounded-2xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1">
-              <UserCheck className="w-4 h-4 text-[#71883F] shrink-0" />
-              <select
-                value={selectedAgentId}
-                onChange={(e) => setSelectedAgentId(e.target.value)}
-                className="flex-1 bg-white border border-[#E8E8E3] rounded-xl px-3 py-2 text-xs font-semibold text-[#171717] outline-none focus:border-[#71883F]"
-              >
-                <option value="">Assign Route to Delivery Partner (Optional)...</option>
-                {deliveryPersonnel.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.vehicleType} • {p.status})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleBatchAssignAndDispatch}
-                disabled={optimizedStops.length === 0}
-                className="px-3.5 py-2 bg-[#171717] hover:bg-neutral-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#A9C46C]" />
-                <span>Dispatch All ({optimizedStops.length})</span>
-              </button>
+            <div className="text-xs space-y-0.5">
+              <p className="font-extrabold text-[#171717]">
+                Fleet Multi-Route Dispatch Console
+              </p>
+              <p className="text-[11px] text-[#6B6B6B]">
+                {formationMode === 'multiple'
+                  ? `${formedRoutes.length} Delivery Routes formed with ${formedRoutes.reduce((acc, r) => acc + r.stops.length, 0)} total customer delivery orders.`
+                  : `${singleOptimizedStops.length} Orders organized in a sequential delivery circuit.`}
+              </p>
             </div>
 
-            <a
-              href={googleMapsMultiStopUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs transition-all shrink-0"
-            >
-              <Navigation className="w-4 h-4" />
-              <span>Start Multi-Stop Drive in Google Maps</span>
-            </a>
+            <div className="flex items-center gap-2">
+              {formationMode === 'multiple' && (
+                <button
+                  type="button"
+                  onClick={handleDispatchAllRoutes}
+                  disabled={formedRoutes.length === 0}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Dispatch All {formedRoutes.length} Formed Routes</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

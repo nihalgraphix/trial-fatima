@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { Order, OrderStatus, DeliveryAssignment } from '../../types';
 import {
@@ -19,14 +19,18 @@ import {
   UserCheck,
   CreditCard,
   Star,
+  Printer,
+  Download,
 } from 'lucide-react';
 import { ProductImage } from '../common/ProductImage';
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
 import { IndianPaymentGatewayModal } from '../checkout/IndianPaymentGatewayModal';
+import { InvoiceModal } from '../checkout/InvoiceModal';
 
 export const OrderTrackingPage: React.FC = () => {
   const { 
     orders, 
+    allOrders,
     products, 
     deliveryAssignments, 
     deliveryPersonnel, 
@@ -40,12 +44,31 @@ export const OrderTrackingPage: React.FC = () => {
     rateDeliveryAssignment,
   } = useStore();
 
+  const combinedOrdersPool = useMemo(() => {
+    const map = new Map<string, Order>();
+    (orders || []).forEach((o) => map.set(o.id, o));
+    (allOrders || []).forEach((o) => map.set(o.id, o));
+    try {
+      const saved = localStorage.getItem('fs_saved_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((o: any) => {
+            if (o && o.id && !map.has(o.id)) map.set(o.id, o);
+          });
+        }
+      }
+    } catch {}
+    return Array.from(map.values());
+  }, [orders, allOrders]);
+
   const [searchOrderId, setSearchOrderId] = useState('');
   const [searchEmailOrPhone, setSearchEmailOrPhone] = useState('');
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [copiedTracking, setCopiedTracking] = useState(false);
   const [showPayNowModal, setShowPayNowModal] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
   const [driverStars, setDriverStars] = useState<number>(5);
   const [driverComment, setDriverComment] = useState<string>('');
 
@@ -61,7 +84,7 @@ export const OrderTrackingPage: React.FC = () => {
   // Sync with selectedOrderId from store or default to first order
   useEffect(() => {
     if (selectedOrderId) {
-      const found = orders.find((o) => o.id === selectedOrderId);
+      const found = combinedOrdersPool.find((o) => o.id === selectedOrderId);
       if (found) {
         setActiveOrder(found);
         setSearchOrderId(found.id);
@@ -69,12 +92,11 @@ export const OrderTrackingPage: React.FC = () => {
         return;
       }
     }
-    if (orders && orders.length > 0 && !activeOrder) {
-      setActiveOrder(orders[0]);
-      setSearchOrderId(orders[0].id);
+    if (combinedOrdersPool && combinedOrdersPool.length > 0 && !activeOrder) {
+      setActiveOrder(combinedOrdersPool[0]);
+      setSearchOrderId(combinedOrdersPool[0].id);
     }
-  }, [orders, selectedOrderId, activeOrder]);
-
+  }, [combinedOrdersPool, selectedOrderId, activeOrder]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,13 +107,13 @@ export const OrderTrackingPage: React.FC = () => {
     }
 
     setHasSearched(true);
-    const found = orders.find(
+    const found = combinedOrdersPool.find(
       (o) =>
-        o.id.toLowerCase() === query ||
-        o.id.toLowerCase().includes(query) ||
-        o.phone.includes(query) ||
-        o.shippingAddress?.phone.includes(query) ||
-        (searchEmailOrPhone && o.email.toLowerCase() === searchEmailOrPhone.trim().toLowerCase())
+        (o.id || '').toLowerCase() === query ||
+        (o.id || '').toLowerCase().includes(query) ||
+        (o.phone || '').includes(query) ||
+        (o.shippingAddress?.phone || '').includes(query) ||
+        (searchEmailOrPhone && (o.email || '').toLowerCase() === searchEmailOrPhone.trim().toLowerCase())
     );
 
     if (found) {
@@ -206,10 +228,10 @@ export const OrderTrackingPage: React.FC = () => {
             </div>
 
             {/* Quick Select Recent Orders */}
-            {orders && orders.length > 0 && (
+            {combinedOrdersPool && combinedOrdersPool.length > 0 && (
               <div className="pt-2 flex items-center gap-2 flex-wrap text-xs text-[#77766F]">
                 <span className="font-semibold text-[11px] text-[#202320]">Quick Select Recent Orders:</span>
-                {orders.slice(0, 4).map((ord) => (
+                {combinedOrdersPool.slice(0, 5).map((ord) => (
                   <button
                     key={ord.id}
                     type="button"
@@ -276,14 +298,25 @@ export const OrderTrackingPage: React.FC = () => {
                     <span className="text-[#77766F] font-semibold text-[11px]">Tracking No.</span>
                     <span className="font-mono font-bold text-[#202320]">{activeOrder.trackingNumber || `FE-${activeOrder.id.replace(/[^0-9]/g, '') || '98214'}`}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyTracking(activeOrder.trackingNumber || `FE-${activeOrder.id.replace(/[^0-9]/g, '') || '98214'}`)}
-                    className="w-full mt-1 py-1 px-2 bg-white border border-[#E9E5DE] hover:border-[#145A38] text-[10px] font-bold text-[#202320] rounded-lg text-center flex items-center justify-center gap-1 transition-colors"
-                  >
-                    <Share2 className="w-3 h-3 text-[#145A38]" />
-                    <span>{copiedTracking ? 'Copied!' : 'Copy Tracking Number'}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyTracking(activeOrder.trackingNumber || `FE-${activeOrder.id.replace(/[^0-9]/g, '') || '98214'}`)}
+                      className="flex-1 py-1 px-2 bg-white border border-[#E9E5DE] hover:border-[#145A38] text-[10px] font-bold text-[#202320] rounded-lg text-center flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Share2 className="w-3 h-3 text-[#145A38]" />
+                      <span>{copiedTracking ? 'Copied!' : 'Copy Tracking'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowInvoice(true)}
+                      className="py-1 px-2.5 bg-[#EFF4E6] border border-[#145A38]/30 hover:bg-[#145A38] hover:text-white text-[10px] font-bold text-[#145A38] rounded-lg text-center flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="View & Download Official GST Bill"
+                    >
+                      <Printer className="w-3 h-3" />
+                      <span>View Bill</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -632,6 +665,14 @@ export const OrderTrackingPage: React.FC = () => {
               await completeOnlineOrderPayment(activeOrder.id, chosenMethod, paymentDetails);
               setShowPayNowModal(false);
             }}
+          />
+        )}
+
+        {showInvoice && activeOrder && (
+          <InvoiceModal
+            order={activeOrder}
+            isOpen={showInvoice}
+            onClose={() => setShowInvoice(false)}
           />
         )}
 

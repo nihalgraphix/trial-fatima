@@ -93,6 +93,13 @@ export const AccountPage: React.FC = () => {
     }
   }, [currentUser]);
 
+  // If driver access was revoked by admin, automatically fallback to overview
+  useEffect(() => {
+    if (!isDriver && activeTab === 'driver-portal') {
+      setActiveTab('overview');
+    }
+  }, [isDriver, activeTab]);
+
   if (isAuthLoading && !currentUser) {
     return (
       <div className="bg-white min-h-[65vh] flex flex-col items-center justify-center p-8 text-center space-y-3">

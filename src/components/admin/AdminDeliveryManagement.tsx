@@ -19,6 +19,7 @@ import {
 import { DeliveryTrackingMap } from '../delivery/DeliveryTrackingMap';
 import { AdminRouteOptimizer } from './AdminRouteOptimizer';
 import { AdminDriverPerformanceView } from './AdminDriverPerformanceView';
+import { DEFAULT_DISPATCH_ORDERS } from '../../context/StoreContext';
 
 export const AdminDeliveryManagement: React.FC = () => {
   const {
@@ -31,11 +32,17 @@ export const AdminDeliveryManagement: React.FC = () => {
     assignOrderToDelivery,
     updateOrderStatus,
     grantCustomerDriver,
+    seedSampleDispatchOrders,
     showToast,
     storeSettings,
   } = useStore();
 
-  const sourceOrders = (allOrders && allOrders.length > 0 ? allOrders : orders) || [];
+  const sourceOrders =
+    (orders && orders.length > 0
+      ? orders
+      : allOrders && allOrders.length > 0
+      ? allOrders
+      : DEFAULT_DISPATCH_ORDERS) || [];
   const nonArchivedOrders = sourceOrders.filter((o) => !o.isArchived && o.orderStatus !== 'Cancelled');
 
   const [viewMode, setViewMode] = useState<
@@ -181,6 +188,18 @@ export const AdminDeliveryManagement: React.FC = () => {
               {deliveryPersonnel.filter((p) => String(p.status).toLowerCase() === 'available').length} Available Drivers
             </span>
           </div>
+
+          <button
+            type="button"
+            onClick={async () => {
+              await seedSampleDispatchOrders();
+            }}
+            className="px-3.5 py-2 rounded-xl bg-[#EFF4E6] hover:bg-[#71883F] text-[#71883F] hover:text-white border border-[#71883F]/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            title="Populate ready-for-delivery orders across Trivandrum sectors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Generate Sample Orders</span>
+          </button>
         </div>
       </div>
 
@@ -341,15 +360,14 @@ export const AdminDeliveryManagement: React.FC = () => {
                     </p>
                   </div>
 
-                  {(driver.email || driver.userId) && (
-                    <button
-                      type="button"
-                      onClick={() => grantCustomerDriver(driver.email || driver.userId || driver.id, false)}
-                      className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer"
-                    >
-                      Remove
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => grantCustomerDriver(driver.id || driver.email || driver.userId || '', false)}
+                    className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold cursor-pointer transition-colors shrink-0"
+                    title="Revoke Driver Portal access"
+                  >
+                    Revoke Driver
+                  </button>
                 </div>
               ))}
             </div>

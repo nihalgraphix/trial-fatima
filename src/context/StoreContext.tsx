@@ -259,6 +259,320 @@ const DEFAULT_DELIVERY_PERSONNEL: DeliveryPersonnel[] = [
   },
 ];
 
+export const DEFAULT_DISPATCH_ORDERS: Order[] = [
+  {
+    id: 'ORD-DISPATCH-101',
+    customerName: 'Ananya Pillai',
+    email: 'ananya.pillai@example.com',
+    phone: '+91 94471 23456',
+    date: new Date(Date.now() - 3600000).toISOString(),
+    createdAt: new Date(Date.now() - 3600000).toISOString(),
+    orderStatus: 'Confirmed',
+    deliveryMethod: 'Fast Express Doorstep Delivery (Same Day)',
+    paymentMethod: 'Online',
+    paymentStatus: 'Paid',
+    paymentVerified: true,
+    subtotal: 540,
+    discount: 0,
+    deliveryCharge: 0,
+    total: 540,
+    finalTotal: 540,
+    estimatedDelivery: 'Today within 45 mins',
+    trackingNumber: 'TRK-FS-101',
+    items: [
+      {
+        productId: 'prod-classmate-pulse-spiral-notebook',
+        name: 'Classmate Pulse 6-Subject Spiral Notebook (300 Pages)',
+        price: 180,
+        quantity: 2,
+        image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
+      },
+      {
+        productId: 'prod-pilot-g2-gel-pen',
+        name: 'Pilot G2 Retractable Gel Pen 0.7mm (Pack of 3)',
+        price: 180,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400&auto=format&fit=crop&q=80',
+      },
+    ],
+    shippingAddress: {
+      fullName: 'Ananya Pillai',
+      phone: '+91 94471 23456',
+      email: 'ananya.pillai@example.com',
+      house: 'TC 14/1102, Palm Grove Villa',
+      street: 'Pattom Palace Road, Near Kendriya Vidyalaya',
+      area: 'Pattom',
+      city: 'Trivandrum',
+      district: 'Trivandrum',
+      state: 'Kerala',
+      pinCode: '695004',
+      lat: 8.5241,
+      lng: 76.9366,
+      isDefault: true,
+    },
+    deliveryNotes: 'Call before arriving at the gate. Ring the doorbell on 1st floor.',
+    priority: 'high',
+  },
+  {
+    id: 'ORD-DISPATCH-102',
+    customerName: 'Vishnu Raj (Tech Delivery)',
+    email: 'vishnu.raj@technopark.org',
+    phone: '+91 98950 87654',
+    date: new Date(Date.now() - 7200000).toISOString(),
+    createdAt: new Date(Date.now() - 7200000).toISOString(),
+    orderStatus: 'Processing',
+    deliveryMethod: 'Standard Delivery (1-2 Days)',
+    paymentMethod: 'COD',
+    paymentStatus: 'Pending',
+    subtotal: 420,
+    discount: 0,
+    deliveryCharge: 0,
+    total: 420,
+    finalTotal: 420,
+    estimatedDelivery: 'Today within 1 hour',
+    trackingNumber: 'TRK-FS-102',
+    items: [
+      {
+        productId: 'prod-staedtler-geometry-box',
+        name: 'Staedtler Noris Mathematical Compass Instruments Box',
+        price: 260,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=400&auto=format&fit=crop&q=80',
+      },
+      {
+        productId: 'prod-faber-castell-highlighters',
+        name: 'Faber-Castell Textliner Highlighters Pastel 5-Colors',
+        price: 160,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1585776245991-cf89dd7fc73a?w=400&auto=format&fit=crop&q=80',
+      },
+    ],
+    shippingAddress: {
+      fullName: 'Vishnu Raj',
+      phone: '+91 98950 87654',
+      email: 'vishnu.raj@technopark.org',
+      house: 'Tower 3, Level 4, Tech Innovation Hub',
+      street: 'Technopark Campus Phase 1 Main Gate Road',
+      area: 'Kazhakkoottam',
+      city: 'Trivandrum',
+      district: 'Trivandrum',
+      state: 'Kerala',
+      pinCode: '695581',
+      lat: 8.5581,
+      lng: 76.8816,
+      isDefault: true,
+    },
+    deliveryNotes: 'Drop at Security Reception desk if unavailable.',
+  },
+  {
+    id: 'ORD-DISPATCH-103',
+    customerName: 'Dr. Lakshmi Menon',
+    email: 'lakshmi.menon@keralauniv.edu',
+    phone: '+91 97455 11223',
+    date: new Date(Date.now() - 10800000).toISOString(),
+    createdAt: new Date(Date.now() - 10800000).toISOString(),
+    orderStatus: 'Confirmed',
+    deliveryMethod: 'Fast Express Doorstep Delivery (Same Day)',
+    paymentMethod: 'Online',
+    paymentStatus: 'Paid',
+    paymentVerified: true,
+    subtotal: 950,
+    discount: 0,
+    deliveryCharge: 0,
+    total: 950,
+    finalTotal: 950,
+    estimatedDelivery: 'Today within 45 mins',
+    trackingNumber: 'TRK-FS-103',
+    items: [
+      {
+        productId: 'prod-parker-vector-fountain-pen',
+        name: 'Parker Vector Matte Black Fountain Pen with Quink Ink',
+        price: 550,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400&auto=format&fit=crop&q=80',
+      },
+      {
+        productId: 'prod-jk-cedar-bond-paper',
+        name: 'JK Cedar Bond 90 GSM Executive Letterhead Paper (Ream)',
+        price: 400,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80',
+      },
+    ],
+    shippingAddress: {
+      fullName: 'Dr. Lakshmi Menon',
+      phone: '+91 97455 11223',
+      email: 'lakshmi.menon@keralauniv.edu',
+      house: 'TC 3/420, Golf Links Avenue',
+      street: 'Vellayambalam - Kowdiar Palace Road',
+      area: 'Kowdiar',
+      city: 'Trivandrum',
+      district: 'Trivandrum',
+      state: 'Kerala',
+      pinCode: '695003',
+      lat: 8.5262,
+      lng: 76.9615,
+      isDefault: true,
+    },
+    deliveryNotes: 'Near Tennis Club. Blue residential gate.',
+  },
+  {
+    id: 'ORD-DISPATCH-104',
+    customerName: 'Karthik Nair (Secretariat)',
+    email: 'karthik.nair@statue.in',
+    phone: '+91 99951 33445',
+    date: new Date(Date.now() - 14400000).toISOString(),
+    createdAt: new Date(Date.now() - 14400000).toISOString(),
+    orderStatus: 'Confirmed',
+    deliveryMethod: 'Standard Delivery (1-2 Days)',
+    paymentMethod: 'Online',
+    paymentStatus: 'Paid',
+    paymentVerified: true,
+    subtotal: 680,
+    discount: 0,
+    deliveryCharge: 0,
+    total: 680,
+    finalTotal: 680,
+    estimatedDelivery: 'Today within 1 hour',
+    trackingNumber: 'TRK-FS-104',
+    items: [
+      {
+        productId: 'prod-doms-brush-pens',
+        name: 'Doms Artist Brush Pen Set (24 Pastel & Metallic Shades)',
+        price: 360,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1585776245991-cf89dd7fc73a?w=400&auto=format&fit=crop&q=80',
+      },
+      {
+        productId: 'prod-brustro-sketchbook',
+        name: 'Brustro Spiral Bound Heavyweight Wiro Sketchbook (A4)',
+        price: 320,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
+      },
+    ],
+    shippingAddress: {
+      fullName: 'Karthik Nair',
+      phone: '+91 99951 33445',
+      email: 'karthik.nair@statue.in',
+      house: 'Office Block 2, Opposite Secretariat North Gate',
+      street: 'Mahatma Gandhi Road, Statue Junction',
+      area: 'Palayam',
+      city: 'Trivandrum',
+      district: 'Trivandrum',
+      state: 'Kerala',
+      pinCode: '695001',
+      lat: 8.4988,
+      lng: 76.9492,
+      isDefault: true,
+    },
+    deliveryNotes: 'Deliver to ground floor office reception.',
+  },
+  {
+    id: 'ORD-DISPATCH-105',
+    customerName: 'Meera Suresh (Medical College)',
+    email: 'meera.s@medcollege.tvm',
+    phone: '+91 98470 55667',
+    date: new Date(Date.now() - 18000000).toISOString(),
+    createdAt: new Date(Date.now() - 18000000).toISOString(),
+    orderStatus: 'Processing',
+    deliveryMethod: 'Fast Express Doorstep Delivery (Same Day)',
+    paymentMethod: 'COD',
+    paymentStatus: 'Pending',
+    subtotal: 1390,
+    discount: 0,
+    deliveryCharge: 0,
+    total: 1390,
+    finalTotal: 1390,
+    estimatedDelivery: 'Today within 45 mins',
+    trackingNumber: 'TRK-FS-105',
+    items: [
+      {
+        productId: 'prod-casio-fx991cw',
+        name: 'Casio FX-991CW ClassWiz Scientific Calculator (Non-Programmable)',
+        price: 1190,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=400&auto=format&fit=crop&q=80',
+      },
+      {
+        productId: 'prod-cello-technotip-pens',
+        name: 'Cello Technotip Ball Pens 0.6mm (Box of 10 Blue)',
+        price: 200,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=400&auto=format&fit=crop&q=80',
+      },
+    ],
+    shippingAddress: {
+      fullName: 'Meera Suresh',
+      phone: '+91 98470 55667',
+      email: 'meera.s@medcollege.tvm',
+      house: 'Doctors Quarters #12, Ulloor Lane',
+      street: 'Medical College - Ulloor Bypass Road',
+      area: 'Medical College PO',
+      city: 'Trivandrum',
+      district: 'Trivandrum',
+      state: 'Kerala',
+      pinCode: '695011',
+      lat: 8.5246,
+      lng: 76.9282,
+      isDefault: true,
+    },
+    deliveryNotes: 'Keep exact change for COD ₹1390 or accept Google Pay at doorstep.',
+  },
+  {
+    id: 'ORD-DISPATCH-106',
+    customerName: 'Arun Thomas (Bakery Jn)',
+    email: 'arun.thomas@vazhuthacaud.com',
+    phone: '+91 94002 88990',
+    date: new Date(Date.now() - 21600000).toISOString(),
+    createdAt: new Date(Date.now() - 21600000).toISOString(),
+    orderStatus: 'Confirmed',
+    deliveryMethod: 'Standard Delivery (1-2 Days)',
+    paymentMethod: 'Online',
+    paymentStatus: 'Paid',
+    paymentVerified: true,
+    subtotal: 510,
+    discount: 0,
+    deliveryCharge: 0,
+    total: 510,
+    finalTotal: 510,
+    estimatedDelivery: 'Today within 1 hour',
+    trackingNumber: 'TRK-FS-106',
+    items: [
+      {
+        productId: 'prod-kangaroo-stapler-set',
+        name: 'Kangaro DS-45L Heavy Duty Metal Stapler + 2000 Pins',
+        price: 290,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80',
+      },
+      {
+        productId: 'prod-solo-expanding-file',
+        name: 'Solo 12-Pocket Expanding Document File Organizer (FC Size)',
+        price: 220,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
+      },
+    ],
+    shippingAddress: {
+      fullName: 'Arun Thomas',
+      phone: '+91 94002 88990',
+      email: 'arun.thomas@vazhuthacaud.com',
+      house: 'Flat 3B, Silver Heights Complex',
+      street: 'CV Raman Pillai Road, Near Women\'s College',
+      area: 'Vazhuthacaud',
+      city: 'Trivandrum',
+      district: 'Trivandrum',
+      state: 'Kerala',
+      pinCode: '695014',
+      lat: 8.5012,
+      lng: 76.9598,
+      isDefault: true,
+    },
+    deliveryNotes: 'Take lift to 3rd floor. Call on arrival.',
+  },
+];
+
 interface Toast {
 
   id: string;
@@ -372,6 +686,7 @@ interface StoreContextType {
   requestOrderReturn: (orderId: string, reason: string) => Promise<void>;
   processOrderReturn: (orderId: string, status: 'Approved' | 'Rejected' | 'Refunded') => Promise<void>;
   verifyOrderPayment: (orderId: string, verified: boolean) => Promise<void>;
+  seedSampleDispatchOrders: () => Promise<void>;
 
   // Expenses & Finance
   expenses: Expense[];
@@ -695,13 +1010,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const saved = localStorage.getItem('fs_saved_orders');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           const defaultDemoIds = new Set(['ORD-84920', 'ORD-83104', 'ORD-79211']);
-          return parsed.filter((o: any) => o && o.id && !defaultDemoIds.has(o.id));
+          const clean = parsed.filter((o: any) => o && o.id && !defaultDemoIds.has(o.id));
+          if (clean.length > 0) return clean;
         }
       }
     } catch (e) {}
-    return [];
+    return DEFAULT_DISPATCH_ORDERS;
   });
   const [coupons, setCoupons] = useState<Coupon[]>(() => INITIAL_COUPONS);
   const [reviews, setReviews] = useState<Review[]>(() => INITIAL_REVIEWS);
@@ -978,7 +1294,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                       const merged: User = {
                         ...prev,
                         role: freshData.role || prev.role,
-                        isDriver: Boolean(freshData.isDriver || freshData.role === 'delivery' || prev.isDriver),
+                        isDriver: freshData.isDriver !== undefined ? Boolean(freshData.isDriver) : freshData.role === 'delivery',
                         addresses: Array.isArray(freshData.addresses) ? freshData.addresses : prev.addresses,
                       };
                       localStorage.setItem('fs_active_user', JSON.stringify(merged));
@@ -1291,9 +1607,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
           const defaultDemoIds = new Set(['ORD-84920', 'ORD-83104', 'ORD-79211']);
           const cleanOrders = firestoreOrders.filter((o) => !defaultDemoIds.has(o.id));
-          setOrders(cleanOrders);
+          const effectiveOrders = cleanOrders.length > 0 ? cleanOrders : DEFAULT_DISPATCH_ORDERS;
+          setOrders(effectiveOrders);
           try {
-            localStorage.setItem('fs_saved_orders', JSON.stringify(cleanOrders));
+            localStorage.setItem('fs_saved_orders', JSON.stringify(effectiveOrders));
           } catch {}
         },
         (err) => {
@@ -1554,18 +1871,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isDriver = React.useMemo(() => {
     if (!currentUser) return false;
     const emailNorm = (currentUser.email || '').trim().toLowerCase();
+    const removedEmails = new Set(
+      (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const removedIds = new Set(storeSettings.removedDriverIds || []);
+    if (removedEmails.has(emailNorm) || (currentUser.id && removedIds.has(currentUser.id))) {
+      return false;
+    }
     const driverEmails = new Set(
       (storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim())
     );
     const driverIds = new Set(storeSettings.customDriverIds || []);
-    if (currentUser.role === 'delivery' || currentUser.isDriver === true) return true;
+    if (currentUser.role === 'delivery') return true;
+    if (currentUser.isDriver === true) return true;
     if (emailNorm && driverEmails.has(emailNorm)) return true;
     if (currentUser.id && driverIds.has(currentUser.id)) return true;
     return false;
-  }, [currentUser, storeSettings.customDriverEmails, storeSettings.customDriverIds]);
+  }, [currentUser, storeSettings.customDriverEmails, storeSettings.customDriverIds, storeSettings.removedDriverEmails, storeSettings.removedDriverIds]);
 
   const effectiveDeliveryPersonnel = React.useMemo(() => {
-    const baseList = deliveryPersonnel.length > 0 ? [...deliveryPersonnel] : [...DEFAULT_DELIVERY_PERSONNEL];
+    const rawList = deliveryPersonnel.length > 0 ? [...deliveryPersonnel] : [...DEFAULT_DELIVERY_PERSONNEL];
+    const removedEmails = new Set(
+      (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
+    );
+    const removedIds = new Set(storeSettings.removedDriverIds || []);
+
+    const baseList = rawList.filter((dp) => {
+      const dpEmail = (dp.email || '').toLowerCase().trim();
+      if (removedIds.has(dp.id) || (dp.userId && removedIds.has(dp.userId))) return false;
+      if (dpEmail && removedEmails.has(dpEmail)) return false;
+      return true;
+    });
+
     // If currentUser is an authorized driver and not yet in the list, synthesize their driver profile
     if (currentUser && isDriver) {
       const emailNorm = (currentUser.email || '').trim().toLowerCase();
@@ -1595,7 +1932,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
     return baseList;
-  }, [deliveryPersonnel, currentUser, isDriver, storeSettings.storeLat, storeSettings.storeLng, storeSettings.storeHubName]);
+  }, [deliveryPersonnel, currentUser, isDriver, storeSettings.storeLat, storeSettings.storeLng, storeSettings.storeHubName, storeSettings.removedDriverEmails, storeSettings.removedDriverIds]);
 
   const currentDeliveryPerson = React.useMemo(() => {
     if (currentUser && isDriver) {
@@ -3184,6 +3521,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const seedSampleDispatchOrders = async () => {
+    setOrders((prev) => {
+      const existingIds = new Set(prev.map((o) => o.id));
+      const freshOrders = DEFAULT_DISPATCH_ORDERS.filter((o) => !existingIds.has(o.id));
+      const combined = [...freshOrders, ...prev];
+      try {
+        localStorage.setItem('fs_saved_orders', JSON.stringify(combined));
+      } catch {}
+      return combined;
+    });
+
+    for (const ord of DEFAULT_DISPATCH_ORDERS) {
+      setDoc(doc(db, 'orders', ord.id), sanitizeFirestoreData(ord)).catch(() => {});
+    }
+    showToast('6 Ready-for-Delivery Orders generated in Dispatch Console!', 'success');
+  };
+
   // Expenses CRUD
   const addExpense = async (newExp: Omit<Expense, 'id'>) => {
     const id = createUniqueId('exp');
@@ -4139,47 +4493,140 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   ) => {
     try {
-      const emailNorm = (customerEmailOrId || '').trim().toLowerCase();
+      const cleanInput = (customerEmailOrId || '').trim();
+      const emailNorm = cleanInput.toLowerCase();
+
+      // Find user doc in allUsers
       const userDoc = allUsers.find(
-        (u) => u.id === customerEmailOrId || (u.email && u.email.toLowerCase() === emailNorm)
+        (u) => u.id === cleanInput || (u.email && u.email.toLowerCase().trim() === emailNorm)
       );
-      const targetEmail = (userDoc?.email || emailNorm).toLowerCase().trim();
-      const targetId = userDoc?.id || customerEmailOrId;
+
+      // Also find in deliveryPersonnel or DEFAULT_DELIVERY_PERSONNEL
+      const matchedDp = [...deliveryPersonnel, ...DEFAULT_DELIVERY_PERSONNEL].find(
+        (dp) =>
+          dp.id === cleanInput ||
+          dp.userId === cleanInput ||
+          (dp.email && dp.email.toLowerCase().trim() === emailNorm)
+      );
+
+      const targetEmail = (userDoc?.email || (emailNorm.includes('@') ? emailNorm : matchedDp?.email || '')).toLowerCase().trim();
+      const targetUserId = userDoc?.id || (cleanInput.startsWith('dp-') ? matchedDp?.userId : cleanInput);
+      const dpId = matchedDp?.id || `dp-${(targetUserId || targetEmail || cleanInput).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
       const currentDriverEmails = new Set(
         (storeSettings.customDriverEmails || []).map((e) => e.toLowerCase().trim())
       );
       const currentDriverIds = new Set(storeSettings.customDriverIds || []);
+      const removedDriverEmails = new Set(
+        (storeSettings.removedDriverEmails || []).map((e) => e.toLowerCase().trim())
+      );
+      const removedDriverIds = new Set(storeSettings.removedDriverIds || []);
 
       if (grant) {
-        if (targetEmail && targetEmail.includes('@')) currentDriverEmails.add(targetEmail);
-        if (targetId) currentDriverIds.add(targetId);
+        if (targetEmail && targetEmail.includes('@')) {
+          currentDriverEmails.add(targetEmail);
+          removedDriverEmails.delete(targetEmail);
+        }
+        if (targetUserId) {
+          currentDriverIds.add(targetUserId);
+          removedDriverIds.delete(targetUserId);
+        }
+        if (dpId) {
+          currentDriverIds.add(dpId);
+          removedDriverIds.delete(dpId);
+        }
       } else {
-        if (targetEmail) currentDriverEmails.delete(targetEmail);
-        if (targetId) currentDriverIds.delete(targetId);
+        // Revoking driver access - permanently remove from all driver sets
+        if (targetEmail) {
+          currentDriverEmails.delete(targetEmail);
+          removedDriverEmails.add(targetEmail);
+        }
+        if (targetUserId) {
+          currentDriverIds.delete(targetUserId);
+          removedDriverIds.add(targetUserId);
+        }
+        if (cleanInput) {
+          currentDriverIds.delete(cleanInput);
+          removedDriverIds.add(cleanInput);
+        }
+        if (dpId) {
+          currentDriverIds.delete(dpId);
+          removedDriverIds.add(dpId);
+        }
+        if (matchedDp) {
+          if (matchedDp.email) {
+            const mEmail = matchedDp.email.toLowerCase().trim();
+            currentDriverEmails.delete(mEmail);
+            removedDriverEmails.add(mEmail);
+          }
+          if (matchedDp.id) {
+            currentDriverIds.delete(matchedDp.id);
+            removedDriverIds.add(matchedDp.id);
+          }
+          if (matchedDp.userId) {
+            currentDriverIds.delete(matchedDp.userId);
+            removedDriverIds.add(matchedDp.userId);
+          }
+        }
       }
 
       await updateStoreSettings({
         customDriverEmails: Array.from(currentDriverEmails),
         customDriverIds: Array.from(currentDriverIds),
+        removedDriverEmails: Array.from(removedDriverEmails),
+        removedDriverIds: Array.from(removedDriverIds),
       });
 
       // Update user document in Firestore & allUsers state
-      if (userDoc) {
-        const nextRole = grant
-          ? userDoc.role === 'admin'
-            ? 'admin'
-            : 'delivery'
-          : userDoc.role === 'admin'
-          ? 'admin'
-          : 'customer';
+      if (!grant) {
+        // Find all matching users in allUsers
+        const matches = allUsers.filter(
+          (u) =>
+            u.id === cleanInput ||
+            u.id === targetUserId ||
+            u.id === dpId ||
+            (targetEmail && u.email?.toLowerCase().trim() === targetEmail)
+        );
+
+        for (const mu of matches) {
+          const nextRole = mu.role === 'admin' ? 'admin' : 'customer';
+          await updateDoc(doc(db, 'users', mu.id), {
+            role: nextRole,
+            isDriver: false,
+            updatedAt: serverTimestamp(),
+          }).catch(() => {});
+        }
+
+        if (targetEmail && targetEmail.includes('@')) {
+          const emailDocId = targetEmail.replace(/[@.]/g, '_');
+          await updateDoc(doc(db, 'users', emailDocId), {
+            role: 'customer',
+            isDriver: false,
+            updatedAt: serverTimestamp(),
+          }).catch(() => {});
+        }
+
+        setAllUsers((prev) =>
+          prev.map((u) => {
+            const isMatch =
+              u.id === cleanInput ||
+              u.id === targetUserId ||
+              u.id === dpId ||
+              (targetEmail && u.email?.toLowerCase().trim() === targetEmail);
+            return isMatch
+              ? { ...u, role: u.role === 'admin' ? 'admin' : 'customer', isDriver: false }
+              : u;
+          })
+        );
+      } else if (userDoc) {
+        const nextRole = userDoc.role === 'admin' ? 'admin' : 'delivery';
         await updateDoc(doc(db, 'users', userDoc.id), {
           role: nextRole,
-          isDriver: grant,
+          isDriver: true,
           updatedAt: serverTimestamp(),
         }).catch(() => {});
         setAllUsers((prev) =>
-          prev.map((u) => (u.id === userDoc.id ? { ...u, role: nextRole, isDriver: grant } : u))
+          prev.map((u) => (u.id === userDoc.id ? { ...u, role: nextRole, isDriver: true } : u))
         );
       } else if (targetEmail && targetEmail.includes('@')) {
         const emailDocId = targetEmail.replace(/[@.]/g, '_');
@@ -4190,8 +4637,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             email: targetEmail,
             name: vehicleDetails?.name || targetEmail.split('@')[0],
             phone: vehicleDetails?.phone || '+91 98450 12345',
-            role: grant ? 'delivery' : 'customer',
-            isDriver: grant,
+            role: 'delivery',
+            isDriver: true,
             updatedAt: serverTimestamp(),
           }),
           { merge: true }
@@ -4201,33 +4648,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // Sync currentUser if Admin is modifying their own or active user's driver access
       if (
         currentUser &&
-        (currentUser.id === targetId ||
+        (currentUser.id === targetUserId ||
+          currentUser.id === cleanInput ||
+          currentUser.id === dpId ||
           (targetEmail && currentUser.email?.toLowerCase().trim() === targetEmail))
       ) {
-        setCurrentUser((prev) =>
-          prev
-            ? {
-                ...prev,
-                isDriver: grant,
-                role: grant ? (prev.role === 'admin' ? 'admin' : 'delivery') : prev.role === 'admin' ? 'admin' : 'customer',
-              }
-            : null
-        );
+        setCurrentUser((prev) => {
+          if (!prev) return null;
+          const updated: User = {
+            ...prev,
+            isDriver: grant,
+            role: grant ? (prev.role === 'admin' ? 'admin' : 'delivery') : prev.role === 'admin' ? 'admin' : 'customer',
+          };
+          try {
+            localStorage.setItem('fs_active_user', JSON.stringify(updated));
+            localStorage.setItem('fs_v5_user', JSON.stringify(updated));
+            if (!grant) {
+              localStorage.removeItem('fs_active_driver_id');
+            }
+          } catch {}
+          return updated;
+        });
+        if (!grant) {
+          setCurrentDeliveryPersonId(null);
+        }
       }
 
       // Create or remove DeliveryPersonnel entry in delivery_personnel collection
-      const dpId = `dp-${(targetId || targetEmail).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
       if (grant) {
         const existingDp = deliveryPersonnel.find(
           (dp) =>
             dp.id === dpId ||
-            dp.userId === targetId ||
+            dp.userId === targetUserId ||
             (targetEmail && dp.email.toLowerCase().trim() === targetEmail)
         );
         const finalDpId = existingDp ? existingDp.id : dpId;
         const driverProfile: DeliveryPersonnel = {
           id: finalDpId,
-          userId: targetId,
+          userId: targetUserId,
           name: vehicleDetails?.name || userDoc?.name || existingDp?.name || targetEmail.split('@')[0] || 'Store Driver',
           email: targetEmail || userDoc?.email || existingDp?.email || '',
           phone: vehicleDetails?.phone || userDoc?.phone || existingDp?.phone || '+91 98450 12345',
@@ -4263,22 +4721,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           message: `You have been appointed as an official Delivery Driver for ${storeSettings.storeName || 'Fathima Stores'}. You can now access the Driver Portal from your Account Center!`,
         });
       } else {
-        const matchedDp = deliveryPersonnel.find(
-          (dp) =>
-            dp.id === dpId ||
-            dp.userId === targetId ||
-            (targetEmail && dp.email.toLowerCase().trim() === targetEmail)
+        // Remove from delivery personnel
+        setDeliveryPersonnel((prev) =>
+          prev.filter(
+            (d) =>
+              d.id !== dpId &&
+              d.id !== cleanInput &&
+              d.id !== matchedDp?.id &&
+              (!targetEmail || d.email.toLowerCase().trim() !== targetEmail) &&
+              (!targetUserId || d.userId !== targetUserId)
+          )
         );
-        if (matchedDp) {
-          setDeliveryPersonnel((prev) => prev.filter((d) => d.id !== matchedDp.id));
+        if (matchedDp?.id) {
           await deleteDoc(doc(db, 'delivery_personnel', matchedDp.id)).catch(() => {});
+        }
+        if (dpId && dpId !== matchedDp?.id) {
+          await deleteDoc(doc(db, 'delivery_personnel', dpId)).catch(() => {});
         }
       }
 
       showToast(
         grant
-          ? `Driver Portal access granted to ${userDoc?.name || targetEmail}!`
-          : `Driver Portal access revoked for ${userDoc?.name || targetEmail}.`,
+          ? `Driver Portal access granted to ${userDoc?.name || targetEmail || cleanInput}!`
+          : `Driver Portal access revoked for ${userDoc?.name || targetEmail || cleanInput}.`,
         'success'
       );
     } catch (err) {
@@ -4665,6 +5130,7 @@ const RESET_STORE_SETTINGS: Partial<StoreSettings> = {
         requestOrderReturn,
         processOrderReturn,
         verifyOrderPayment,
+        seedSampleDispatchOrders,
 
         expenses,
         addExpense,

@@ -14,6 +14,7 @@ import {
   Settings,
   Box,
   BadgeCheck,
+  PlusCircle,
 } from 'lucide-react';
 import { DeliveryTrackingMap } from './DeliveryTrackingMap';
 
@@ -34,11 +35,13 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
     updateOrderStatus,
     updateDeliveryLocation,
     updateDeliveryPersonnel,
+    assignDeliveryPerson,
+    seedSampleDispatchOrders,
     setActivePage,
     showToast,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'settings'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'available' | 'completed' | 'settings'>('active');
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [sharingGpsOrderId, setSharingGpsOrderId] = useState<string | null>(null);
   const [deliveryNotesMap, setDeliveryNotesMap] = useState<Record<string, string>>({});
@@ -133,6 +136,24 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
       (o) => isOrderAssignedToMe(o) && o.orderStatus === 'Delivered'
     );
   }, [combinedOrders, currentDeliveryPerson, currentUser, deliveryAssignments]);
+
+  // Unassigned or Available Hub Orders that can be claimed by any driver
+  const availableHubOrders = useMemo(() => {
+    return combinedOrders.filter(
+      (o) =>
+        !isOrderAssignedToMe(o) &&
+        !['Delivered', 'Cancelled', 'Returned'].includes(o.orderStatus)
+    );
+  }, [combinedOrders, currentDeliveryPerson, currentUser, deliveryAssignments]);
+
+  const handleClaimOrder = async (orderId: string) => {
+    if (!currentUser) return;
+    const myId = currentDeliveryPerson?.id || `DRV-${currentUser.id.slice(0, 6).toUpperCase()}`;
+    await assignDeliveryPerson(orderId, myId);
+    await updateOrderStatus(orderId, 'Out for Delivery');
+    showToast(`Order #${orderId} claimed and added to your delivery route!`, 'success');
+    setActiveTab('active');
+  };
 
   // 1. Not Signed In Guard
   if (!currentUser) {
@@ -500,6 +521,25 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
           </button>
 
           <button
+            onClick={() => setActiveTab('available')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'available'
+                ? 'bg-[#71883F] text-white shadow-xs'
+                : 'bg-white border border-[#E8E8E3] text-[#171717] hover:bg-[#F7F8F3]'
+            }`}
+          >
+            <Box className="w-4 h-4" />
+            Store Orders Ready for Delivery
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'available' ? 'bg-white/20 text-white' : 'bg-[#EFF4E6] text-[#71883F]'
+              }`}
+            >
+              {availableHubOrders.length}
+            </span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('completed')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === 'completed'
@@ -528,14 +568,35 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
         {activeTab === 'active' && (
           <div className="space-y-4">
             {myActiveOrders.length === 0 ? (
-              <div className="bg-white border border-[#E8E8E3] rounded-3xl p-10 text-center space-y-3">
+              <div className="bg-white border border-[#E8E8E3] rounded-3xl p-10 text-center space-y-4">
                 <div className="w-12 h-12 rounded-2xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto">
                   <Truck className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-extrabold text-[#171717]">No Active Deliveries Assigned Right Now</h3>
-                <p className="text-xs text-[#6B6B6B] max-w-md mx-auto">
-                  When the Store Administrator assigns an order to you from the Admin Dashboard, it will appear here automatically with live customer navigation and delivery status controls.
-                </p>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#171717]">No Active Deliveries Assigned Right Now</h3>
+                  <p className="text-xs text-[#6B6B6B] max-w-md mx-auto mt-1">
+                    You have no active orders queued. You can claim available store orders waiting at the hub, or generate sample delivery orders for testing.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  {availableHubOrders.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('available')}
+                      className="px-4 py-2.5 bg-[#71883F] hover:bg-[#5F7334] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <Box className="w-4 h-4" />
+                      <span>View & Claim Available Orders ({availableHubOrders.length})</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={seedSampleDispatchOrders}
+                    className="px-4 py-2.5 bg-[#F7F8F3] hover:bg-neutral-200 text-[#171717] text-xs font-bold rounded-xl border border-[#E8E8E3] transition-colors cursor-pointer"
+                  >
+                    <span>Generate Sample Delivery Orders</span>
+                  </button>
+                </div>
               </div>
             ) : (
               myActiveOrders.map((order) => {
@@ -762,7 +823,95 @@ export const DeliveryPortalPage: React.FC<DeliveryPortalPageProps> = ({ embedded
           </div>
         )}
 
-        {/* TAB 2: COMPLETED DELIVERIES HISTORY */}
+        {/* TAB 2: STORE ORDERS READY FOR DELIVERY (CLAIMABLE BY DRIVER) */}
+        {activeTab === 'available' && (
+          <div className="bg-white border border-[#E8E8E3] rounded-3xl p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E8E8E3]">
+              <div>
+                <h3 className="text-base font-extrabold text-[#171717]">
+                  Store Orders Ready for Delivery ({availableHubOrders.length})
+                </h3>
+                <p className="text-xs text-[#6B6B6B]">
+                  Pickup packaged stationery orders from {storeSettings.storeHubName || storeSettings.storeName || 'Fathima Stores'} and claim for your delivery trip
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={seedSampleDispatchOrders}
+                className="px-3.5 py-1.5 bg-[#EFF4E6] hover:bg-[#71883F] text-[#71883F] hover:text-white rounded-xl text-xs font-bold transition-colors cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>Restock Sample Orders</span>
+              </button>
+            </div>
+
+            {availableHubOrders.length === 0 ? (
+              <div className="py-10 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#EFF4E6] text-[#71883F] flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-bold text-[#171717]">All Store Orders Dispatched!</h4>
+                <p className="text-xs text-[#6B6B6B] max-w-sm mx-auto">
+                  There are no unassigned orders waiting at the hub right now. Generate sample orders to test route claims.
+                </p>
+                <button
+                  type="button"
+                  onClick={seedSampleDispatchOrders}
+                  className="mt-2 px-4 py-2 bg-[#71883F] text-white text-xs font-bold rounded-xl shadow-2xs"
+                >
+                  Generate 6 Ready Orders
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {availableHubOrders.map((ord) => (
+                  <div
+                    key={ord.id}
+                    className="p-4 rounded-2xl border border-[#E8E8E3] bg-[#FAFBF7] hover:border-[#71883F] transition-all space-y-3 text-xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-extrabold text-[#71883F] text-sm">
+                        #{ord.id}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-50 text-amber-700 border border-amber-200">
+                        {ord.orderStatus}
+                      </span>
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-sm text-[#171717]">{ord.customerName}</p>
+                      <p className="text-[#6B6B6B] mt-0.5 truncate">
+                        {ord.shippingAddress?.house}, {ord.shippingAddress?.street},{' '}
+                        {ord.shippingAddress?.area || ord.shippingAddress?.city}
+                      </p>
+                      <p className="text-[11px] text-[#71883F] font-semibold mt-1">
+                        Total Amount: ₹{ord.finalTotal || ord.total} • Mode: {ord.paymentMethod} ({ord.paymentStatus})
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-[#E8E8E3]">
+                      <span className="text-[10px] text-[#6B6B6B]">
+                        {(ord.items || []).length} Items ({ord.deliveryMethod || 'Standard Delivery'})
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleClaimOrder(ord.id)}
+                        className="px-3 py-1.5 bg-[#71883F] hover:bg-[#5F7334] text-white font-bold text-xs rounded-xl shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>Claim for Delivery</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: COMPLETED DELIVERIES HISTORY */}
         {activeTab === 'completed' && (
           <div className="bg-white border border-[#E8E8E3] rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">

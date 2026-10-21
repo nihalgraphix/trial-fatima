@@ -294,6 +294,24 @@ export const Header: React.FC = () => {
                         </button>
                       )}
 
+                      {isDriver && (
+                        <button
+                          onClick={() => {
+                            setActivePage('delivery-portal');
+                            setAccountDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-5 py-2.5 text-xs font-bold text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100/80 flex items-center justify-between transition-colors"
+                        >
+                          <span className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                            <span>Driver Dispatch Console</span>
+                          </span>
+                          <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-full font-extrabold uppercase">
+                            Live
+                          </span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           setActivePage('account');
